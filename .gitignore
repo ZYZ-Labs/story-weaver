@@ -1,0 +1,28 @@
+# Dependencies
+node_modules/
+*.log
+
+# IDE
+.vscode/
+.idea/
+*.iml
+
+# Build outputs
+target/
+dist/
+build/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Config files with secrets
+*.properties
+*.yml
+.env
+.env.local
+*.pem
+
+# Test output
+coverage/
+.nyc_output/
