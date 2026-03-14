@@ -1,0 +1,3 @@
+[submodule "front/vuetify-admin"]
+	path = front/vuetify-admin
+	url = https://github.com/codedthemes/berry-free-vuetify-vuejs-admin-template.git
