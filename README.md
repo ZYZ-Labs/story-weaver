@@ -54,3 +54,36 @@ cp .env.example .env
 ```env
 VITE_API_BASE_URL=http://localhost:8080/api
 ```
+
+
+## 后端 API 列表
+
+以下接口统一使用 `/api` 前缀：
+
+- `POST /api/auth/login`
+- `POST /api/auth/register`
+- `GET /api/projects`
+- `POST /api/projects`
+- `PUT /api/projects/{id}`
+- `DELETE /api/projects/{id}`
+- `GET /api/projects/{projectId}/chapters`
+- `POST /api/projects/{projectId}/chapters`
+- `PUT /api/projects/{projectId}/chapters/{chapterId}`
+- `DELETE /api/projects/{projectId}/chapters/{chapterId}`
+- `GET /api/projects/{projectId}/chapters/{chapterId}`
+- `GET /api/projects/{projectId}/characters`
+- `POST /api/projects/{projectId}/characters`
+- `PUT /api/projects/{projectId}/characters/{characterId}`
+- `DELETE /api/projects/{projectId}/characters/{characterId}`
+- `GET /api/projects/{projectId}/characters/{characterId}`
+- `POST /api/ai-writing/generate`
+- `GET /api/ai-writing/chapter/{chapterId}`
+- `GET /api/ai-writing/{id}`
+- `POST /api/ai-writing/{id}/accept`
+- `POST /api/ai-writing/{id}/reject`
+- `GET /api/world-settings/project/{projectId}`
+- `GET /api/world-settings/{id}`
+- `POST /api/world-settings`
+- `PUT /api/world-settings/{id}`
+- `DELETE /api/world-settings/{id}`
+
