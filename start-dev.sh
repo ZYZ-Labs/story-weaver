@@ -61,7 +61,7 @@ sleep 5
 echo
 echo "4. 启动前端服务..."
 echo
-cd ../front/vuetify-admin
+cd ../front
 gnome-terminal -- bash -c "npm run dev; exec bash" &
 echo "前端启动中... (端口: 5173)"
 sleep 5
