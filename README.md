@@ -22,10 +22,17 @@ story-weaver/
 
 - JDK 21+
 - Node.js 20+
-- MySQL 8.x
-- Redis
+- MySQL 8.x（**必需**，默认端口 `3306`）
+- Redis（**可选**，默认端口 `6379`，当前版本未强依赖）
 
 ### 后端启动
+
+先复制后端配置模板并填写本地账号密码：
+
+```bash
+cd backend/src/main/resources
+cp application-example.yml application.yml
+```
 
 ```bash
 cd backend
@@ -86,4 +93,3 @@ VITE_API_BASE_URL=http://localhost:8080/api
 - `POST /api/world-settings`
 - `PUT /api/world-settings/{id}`
 - `DELETE /api/world-settings/{id}`
-
