@@ -1,0 +1,119 @@
+package com.storyweaver.domain.entity;
+
+import com.baomidou.mybatisplus.annotation.*;
+import lombok.Data;
+import lombok.EqualsAndHashCode;
+
+import java.time.LocalDateTime;
+
+@Data
+@EqualsAndHashCode(callSuper = false)
+@TableName("ai_writing_record")
+public class AIWritingRecord {
+    @TableId(type = IdType.AUTO)
+    private Long id;
+    
+    private Long chapterId;
+    
+    @TableField(typeHandler = com.baomidou.mybatisplus.extension.handlers.JacksonTypeHandler.class)
+    private String originalContent;
+    
+    @TableField(typeHandler = com.baomidou.mybatisplus.extension.handlers.JacksonTypeHandler.class)
+    private String generatedContent;
+    
+    private String writingType; // "continue", "polish", "expand", "rewrite"
+    
+    private String userInstruction;
+    
+    private String status; // "draft", "accepted", "rejected"
+    
+    @TableField(fill = FieldFill.INSERT)
+    private LocalDateTime createTime;
+    
+    @TableField(fill = FieldFill.INSERT_UPDATE)
+    private LocalDateTime updateTime;
+    
+    @TableLogic
+    private Integer deleted;
+    
+    // Manual getters and setters for IDE compatibility
+    public Long getId() {
+        return id;
+    }
+    
+    public void setId(Long id) {
+        this.id = id;
+    }
+    
+    public Long getChapterId() {
+        return chapterId;
+    }
+    
+    public void setChapterId(Long chapterId) {
+        this.chapterId = chapterId;
+    }
+    
+    public String getOriginalContent() {
+        return originalContent;
+    }
+    
+    public void setOriginalContent(String originalContent) {
+        this.originalContent = originalContent;
+    }
+    
+    public String getGeneratedContent() {
+        return generatedContent;
+    }
+    
+    public void setGeneratedContent(String generatedContent) {
+        this.generatedContent = generatedContent;
+    }
+    
+    public String getWritingType() {
+        return writingType;
+    }
+    
+    public void setWritingType(String writingType) {
+        this.writingType = writingType;
+    }
+    
+    public String getUserInstruction() {
+        return userInstruction;
+    }
+    
+    public void setUserInstruction(String userInstruction) {
+        this.userInstruction = userInstruction;
+    }
+    
+    public String getStatus() {
+        return status;
+    }
+    
+    public void setStatus(String status) {
+        this.status = status;
+    }
+    
+    public LocalDateTime getCreateTime() {
+        return createTime;
+    }
+    
+    public void setCreateTime(LocalDateTime createTime) {
+        this.createTime = createTime;
+    }
+    
+    public LocalDateTime getUpdateTime() {
+        return updateTime;
+    }
+    
+    public void setUpdateTime(LocalDateTime updateTime) {
+        this.updateTime = updateTime;
+    }
+    
+    public Integer getDeleted() {
+        return deleted;
+    }
+    
+    public void setDeleted(Integer deleted) {
+        this.deleted = deleted;
+    }
+}

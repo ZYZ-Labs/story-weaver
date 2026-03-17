@@ -97,6 +97,25 @@ CREATE TABLE IF NOT EXISTS `world_setting` (
     CONSTRAINT `fk_world_setting_project` FOREIGN KEY (`project_id`) REFERENCES `project` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='世界设定表';
 
+-- AI writing record table
+CREATE TABLE IF NOT EXISTS `ai_writing_record` (
+    `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT 'AI写作记录ID',
+    `chapter_id` BIGINT NOT NULL COMMENT '章节ID',
+    `original_content` LONGTEXT COMMENT '原始内容',
+    `generated_content` LONGTEXT COMMENT '生成内容',
+    `writing_type` VARCHAR(50) COMMENT '写作类型(continue:续写,polish:润色,expand:扩写,rewrite:改写)',
+    `user_instruction` TEXT COMMENT '用户指令',
+    `status` VARCHAR(20) NOT NULL DEFAULT 'draft' COMMENT '状态(draft:草稿,accepted:已采纳,rejected:已拒绝)',
+    `create_time` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `update_time` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    `deleted` TINYINT NOT NULL DEFAULT 0 COMMENT '删除标记(0:正常,1:删除)',
+    PRIMARY KEY (`id`),
+    KEY `idx_chapter_id` (`chapter_id`),
+    KEY `idx_status` (`status`),
+    KEY `idx_create_time` (`create_time`),
+    CONSTRAINT `fk_ai_writing_chapter` FOREIGN KEY (`chapter_id`) REFERENCES `chapter` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='AI写作记录表';
+
 -- Insert default admin user (password: admin123)
 INSERT INTO `user` (`username`, `password`, `email`, `nickname`, `status`) VALUES
 ('admin', '$2a$10$N.zmdr9k7uOCQb376NoUnuTJ8iAt6Z5EHsM8lE9lBOsl7iKTV5UiC', 'admin@storyweaver.com', '管理员', 1),
