@@ -182,11 +182,21 @@ class ProjectControllerTest extends BaseTest {
                 "genre": "测试"
             }
             """;
-        
+
         mockMvc.perform(post("/api/projects")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(projectJson))
-                .andExpect(status().isUnauthorized());
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value(401))
+                .andExpect(jsonPath("$.message").value("未认证或 token 无效"));
+    }
+
+    @Test
+    void testGetProjectList_WithoutAuthorizationHeader_ShouldReturn401() throws Exception {
+        mockMvc.perform(get("/api/projects"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value(401))
+                .andExpect(jsonPath("$.message").value("未认证或 token 无效"));
     }
     
     @Test
