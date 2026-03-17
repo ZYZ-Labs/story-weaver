@@ -10,7 +10,6 @@ import org.springframework.security.web.AuthenticationEntryPoint;
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
-import java.time.Instant;
 
 @Component
 @RequiredArgsConstructor
@@ -22,12 +21,7 @@ public class RestAuthenticationEntryPoint implements AuthenticationEntryPoint {
     public void commence(HttpServletRequest request,
                          HttpServletResponse response,
                          AuthenticationException authException) throws IOException {
-        ApiErrorResponse error = new ApiErrorResponse(
-                401,
-                "未认证或 token 无效",
-                request.getRequestURI(),
-                Instant.now()
-        );
+        ApiErrorResponse error = new ApiErrorResponse(401, "未认证或 token 无效");
 
         response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
         response.setContentType(MediaType.APPLICATION_JSON_VALUE);

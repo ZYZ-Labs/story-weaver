@@ -10,7 +10,6 @@ import org.springframework.security.web.access.AccessDeniedHandler;
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
-import java.time.Instant;
 
 @Component
 @RequiredArgsConstructor
@@ -22,12 +21,7 @@ public class RestAccessDeniedHandler implements AccessDeniedHandler {
     public void handle(HttpServletRequest request,
                        HttpServletResponse response,
                        AccessDeniedException accessDeniedException) throws IOException {
-        ApiErrorResponse error = new ApiErrorResponse(
-                403,
-                "无权访问该资源",
-                request.getRequestURI(),
-                Instant.now()
-        );
+        ApiErrorResponse error = new ApiErrorResponse(403, "无权访问该资源");
 
         response.setStatus(HttpServletResponse.SC_FORBIDDEN);
         response.setContentType(MediaType.APPLICATION_JSON_VALUE);

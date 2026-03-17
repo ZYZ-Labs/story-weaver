@@ -21,7 +21,11 @@ public class ChapterController {
     @GetMapping
     public ResponseEntity<Map<String, Object>> getProjectChapters(
             @PathVariable Long projectId,
+            @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
             Authentication authentication) {
+        if (!AuthHeaderSupport.hasValidBearerToken(authorizationHeader)) {
+            return AuthHeaderSupport.unauthorizedResponse();
+        }
         Long userId = SecurityUtils.getCurrentUserId(authentication);
 
         List<Chapter> chapters = chapterService.getProjectChapters(projectId, userId);
@@ -38,7 +42,11 @@ public class ChapterController {
     public ResponseEntity<Map<String, Object>> createChapter(
             @PathVariable Long projectId,
             @RequestBody Map<String, String> requestBody,
+            @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
             Authentication authentication) {
+        if (!AuthHeaderSupport.hasValidBearerToken(authorizationHeader)) {
+            return AuthHeaderSupport.unauthorizedResponse();
+        }
         Long userId = SecurityUtils.getCurrentUserId(authentication);
 
         String title = requestBody.get("title");
@@ -74,7 +82,11 @@ public class ChapterController {
             @PathVariable Long projectId,
             @PathVariable Long chapterId,
             @RequestBody Chapter chapter,
+            @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
             Authentication authentication) {
+        if (!AuthHeaderSupport.hasValidBearerToken(authorizationHeader)) {
+            return AuthHeaderSupport.unauthorizedResponse();
+        }
         Long userId = SecurityUtils.getCurrentUserId(authentication);
 
         boolean success = chapterService.updateChapter(chapterId, userId, chapter);
@@ -96,7 +108,11 @@ public class ChapterController {
     public ResponseEntity<Map<String, Object>> deleteChapter(
             @PathVariable Long projectId,
             @PathVariable Long chapterId,
+            @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
             Authentication authentication) {
+        if (!AuthHeaderSupport.hasValidBearerToken(authorizationHeader)) {
+            return AuthHeaderSupport.unauthorizedResponse();
+        }
         Long userId = SecurityUtils.getCurrentUserId(authentication);
 
         boolean success = chapterService.deleteChapter(chapterId, userId);
@@ -118,7 +134,11 @@ public class ChapterController {
     public ResponseEntity<Map<String, Object>> getChapter(
             @PathVariable Long projectId,
             @PathVariable Long chapterId,
+            @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
             Authentication authentication) {
+        if (!AuthHeaderSupport.hasValidBearerToken(authorizationHeader)) {
+            return AuthHeaderSupport.unauthorizedResponse();
+        }
         Long userId = SecurityUtils.getCurrentUserId(authentication);
 
         Chapter chapter = chapterService.getChapterWithAuth(chapterId, userId);
