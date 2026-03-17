@@ -22,8 +22,12 @@ public class AIWritingController {
     @PostMapping("/generate")
     public ResponseEntity<AIWritingResponseVO> generateContent(
             @Validated @RequestBody AIWritingRequestDTO requestDTO,
+            @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
             Authentication authentication) {
 
+        if (!AuthHeaderSupport.hasValidBearerToken(authorizationHeader)) {
+            return ResponseEntity.status(401).build();
+        }
         SecurityUtils.getCurrentUserId(authentication);
 
         try {
@@ -39,8 +43,12 @@ public class AIWritingController {
     @GetMapping("/chapter/{chapterId}")
     public ResponseEntity<List<AIWritingResponseVO>> getRecordsByChapterId(
             @PathVariable Long chapterId,
+            @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
             Authentication authentication) {
 
+        if (!AuthHeaderSupport.hasValidBearerToken(authorizationHeader)) {
+            return ResponseEntity.status(401).build();
+        }
         SecurityUtils.getCurrentUserId(authentication);
 
         List<AIWritingResponseVO> records = aiWritingService.getRecordsByChapterId(chapterId);
@@ -50,8 +58,12 @@ public class AIWritingController {
     @GetMapping("/{id}")
     public ResponseEntity<AIWritingResponseVO> getRecordById(
             @PathVariable Long id,
+            @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
             Authentication authentication) {
 
+        if (!AuthHeaderSupport.hasValidBearerToken(authorizationHeader)) {
+            return ResponseEntity.status(401).build();
+        }
         SecurityUtils.getCurrentUserId(authentication);
 
         AIWritingResponseVO record = aiWritingService.getRecordById(id);
@@ -65,8 +77,12 @@ public class AIWritingController {
     @PostMapping("/{id}/accept")
     public ResponseEntity<AIWritingResponseVO> acceptGeneratedContent(
             @PathVariable Long id,
+            @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
             Authentication authentication) {
 
+        if (!AuthHeaderSupport.hasValidBearerToken(authorizationHeader)) {
+            return ResponseEntity.status(401).build();
+        }
         SecurityUtils.getCurrentUserId(authentication);
 
         AIWritingResponseVO record = aiWritingService.acceptGeneratedContent(id);
@@ -80,8 +96,12 @@ public class AIWritingController {
     @PostMapping("/{id}/reject")
     public ResponseEntity<Void> rejectGeneratedContent(
             @PathVariable Long id,
+            @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
             Authentication authentication) {
 
+        if (!AuthHeaderSupport.hasValidBearerToken(authorizationHeader)) {
+            return ResponseEntity.status(401).build();
+        }
         SecurityUtils.getCurrentUserId(authentication);
 
         aiWritingService.rejectGeneratedContent(id);

@@ -19,7 +19,12 @@ public class ProjectController {
     private ProjectService projectService;
 
     @GetMapping
-    public ResponseEntity<Map<String, Object>> getUserProjects(Authentication authentication) {
+    public ResponseEntity<Map<String, Object>> getUserProjects(
+            @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
+            Authentication authentication) {
+        if (!AuthHeaderSupport.hasValidBearerToken(authorizationHeader)) {
+            return AuthHeaderSupport.unauthorizedResponse();
+        }
         Long userId = SecurityUtils.getCurrentUserId(authentication);
 
         List<Project> projects = projectService.getUserProjects(userId);
@@ -35,7 +40,11 @@ public class ProjectController {
     @PostMapping
     public ResponseEntity<Map<String, Object>> createProject(
             @RequestBody Map<String, String> requestBody,
+            @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
             Authentication authentication) {
+        if (!AuthHeaderSupport.hasValidBearerToken(authorizationHeader)) {
+            return AuthHeaderSupport.unauthorizedResponse();
+        }
         Long userId = SecurityUtils.getCurrentUserId(authentication);
 
         String name = requestBody.get("name");
@@ -64,7 +73,11 @@ public class ProjectController {
     public ResponseEntity<Map<String, Object>> updateProject(
             @PathVariable Long id,
             @RequestBody Project project,
+            @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
             Authentication authentication) {
+        if (!AuthHeaderSupport.hasValidBearerToken(authorizationHeader)) {
+            return AuthHeaderSupport.unauthorizedResponse();
+        }
         Long userId = SecurityUtils.getCurrentUserId(authentication);
 
         boolean success = projectService.updateProject(id, userId, project);
@@ -85,7 +98,11 @@ public class ProjectController {
     @DeleteMapping("/{id}")
     public ResponseEntity<Map<String, Object>> deleteProject(
             @PathVariable Long id,
+            @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
             Authentication authentication) {
+        if (!AuthHeaderSupport.hasValidBearerToken(authorizationHeader)) {
+            return AuthHeaderSupport.unauthorizedResponse();
+        }
         Long userId = SecurityUtils.getCurrentUserId(authentication);
 
         boolean success = projectService.deleteProject(id, userId);
