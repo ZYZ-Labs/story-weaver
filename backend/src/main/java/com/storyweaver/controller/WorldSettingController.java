@@ -22,7 +22,11 @@ public class WorldSettingController {
     @GetMapping("/project/{projectId}")
     public ResponseEntity<List<WorldSettingVO>> getWorldSettingsByProjectId(
             @PathVariable Long projectId,
+            @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
             Authentication authentication) {
+        if (!AuthHeaderSupport.hasValidBearerToken(authorizationHeader)) {
+            return ResponseEntity.status(401).build();
+        }
         SecurityUtils.getCurrentUserId(authentication);
         List<WorldSettingVO> worldSettings = worldSettingService.getWorldSettingsByProjectId(projectId);
         return ResponseEntity.ok(worldSettings);
@@ -31,7 +35,11 @@ public class WorldSettingController {
     @GetMapping("/{id}")
     public ResponseEntity<WorldSettingVO> getWorldSettingById(
             @PathVariable Long id,
+            @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
             Authentication authentication) {
+        if (!AuthHeaderSupport.hasValidBearerToken(authorizationHeader)) {
+            return ResponseEntity.status(401).build();
+        }
         SecurityUtils.getCurrentUserId(authentication);
         WorldSettingVO worldSetting = worldSettingService.getWorldSettingById(id);
         if (worldSetting == null) {
@@ -44,7 +52,11 @@ public class WorldSettingController {
     @PostMapping
     public ResponseEntity<WorldSettingVO> createWorldSetting(
             @Validated @RequestBody WorldSettingDTO worldSettingDTO,
+            @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
             Authentication authentication) {
+        if (!AuthHeaderSupport.hasValidBearerToken(authorizationHeader)) {
+            return ResponseEntity.status(401).build();
+        }
         SecurityUtils.getCurrentUserId(authentication);
         WorldSettingVO createdWorldSetting = worldSettingService.createWorldSetting(worldSettingDTO);
         return ResponseEntity.ok(createdWorldSetting);
@@ -54,7 +66,11 @@ public class WorldSettingController {
     public ResponseEntity<WorldSettingVO> updateWorldSetting(
             @PathVariable Long id,
             @Validated @RequestBody WorldSettingDTO worldSettingDTO,
+            @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
             Authentication authentication) {
+        if (!AuthHeaderSupport.hasValidBearerToken(authorizationHeader)) {
+            return ResponseEntity.status(401).build();
+        }
         SecurityUtils.getCurrentUserId(authentication);
         WorldSettingVO updatedWorldSetting = worldSettingService.updateWorldSetting(id, worldSettingDTO);
         if (updatedWorldSetting == null) {
@@ -67,7 +83,11 @@ public class WorldSettingController {
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> deleteWorldSetting(
             @PathVariable Long id,
+            @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
             Authentication authentication) {
+        if (!AuthHeaderSupport.hasValidBearerToken(authorizationHeader)) {
+            return ResponseEntity.status(401).build();
+        }
         SecurityUtils.getCurrentUserId(authentication);
         worldSettingService.deleteWorldSetting(id);
         return ResponseEntity.ok().build();

@@ -21,7 +21,11 @@ public class CharacterController {
     @GetMapping
     public ResponseEntity<Map<String, Object>> getProjectCharacters(
             @PathVariable Long projectId,
+            @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
             Authentication authentication) {
+        if (!AuthHeaderSupport.hasValidBearerToken(authorizationHeader)) {
+            return AuthHeaderSupport.unauthorizedResponse();
+        }
         Long userId = SecurityUtils.getCurrentUserId(authentication);
 
         List<Character> characters = characterService.getProjectCharacters(projectId, userId);
@@ -38,7 +42,11 @@ public class CharacterController {
     public ResponseEntity<Map<String, Object>> createCharacter(
             @PathVariable Long projectId,
             @RequestBody Map<String, String> requestBody,
+            @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
             Authentication authentication) {
+        if (!AuthHeaderSupport.hasValidBearerToken(authorizationHeader)) {
+            return AuthHeaderSupport.unauthorizedResponse();
+        }
         Long userId = SecurityUtils.getCurrentUserId(authentication);
 
         String name = requestBody.get("name");
@@ -73,7 +81,11 @@ public class CharacterController {
             @PathVariable Long projectId,
             @PathVariable Long characterId,
             @RequestBody Character character,
+            @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
             Authentication authentication) {
+        if (!AuthHeaderSupport.hasValidBearerToken(authorizationHeader)) {
+            return AuthHeaderSupport.unauthorizedResponse();
+        }
         Long userId = SecurityUtils.getCurrentUserId(authentication);
 
         boolean success = characterService.updateCharacter(characterId, userId, character);
@@ -95,7 +107,11 @@ public class CharacterController {
     public ResponseEntity<Map<String, Object>> deleteCharacter(
             @PathVariable Long projectId,
             @PathVariable Long characterId,
+            @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
             Authentication authentication) {
+        if (!AuthHeaderSupport.hasValidBearerToken(authorizationHeader)) {
+            return AuthHeaderSupport.unauthorizedResponse();
+        }
         Long userId = SecurityUtils.getCurrentUserId(authentication);
 
         boolean success = characterService.deleteCharacter(characterId, userId);
@@ -117,7 +133,11 @@ public class CharacterController {
     public ResponseEntity<Map<String, Object>> getCharacter(
             @PathVariable Long projectId,
             @PathVariable Long characterId,
+            @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
             Authentication authentication) {
+        if (!AuthHeaderSupport.hasValidBearerToken(authorizationHeader)) {
+            return AuthHeaderSupport.unauthorizedResponse();
+        }
         Long userId = SecurityUtils.getCurrentUserId(authentication);
 
         Character character = characterService.getCharacterWithAuth(characterId, userId);
