@@ -16,10 +16,10 @@ import java.util.function.Function;
 @Component
 public class JwtUtil {
     
-    @Value("${jwt.secret}")
+    @Value("${jwt.secret:story-weaver-default-jwt-secret-key-story-weaver-2026}")
     private String secret;
     
-    @Value("${jwt.expiration}")
+    @Value("${jwt.expiration:86400000}")
     private Long expiration;
     
     private Key getSigningKey() {
