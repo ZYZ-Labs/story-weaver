@@ -1,0 +1,13 @@
+<template>
+  <v-card>
+    <v-card-title>世界设定</v-card-title>
+    <v-card-text>
+      <v-textarea
+        model-value="一个由浮空群岛构成的世界，能源来源于古代遗迹。"
+        label="背景设定"
+        rows="5"
+        readonly
+      />
+    </v-card-text>
+  </v-card>
+</template>

@@ -53,7 +53,7 @@ timeout /t 5 /nobreak >nul
 echo.
 echo 3. 启动前端服务...
 echo.
-cd ..\front\vuetify-admin
+cd ..\front
 start "Story Weaver Frontend" cmd /k "npm run dev"
 echo 前端启动中... (端口: 5173)
 timeout /t 5 /nobreak >nul
