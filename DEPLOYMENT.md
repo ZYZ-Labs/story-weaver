@@ -5,12 +5,12 @@
 ### 必需软件
 1. **Java 21+** - 后端运行环境
 2. **Node.js 20+** - 前端运行环境
-3. **MySQL 8.0+** - 数据库
+3. **MySQL 8.0+** - 数据库（必需，默认端口 `3306`）
 4. **Maven 3.8+** - Java 项目管理
 5. **Git** - 版本控制
 
 ### 可选软件
-1. **Redis** - 缓存服务（可选，当前版本未使用）
+1. **Redis** - 缓存服务（可选，默认端口 `6379`，当前版本未强依赖）
 2. **Docker** - 容器化部署（未来版本）
 
 ## 快速开始
@@ -60,6 +60,12 @@ mysql -u root -p < backend/src/main/resources/schema.sql
 ```
 
 ### 3. 后端启动
+先复制配置模板并按本地环境修改账号密码与 JWT 密钥：
+```bash
+cd backend/src/main/resources
+cp application-example.yml application.yml
+```
+
 ```bash
 cd backend
 mvn clean compile
@@ -85,25 +91,32 @@ npm run dev
 
 ## 配置文件
 
-### 后端配置 (backend/src/main/resources/application.yml)
+### 后端配置
+- 示例文件：`backend/src/main/resources/application-example.yml`
+- 本地文件：`backend/src/main/resources/application.yml`（由示例文件复制并自行填写）
+
 ```yaml
 spring:
   datasource:
-    url: jdbc:mysql://localhost:3306/story_weaver
-    username: root
-    password: root  # 根据实际情况修改
-  
-  redis:
-    host: localhost
-    port: 6379
+    url: jdbc:mysql://localhost:3306/story_weaver?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai
+    username: your_mysql_username
+    password: your_mysql_password
+    driver-class-name: com.mysql.cj.jdbc.Driver
 
-server:
-  port: 8080
-  servlet:
-    context-path: /api
+  data:
+    redis:
+      host: localhost
+      port: 6379
+
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true
+  global-config:
+    db-config:
+      id-type: auto
 
 jwt:
-  secret: story-weaver-jwt-secret-key-2025-change-in-production
+  secret: change-this-to-a-32-plus-char-jwt-secret
   expiration: 86400000  # 24小时
 ```
 
