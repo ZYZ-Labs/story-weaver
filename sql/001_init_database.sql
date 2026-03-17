@@ -1,8 +1,7 @@
--- Story Weaver 数据库初始化脚本
--- 版本: 1.0.0
+-- Story Weaver 数据库初始化脚本（唯一权威 Schema）
+-- 版本: 1.1.0
 -- 创建日期: 2026-03-16
 
--- 创建数据库
 CREATE DATABASE IF NOT EXISTS story_weaver
 DEFAULT CHARACTER SET utf8mb4
 DEFAULT COLLATE utf8mb4_unicode_ci;
@@ -61,15 +60,13 @@ CREATE TABLE IF NOT EXISTS chapter (
     FOREIGN KEY (project_id) REFERENCES project(id) ON DELETE CASCADE
 ) COMMENT='章节表';
 
--- 人物表
+-- 人物表（与 Character 实体对齐）
 CREATE TABLE IF NOT EXISTS character (
     id BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '人物ID',
     project_id BIGINT NOT NULL COMMENT '项目ID',
     name VARCHAR(100) NOT NULL COMMENT '人物名称',
     description TEXT COMMENT '人物描述',
-    profile TEXT COMMENT '详细设定',
-    avatar VARCHAR(500) COMMENT '头像',
-    status INT DEFAULT 1 COMMENT '状态: 0-禁用, 1-正常',
+    attributes JSON COMMENT '人物属性(JSON)',
     create_time DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     update_time DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
     deleted INT DEFAULT 0 COMMENT '删除标记: 0-未删除, 1-已删除',
@@ -78,14 +75,13 @@ CREATE TABLE IF NOT EXISTS character (
     FOREIGN KEY (project_id) REFERENCES project(id) ON DELETE CASCADE
 ) COMMENT='人物表';
 
--- 世界设定表
+-- 世界设定表（与 WorldSetting 实体对齐）
 CREATE TABLE IF NOT EXISTS world_setting (
     id BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '设定ID',
     project_id BIGINT NOT NULL COMMENT '项目ID',
-    title VARCHAR(200) NOT NULL COMMENT '设定标题',
-    content LONGTEXT COMMENT '设定内容',
+    name VARCHAR(100) NOT NULL COMMENT '设定名称',
+    description TEXT COMMENT '设定描述',
     category VARCHAR(50) COMMENT '分类',
-    order_num INT DEFAULT 0 COMMENT '排序号',
     create_time DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     update_time DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
     deleted INT DEFAULT 0 COMMENT '删除标记: 0-未删除, 1-已删除',
@@ -94,24 +90,81 @@ CREATE TABLE IF NOT EXISTS world_setting (
     FOREIGN KEY (project_id) REFERENCES project(id) ON DELETE CASCADE
 ) COMMENT='世界设定表';
 
--- AI写作记录表
+-- AI写作记录表（与 AIWritingRecord 实体对齐）
 CREATE TABLE IF NOT EXISTS ai_writing_record (
     id BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '记录ID',
-    project_id BIGINT NOT NULL COMMENT '项目ID',
-    chapter_id BIGINT COMMENT '章节ID',
-    prompt TEXT NOT NULL COMMENT '提示词',
-    response TEXT NOT NULL COMMENT 'AI响应',
-    model VARCHAR(100) COMMENT '模型名称',
-    token_usage INT DEFAULT 0 COMMENT 'token使用量',
-    status INT DEFAULT 0 COMMENT '状态: 0-生成中, 1-成功, 2-失败',
-    error_message TEXT COMMENT '错误信息',
+    chapter_id BIGINT NOT NULL COMMENT '章节ID',
+    original_content LONGTEXT COMMENT '原始内容',
+    generated_content LONGTEXT COMMENT 'AI生成内容',
+    writing_type VARCHAR(50) COMMENT '写作类型',
+    user_instruction TEXT COMMENT '用户指令',
+    status VARCHAR(20) NOT NULL DEFAULT 'draft' COMMENT '状态: draft/accepted/rejected',
     create_time DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-    INDEX idx_project_id (project_id),
+    update_time DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    deleted INT DEFAULT 0 COMMENT '删除标记: 0-未删除, 1-已删除',
     INDEX idx_chapter_id (chapter_id),
     INDEX idx_status (status),
+    FOREIGN KEY (chapter_id) REFERENCES chapter(id) ON DELETE CASCADE
+) COMMENT='AI写作记录表';
+
+-- 情节表（与 Plot 实体对齐）
+CREATE TABLE IF NOT EXISTS plot (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '情节ID',
+    project_id BIGINT NOT NULL COMMENT '项目ID',
+    chapter_id BIGINT COMMENT '章节ID',
+    title VARCHAR(200) COMMENT '标题',
+    description TEXT COMMENT '描述',
+    content LONGTEXT COMMENT '内容',
+    plot_type INT COMMENT '情节类型',
+    sequence INT COMMENT '排序序号',
+    characters TEXT COMMENT '涉及角色',
+    locations TEXT COMMENT '涉及地点',
+    timeline VARCHAR(255) COMMENT '时间线',
+    conflicts TEXT COMMENT '冲突',
+    resolutions TEXT COMMENT '解决方案',
+    tags VARCHAR(500) COMMENT '标签',
+    status INT DEFAULT 1 COMMENT '状态',
+    create_time DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    update_time DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    create_by BIGINT COMMENT '创建人',
+    update_by BIGINT COMMENT '更新人',
+    deleted INT DEFAULT 0 COMMENT '删除标记: 0-未删除, 1-已删除',
+    INDEX idx_project_id (project_id),
+    INDEX idx_chapter_id (chapter_id),
+    INDEX idx_plot_type (plot_type),
+    INDEX idx_sequence (sequence),
     FOREIGN KEY (project_id) REFERENCES project(id) ON DELETE CASCADE,
     FOREIGN KEY (chapter_id) REFERENCES chapter(id) ON DELETE SET NULL
-) COMMENT='AI写作记录表';
+) COMMENT='情节表';
+
+-- 因果关系表（与 Causality 实体对齐）
+CREATE TABLE IF NOT EXISTS causality (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '因果关系ID',
+    project_id BIGINT NOT NULL COMMENT '项目ID',
+    name VARCHAR(200) COMMENT '关系名称',
+    description TEXT COMMENT '关系描述',
+    cause_type VARCHAR(100) COMMENT '原因类型',
+    effect_type VARCHAR(100) COMMENT '结果类型',
+    cause_entity_id VARCHAR(100) COMMENT '原因实体ID',
+    effect_entity_id VARCHAR(100) COMMENT '结果实体ID',
+    cause_entity_type VARCHAR(100) COMMENT '原因实体类型',
+    effect_entity_type VARCHAR(100) COMMENT '结果实体类型',
+    relationship VARCHAR(255) COMMENT '关系描述',
+    strength INT COMMENT '关系强度',
+    conditions TEXT COMMENT '生效条件',
+    tags VARCHAR(500) COMMENT '标签',
+    status INT DEFAULT 1 COMMENT '状态',
+    create_time DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    update_time DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    create_by BIGINT COMMENT '创建人',
+    update_by BIGINT COMMENT '更新人',
+    deleted INT DEFAULT 0 COMMENT '删除标记: 0-未删除, 1-已删除',
+    INDEX idx_project_id (project_id),
+    INDEX idx_cause_entity_id (cause_entity_id),
+    INDEX idx_effect_entity_id (effect_entity_id),
+    INDEX idx_relationship (relationship),
+    FOREIGN KEY (project_id) REFERENCES project(id) ON DELETE CASCADE
+) COMMENT='因果关系表';
 
 -- 操作日志表
 CREATE TABLE IF NOT EXISTS operation_log (
@@ -140,5 +193,3 @@ CREATE TABLE IF NOT EXISTS system_config (
     update_time DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
     INDEX idx_config_key (config_key)
 ) COMMENT='系统配置表';
-
-echo "数据库表结构创建完成";
