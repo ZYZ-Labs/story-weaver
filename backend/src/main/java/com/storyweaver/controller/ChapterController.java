@@ -13,7 +13,7 @@ import java.util.List;
 import java.util.Map;
 
 @RestController
-@RequestMapping("/projects/{projectId}/chapters")
+@RequestMapping("/api/projects/{projectId}/chapters")
 public class ChapterController {
     @Autowired
     private ChapterService chapterService;

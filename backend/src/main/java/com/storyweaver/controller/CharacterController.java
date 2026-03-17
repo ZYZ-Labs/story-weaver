@@ -13,7 +13,7 @@ import java.util.List;
 import java.util.Map;
 
 @RestController
-@RequestMapping("/projects/{projectId}/characters")
+@RequestMapping("/api/projects/{projectId}/characters")
 public class CharacterController {
     @Autowired
     private CharacterService characterService;
