@@ -1,0 +1,90 @@
+package com.storyweaver.domain.vo;
+
+import lombok.Data;
+
+import java.time.LocalDateTime;
+
+@Data
+public class AIWritingResponseVO {
+    
+    private Long id;
+    
+    private Long chapterId;
+    
+    private String originalContent;
+    
+    private String generatedContent;
+    
+    private String writingType;
+    
+    private String userInstruction;
+    
+    private String status; // "draft", "accepted", "rejected"
+    
+    private LocalDateTime createTime;
+    
+    // Manual getters and setters for IDE compatibility
+    public Long getId() {
+        return id;
+    }
+    
+    public void setId(Long id) {
+        this.id = id;
+    }
+    
+    public Long getChapterId() {
+        return chapterId;
+    }
+    
+    public void setChapterId(Long chapterId) {
+        this.chapterId = chapterId;
+    }
+    
+    public String getOriginalContent() {
+        return originalContent;
+    }
+    
+    public void setOriginalContent(String originalContent) {
+        this.originalContent = originalContent;
+    }
+    
+    public String getGeneratedContent() {
+        return generatedContent;
+    }
+    
+    public void setGeneratedContent(String generatedContent) {
+        this.generatedContent = generatedContent;
+    }
+    
+    public String getWritingType() {
+        return writingType;
+    }
+    
+    public void setWritingType(String writingType) {
+        this.writingType = writingType;
+    }
+    
+    public String getUserInstruction() {
+        return userInstruction;
+    }
+    
+    public void setUserInstruction(String userInstruction) {
+        this.userInstruction = userInstruction;
+    }
+    
+    public String getStatus() {
+        return status;
+    }
+    
+    public void setStatus(String status) {
+        this.status = status;
+    }
+    
+    public LocalDateTime getCreateTime() {
+        return createTime;
+    }
+    
+    public void setCreateTime(LocalDateTime createTime) {
+        this.createTime = createTime;
+    }
+}
