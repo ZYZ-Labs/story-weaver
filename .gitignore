@@ -26,3 +26,7 @@ Thumbs.db
 # Test output
 coverage/
 .nyc_output/
+
+# Keep backend config templates in repo
+!backend/src/main/resources/application.yml
+!backend/src/main/resources/application-example.yml
