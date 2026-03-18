@@ -54,3 +54,6 @@ cp .env.example .env
 ```
 
 - `VITE_API_BASE_URL`：后端 API 地址（由 `src/services/api.ts` 统一读取）
+
+
+> 若未配置 `VITE_API_BASE_URL`，前端会默认回退到 `http://localhost:8080/api`，确保本地联调可直接请求本地后端。
