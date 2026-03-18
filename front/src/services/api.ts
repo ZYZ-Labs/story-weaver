@@ -1,4 +1,7 @@
 import axios from 'axios'
+import { AUTH_TOKEN_KEY } from '../stores/storyweaver'
+
+const fallbackBaseUrl = 'http://localhost:8080/api'
 
 const fallbackBaseUrl = 'http://localhost:8080/api'
 
