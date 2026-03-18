@@ -18,7 +18,7 @@ import { useRouter } from 'vue-router'
 import { useAppStore } from '../stores/app'
 import apiClient from '../services/api'
 
-const appStore = useAppStore()
+const appStore = useStoryweaverStore()
 const router = useRouter()
 const username = ref('admin')
 const password = ref('admin123')
