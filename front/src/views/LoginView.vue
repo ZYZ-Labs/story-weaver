@@ -15,7 +15,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { useStoryweaverStore } from '../stores/storyweaver'
+import { useAppStore } from '../stores/app'
 import apiClient from '../services/api'
 
 const appStore = useStoryweaverStore()
@@ -37,12 +37,11 @@ const handleLogin = async () => {
     })
 
     const token = data?.data?.token as string | undefined
-    const user = data?.data?.user as { username?: string } | undefined
     if (!token) {
       throw new Error('登录成功但未返回 token')
     }
 
-    appStore.login({ username: user?.username || username.value }, token)
+    appStore.login(username.value, token)
     router.push('/projects')
   } catch (error: any) {
     errorMessage.value = error?.response?.data?.message || error?.message || '登录失败'
