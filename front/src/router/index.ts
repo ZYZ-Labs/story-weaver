@@ -20,7 +20,7 @@ const router = createRouter({
           path: 'dashboard',
           name: 'dashboard',
           component: () => import('@/views/dashboard/DashboardView.vue'),
-          meta: { title: 'Dashboard' },
+          meta: { title: '总览' },
         },
         {
           path: 'projects',
@@ -68,13 +68,13 @@ const router = createRouter({
           path: 'rag',
           name: 'rag',
           component: () => import('@/views/rag/RagView.vue'),
-          meta: { title: 'RAG 知识库' },
+          meta: { title: '知识库' },
         },
         {
           path: 'providers',
           name: 'providers',
           component: () => import('@/views/provider/ProviderView.vue'),
-          meta: { title: 'AI Provider' },
+          meta: { title: '模型服务' },
         },
         {
           path: 'settings',
@@ -86,7 +86,7 @@ const router = createRouter({
           path: 'system',
           name: 'system',
           component: () => import('@/views/system/SystemView.vue'),
-          meta: { title: '系统日志' },
+          meta: { title: '系统状态' },
         },
       ],
     },
@@ -111,7 +111,7 @@ router.beforeEach((to) => {
   }
 
   if (typeof to.meta.title === 'string') {
-    document.title = `${to.meta.title} | Story Weaver`
+    document.title = `${to.meta.title} | 织文者 Story Weaver`
   }
 
   return true

@@ -39,5 +39,9 @@ export const useProviderStore = defineStore('provider', () => {
     return providerApi.testProvider(id)
   }
 
-  return { providers, loading, fetchAll, create, update, remove, test }
+  async function discover(payload: Partial<AIProvider>) {
+    return providerApi.discoverProviderModels(payload)
+  }
+
+  return { providers, loading, fetchAll, create, update, remove, test, discover }
 })

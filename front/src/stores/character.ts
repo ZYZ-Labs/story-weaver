@@ -12,6 +12,9 @@ export const useCharacterStore = defineStore('character', () => {
     loading.value = true
     try {
       characters.value = await characterApi.getProjectCharacters(projectId)
+    } catch (error) {
+      characters.value = []
+      throw error
     } finally {
       loading.value = false
     }

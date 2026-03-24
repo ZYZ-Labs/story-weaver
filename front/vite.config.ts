@@ -2,6 +2,26 @@ import { fileURLToPath, URL } from 'node:url'
 import { defineConfig, loadEnv } from 'vite'
 import vue from '@vitejs/plugin-vue'
 
+function createManualChunk(id: string) {
+  if (!id.includes('node_modules')) {
+    return undefined
+  }
+
+  if (id.includes('vuetify')) {
+    return 'vuetify'
+  }
+
+  if (id.includes('vue-router') || id.includes('pinia') || id.includes('/vue/')) {
+    return 'vue-core'
+  }
+
+  if (id.includes('axios')) {
+    return 'network'
+  }
+
+  return 'vendor'
+}
+
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
 
@@ -27,6 +47,11 @@ export default defineConfig(({ mode }) => {
     build: {
       sourcemap: mode !== 'production',
       outDir: 'dist',
+      rollupOptions: {
+        output: {
+          manualChunks: createManualChunk,
+        },
+      },
     },
   }
 })

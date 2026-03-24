@@ -1,5 +1,5 @@
 import http from './http'
-import type { AIProvider } from '@/types'
+import type { AIProvider, ProviderDiscoveryResult } from '@/types'
 
 export function getProviders() {
   return http.get<never, AIProvider[]>('/providers')
@@ -19,4 +19,8 @@ export function deleteProvider(id: number) {
 
 export function testProvider(id: number) {
   return http.post<never, { success: boolean }>(`/providers/${id}/test`)
+}
+
+export function discoverProviderModels(payload: Partial<AIProvider>) {
+  return http.post<never, ProviderDiscoveryResult>('/providers/discover-models', payload)
 }

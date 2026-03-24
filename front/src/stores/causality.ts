@@ -12,6 +12,9 @@ export const useCausalityStore = defineStore('causality', () => {
     loading.value = true
     try {
       nodes.value = await causalityApi.getCausalities(projectId)
+    } catch (error) {
+      nodes.value = []
+      throw error
     } finally {
       loading.value = false
     }

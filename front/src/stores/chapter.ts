@@ -4,6 +4,17 @@ import { defineStore } from 'pinia'
 import * as chapterApi from '@/api/chapter'
 import type { Chapter } from '@/types'
 
+function sortChapters(items: Chapter[]) {
+  return [...items].sort((left, right) => {
+    const leftOrder = left.orderNum ?? Number.MAX_SAFE_INTEGER
+    const rightOrder = right.orderNum ?? Number.MAX_SAFE_INTEGER
+    if (leftOrder !== rightOrder) {
+      return leftOrder - rightOrder
+    }
+    return (left.id ?? 0) - (right.id ?? 0)
+  })
+}
+
 export const useChapterStore = defineStore('chapter', () => {
   const chapters = ref<Chapter[]>([])
   const currentChapter = ref<Chapter | null>(null)
@@ -12,8 +23,12 @@ export const useChapterStore = defineStore('chapter', () => {
   async function fetchByProject(projectId: number) {
     loading.value = true
     try {
-      chapters.value = await chapterApi.getProjectChapters(projectId)
+      chapters.value = sortChapters(await chapterApi.getProjectChapters(projectId))
       currentChapter.value = chapters.value[0] || null
+    } catch (error) {
+      chapters.value = []
+      currentChapter.value = null
+      throw error
     } finally {
       loading.value = false
     }
@@ -26,27 +41,38 @@ export const useChapterStore = defineStore('chapter', () => {
 
   async function create(projectId: number, payload: Partial<Chapter>) {
     const chapter = await chapterApi.createChapter(projectId, payload)
-    chapters.value.push(chapter)
+    chapters.value = sortChapters([...chapters.value, chapter])
     currentChapter.value = chapter
     return chapter
   }
 
   async function update(projectId: number, chapterId: number, payload: Partial<Chapter>) {
     await chapterApi.updateChapter(projectId, chapterId, payload)
-    const chapter = chapters.value.find((item) => item.id === chapterId)
-    if (chapter) {
-      Object.assign(chapter, payload)
+
+    const target = chapters.value.find((item) => item.id === chapterId)
+    if (target) {
+      Object.assign(target, payload)
     }
+
     if (currentChapter.value?.id === chapterId) {
       Object.assign(currentChapter.value, payload)
     }
+
+    chapters.value = sortChapters(chapters.value)
   }
 
   async function remove(projectId: number, chapterId: number) {
+    const currentIndex = chapters.value.findIndex((item) => item.id === chapterId)
     await chapterApi.deleteChapter(projectId, chapterId)
+
     chapters.value = chapters.value.filter((item) => item.id !== chapterId)
+
     if (currentChapter.value?.id === chapterId) {
-      currentChapter.value = chapters.value[0] || null
+      currentChapter.value =
+        chapters.value[currentIndex] ||
+        chapters.value[currentIndex - 1] ||
+        chapters.value[0] ||
+        null
     }
   }
 

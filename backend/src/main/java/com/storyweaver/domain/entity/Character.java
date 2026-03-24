@@ -1,8 +1,6 @@
 package com.storyweaver.domain.entity;
 
 import com.baomidou.mybatisplus.annotation.*;
-import com.fasterxml.jackson.annotation.JsonRawValue;
-import com.fasterxml.jackson.databind.JsonNode;
 import lombok.Data;
 
 import java.time.LocalDateTime;
@@ -19,7 +17,6 @@ public class Character {
     
     private String description;
     
-    @JsonRawValue
     private String attributes;
     
     @TableField(fill = FieldFill.INSERT)

@@ -196,6 +196,15 @@ function getWritingTypeLabel(value?: string) {
   return mapping[value || ''] || value || '草稿'
 }
 
+function getWritingStatusLabel(value?: string) {
+  const mapping: Record<string, string> = {
+    draft: '草稿',
+    accepted: '已采纳',
+    rejected: '已拒绝',
+  }
+  return mapping[value || ''] || value || '草稿'
+}
+
 function getEntityOptions(type: string): EntityOption[] {
   switch (type) {
     case 'chapter':
@@ -231,7 +240,7 @@ function getEntityOptions(type: string): EntityOption[] {
         value: String(item.id),
         title: `${getWritingTypeLabel(item.writingType)} · ${item.selectedModel || '未指定模型'}`,
         summary: item.generatedContent || item.userInstruction || '',
-        meta: `章节 #${item.chapterId} / ${item.status || 'draft'}`,
+        meta: `章节 #${item.chapterId} / ${getWritingStatusLabel(item.status)}`,
       }))
     default:
       return []
@@ -264,7 +273,7 @@ function syncAutoFields() {
 
   const relationshipLabel = getRelationshipLabel(form.relationship)
   const autoName = causeMeta && effectMeta
-    ? `${causeMeta.title} ${relationshipLabel} ${effectMeta.title}`
+    ? `${causeMeta.title}${relationshipLabel}${effectMeta.title}`
     : causeMeta
       ? `因果：${causeMeta.title}`
       : effectMeta
@@ -277,7 +286,7 @@ function syncAutoFields() {
   ].filter(Boolean)
 
   const autoDescription = causeMeta && effectMeta
-    ? `${causeMeta.title} ${relationshipLabel} ${effectMeta.title}。${summaryParts.join(' ')}`
+    ? `${causeMeta.title}${relationshipLabel}${effectMeta.title}。${summaryParts.join(' ')}`
     : causeMeta?.summary || effectMeta?.summary || ''
 
   if (autoName && (!form.name || form.name === lastAutoName.value)) {
@@ -374,7 +383,7 @@ async function confirmDelete() {
 <template>
   <PageContainer
     title="因果管理"
-    description="因果关系现在可以直接绑定章节、剧情事件、人物、知识条目和 AI 草稿任务，创建时会自动带出标题和描述，减少重复录入。"
+    description="因果关系可以直接绑定章节、剧情事件、人物、知识条目和 AI 草稿任务，创建时会自动带出标题和描述，减少重复录入。"
   >
     <template #actions>
       <v-btn color="primary" prepend-icon="mdi-plus" :disabled="!projectId" @click="openCreate">

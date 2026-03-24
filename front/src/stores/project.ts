@@ -21,7 +21,13 @@ export const useProjectStore = defineStore('project', () => {
       projects.value = await projectApi.getProjects()
       if (!currentProject.value && projects.value.length > 0) {
         setCurrentProject(projects.value[0].id)
+      } else if (!projects.value.length) {
+        setCurrentProject(null)
       }
+    } catch (error) {
+      projects.value = []
+      setCurrentProject(null)
+      throw error
     } finally {
       loading.value = false
     }

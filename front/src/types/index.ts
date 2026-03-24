@@ -44,8 +44,10 @@ export interface Character {
 export interface WorldSetting {
   id: number
   projectId: number
-  title?: string
+  name?: string
+  description?: string
   category?: string
+  title?: string
   content?: string
   createTime?: string
   updateTime?: string
@@ -140,6 +142,13 @@ export interface AIProvider {
   remark?: string
   createTime?: string
   updateTime?: string
+}
+
+export interface ProviderDiscoveryResult {
+  success: boolean
+  message: string
+  models: string[]
+  embeddingModels: string[]
 }
 
 export interface KnowledgeDocument {

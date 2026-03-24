@@ -30,6 +30,10 @@ export const useRagStore = defineStore('rag', () => {
     loading.value = true
     try {
       documents.value = await ragApi.getKnowledgeDocuments(projectId)
+    } catch (error) {
+      documents.value = []
+      queryResults.value = []
+      throw error
     } finally {
       loading.value = false
     }

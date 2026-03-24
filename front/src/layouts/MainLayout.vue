@@ -12,7 +12,7 @@ const router = useRouter()
 const authStore = useAuthStore()
 const projectStore = useProjectStore()
 
-const currentUserName = computed(() => authStore.user?.nickname || authStore.user?.username || '作者')
+const currentUserName = computed(() => authStore.user?.nickname || authStore.user?.username || '创作者')
 
 async function ensureProjects() {
   if (!projectStore.projects.length && authStore.isAuthenticated) {
@@ -34,8 +34,8 @@ onMounted(() => {
   <v-layout class="min-h-screen">
     <v-navigation-drawer v-model="drawer" width="296" class="border-e" elevation="0">
       <div class="pa-5">
-        <div class="text-overline text-secondary">AI Novel Studio</div>
-        <div class="text-h5 font-weight-bold mt-1">Story Weaver</div>
+        <div class="text-overline text-secondary">长篇创作工作台</div>
+        <div class="text-h5 font-weight-bold mt-1">织文者 Story Weaver</div>
         <div class="text-body-2 text-medium-emphasis mt-2">
           把项目、设定、因果和 AI 写作收拢到一个可持续演进的工作台。
         </div>
@@ -52,7 +52,7 @@ onMounted(() => {
               item-value="id"
               :items="projectStore.projects"
               :model-value="projectStore.selectedProjectId"
-              placeholder="选择项目"
+              placeholder="请选择项目"
               @update:model-value="projectStore.setCurrentProject"
             />
           </v-card-text>

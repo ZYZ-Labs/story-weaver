@@ -12,6 +12,9 @@ export const usePlotStore = defineStore('plot', () => {
     loading.value = true
     try {
       plotlines.value = await plotApi.getPlots(projectId)
+    } catch (error) {
+      plotlines.value = []
+      throw error
     } finally {
       loading.value = false
     }

@@ -11,9 +11,9 @@ import { useWritingStore } from '@/stores/writing'
 import { formatDateTime } from '@/utils/format'
 
 const providerModelLibrary: Record<string, string[]> = {
+  ollama: ['qwen2.5:14b', 'qwen2.5:7b', 'llama3.1:8b', 'deepseek-r1:14b'],
   'openai-compatible': ['gpt-4.1', 'gpt-4o-mini', 'gpt-4.1-mini'],
   deepseek: ['deepseek-chat', 'deepseek-reasoner'],
-  ollama: ['qwen2.5:14b', 'llama3.1:8b', 'deepseek-r1:14b'],
 }
 
 const projectStore = useProjectStore()
@@ -49,6 +49,7 @@ const providerModelOptions = computed(() => {
   }
   return Array.from(values)
 })
+const isOllamaSelected = computed(() => selectedProvider.value?.providerType === 'ollama')
 
 const draftForm = reactive({
   writingType: 'continue',
@@ -93,7 +94,7 @@ watch(
   () => draftForm.selectedProviderId,
   () => {
     const provider = selectedProvider.value
-    const fallbackModel = provider?.modelName || settingsStore.getConfigValue('default_ai_model', 'gpt-4.1')
+    const fallbackModel = provider?.modelName || settingsStore.getConfigValue('default_ai_model', 'qwen2.5:14b')
     if (!draftForm.selectedModel || !providerModelOptions.value.includes(draftForm.selectedModel)) {
       draftForm.selectedModel = fallbackModel
     }
@@ -108,16 +109,27 @@ onMounted(async () => {
   applyProviderDefaults()
 })
 
+function getPreferredProviderId() {
+  const configuredId = settingsStore.getNumberValue('default_ai_provider_id', null)
+  if (configuredId && enabledProviders.value.some((item) => item.id === configuredId)) {
+    return configuredId
+  }
+
+  const defaultProvider = enabledProviders.value.find((item) => item.isDefault === 1)
+  const ollamaProvider = enabledProviders.value.find((item) => item.providerType === 'ollama')
+  return ollamaProvider?.id ?? defaultProvider?.id ?? enabledProviders.value[0]?.id ?? null
+}
+
 function applyProviderDefaults() {
   if (!enabledProviders.value.length) return
-  const defaultProviderId = settingsStore.getNumberValue('default_ai_provider_id', enabledProviders.value[0]?.id ?? null)
+
   if (!draftForm.selectedProviderId || !enabledProviders.value.some((item) => item.id === draftForm.selectedProviderId)) {
-    draftForm.selectedProviderId = defaultProviderId
+    draftForm.selectedProviderId = getPreferredProviderId()
   }
 
   const provider = selectedProvider.value
   if (!draftForm.selectedModel) {
-    draftForm.selectedModel = provider?.modelName || settingsStore.getConfigValue('default_ai_model', 'gpt-4.1')
+    draftForm.selectedModel = provider?.modelName || settingsStore.getConfigValue('default_ai_model', 'qwen2.5:14b')
   }
 }
 
@@ -144,8 +156,17 @@ function getWritingTypeLabel(value: string) {
   return mapping[value] || value
 }
 
+function getRecordStatusLabel(value?: string) {
+  const mapping: Record<string, string> = {
+    draft: '草稿',
+    accepted: '已采纳',
+    rejected: '已拒绝',
+  }
+  return mapping[value || ''] || value || '草稿'
+}
+
 function getProviderName(providerId?: number | null) {
-  return providerStore.providers.find((item) => item.id === providerId)?.name || '未指定 Provider'
+  return providerStore.providers.find((item) => item.id === providerId)?.name || '未指定模型服务'
 }
 
 async function generate() {
@@ -165,7 +186,7 @@ async function generate() {
       promptSnapshot: buildPromptSnapshot(),
     })
   } catch (error) {
-    errorMessage.value = error instanceof Error ? error.message : 'AI 生成失败'
+    errorMessage.value = error instanceof Error ? error.message : 'AI 生成失败。'
   } finally {
     generating.value = false
   }
@@ -184,7 +205,7 @@ async function saveCurrentChapter() {
 <template>
   <PageContainer
     title="写作中心"
-    description="写作中心现在支持直接选择 Provider 和模型，生成记录会保存所选 Provider / 模型 / Prompt 快照，接受草稿后还会自动同步到 RAG。"
+    description="这里会优先使用 Ollama 模型服务。生成记录会保存所选服务、模型和提示词快照，采纳草稿后还会自动同步到知识库。"
   >
     <EmptyState
       v-if="!projectId"
@@ -260,7 +281,7 @@ async function saveCurrentChapter() {
               <v-col cols="12" md="6">
                 <v-select
                   v-model="draftForm.selectedProviderId"
-                  label="AI Provider"
+                  label="模型服务"
                   :items="enabledProviders"
                   item-title="name"
                   item-value="id"
@@ -269,23 +290,27 @@ async function saveCurrentChapter() {
               <v-col cols="12" md="6">
                 <v-combobox
                   v-model="draftForm.selectedModel"
-                  label="生成模型"
+                  label="对话模型"
                   :items="providerModelOptions"
                   clearable
                 />
               </v-col>
             </v-row>
 
-            <v-text-field v-model="draftForm.maxTokens" label="最大 Tokens" type="number" class="mt-2" />
+            <v-text-field v-model="draftForm.maxTokens" label="最大输出长度" type="number" class="mt-2" />
 
             <v-alert type="info" variant="tonal" class="mt-4">
-              当前 Provider：{{ selectedProvider?.name || '未设置' }}，模型：{{ draftForm.selectedModel || '未设置' }}
+              当前模型服务：{{ selectedProvider?.name || '未设置' }}，对话模型：{{ draftForm.selectedModel || '未设置' }}
+            </v-alert>
+
+            <v-alert v-if="isOllamaSelected" type="success" variant="tonal" class="mt-4">
+              当前使用 Ollama。只要服务地址和模型名可用，就可以直接开始生成。
             </v-alert>
 
             <v-textarea
               :model-value="currentPromptTemplate"
               rows="5"
-              label="当前 Prompt 模板"
+              label="当前提示词模板"
               class="mt-4"
               readonly
             />
@@ -303,7 +328,7 @@ async function saveCurrentChapter() {
             </v-alert>
 
             <v-alert type="success" variant="tonal" class="mt-4">
-              接受 AI 草稿后，内容会自动同步到当前项目的 RAG 知识库。
+              采纳 AI 草稿后，内容会自动同步到当前项目的知识库。
             </v-alert>
 
             <v-btn
@@ -326,14 +351,16 @@ async function saveCurrentChapter() {
             <v-list-item
               v-for="record in writingStore.records"
               :key="record.id"
-              :title="`${getWritingTypeLabel(record.writingType)} · ${record.status || 'draft'}`"
+              :title="`${getWritingTypeLabel(record.writingType)} · ${getRecordStatusLabel(record.status)}`"
               :subtitle="record.generatedContent"
             >
               <template #append>
                 <div class="d-flex flex-column align-end ga-2">
                   <div class="d-flex ga-2">
                     <v-chip size="small" variant="tonal">{{ getProviderName(record.selectedProviderId) }}</v-chip>
-                    <v-chip size="small" color="primary" variant="tonal">{{ record.selectedModel || '未指定模型' }}</v-chip>
+                    <v-chip size="small" color="primary" variant="tonal">
+                      {{ record.selectedModel || '未指定模型' }}
+                    </v-chip>
                   </div>
                   <span class="text-caption text-medium-emphasis">{{ formatDateTime(record.createTime) }}</span>
                   <div class="d-flex ga-2">

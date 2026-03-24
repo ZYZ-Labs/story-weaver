@@ -53,7 +53,7 @@ const sourceTypeOptions = [
 const statusOptions = [
   { title: '待入库', value: 'ready' },
   { title: '已索引', value: 'indexed' },
-  { title: '归档', value: 'archived' },
+  { title: '已归档', value: 'archived' },
 ]
 
 const form = reactive({
@@ -128,6 +128,36 @@ function getWritingTypeLabel(value?: string) {
   return mapping[value || ''] || value || '草稿'
 }
 
+function getWritingStatusLabel(value?: string) {
+  const mapping: Record<string, string> = {
+    draft: '草稿',
+    accepted: '已采纳',
+    rejected: '已拒绝',
+  }
+  return mapping[value || ''] || value || '草稿'
+}
+
+function getSourceTypeLabel(value?: string) {
+  const mapping: Record<string, string> = {
+    manual_note: '手动录入',
+    chapter: '章节正文',
+    plot: '剧情事件',
+    character: '人物设定',
+    causality: '因果关系',
+    writing: 'AI 草稿',
+  }
+  return mapping[value || ''] || value || '未分类'
+}
+
+function getStatusLabel(value?: string) {
+  const mapping: Record<string, string> = {
+    ready: '待入库',
+    indexed: '已索引',
+    archived: '已归档',
+  }
+  return mapping[value || ''] || value || '待入库'
+}
+
 function getSourceOptions(type: string): SourceOption[] {
   switch (type) {
     case 'chapter':
@@ -168,7 +198,7 @@ function getSourceOptions(type: string): SourceOption[] {
         title: `${getWritingTypeLabel(item.writingType)} · ${item.selectedModel || '未指定模型'}`,
         summary: buildSummary(item.generatedContent || item.userInstruction || ''),
         content: item.generatedContent || item.originalContent || '',
-        meta: `章节 #${item.chapterId} / ${item.status || 'draft'}`,
+        meta: `章节 #${item.chapterId} / ${getWritingStatusLabel(item.status)}`,
       }))
     default:
       return []
@@ -280,7 +310,7 @@ async function queryKnowledge() {
 async function reindexKnowledge() {
   if (!projectId.value) return
   const result = await ragStore.reindex(projectId.value)
-  reindexMessage.value = `已完成重建索引，文档数：${result.documentCount}`
+  reindexMessage.value = `已完成重建索引，本次处理文档数：${result.documentCount}`
 }
 
 function getStatusColor(status?: string) {
@@ -292,8 +322,8 @@ function getStatusColor(status?: string) {
 
 <template>
   <PageContainer
-    title="RAG 知识库"
-    description="知识录入现在支持从章节、剧情事件、人物、因果关系和 AI 草稿任务中直接选择来源，并自动填充标题、摘要和正文。"
+    title="知识库"
+    description="知识录入支持从章节、剧情事件、人物、因果关系和 AI 草稿中直接选择来源，并自动填充标题、摘要和正文。"
   >
     <template #actions>
       <div class="d-flex ga-2">
@@ -305,7 +335,7 @@ function getStatusColor(status?: string) {
     <EmptyState
       v-if="!projectId"
       title="先选择项目"
-      description="RAG 知识条目和项目强绑定，请先从左侧选择当前项目。"
+      description="知识条目和项目强绑定，请先从左侧选择当前项目。"
     />
 
     <div v-else class="page-grid">
@@ -316,19 +346,19 @@ function getStatusColor(status?: string) {
       <div class="stats-grid">
         <v-card class="soft-panel">
           <v-card-text>
-            <div class="text-overline">知识文档</div>
+            <div class="text-overline">知识条目数</div>
             <div class="text-h4 mt-2">{{ ragStore.knowledgeStats.documents }}</div>
           </v-card-text>
         </v-card>
         <v-card class="soft-panel">
           <v-card-text>
-            <div class="text-overline">Chunk 估算</div>
+            <div class="text-overline">预估切片数</div>
             <div class="text-h4 mt-2">{{ ragStore.knowledgeStats.chunks }}</div>
           </v-card-text>
         </v-card>
         <v-card class="soft-panel">
           <v-card-text>
-            <div class="text-overline">Indexed 比例</div>
+            <div class="text-overline">已索引比例</div>
             <div class="text-h4 mt-2">{{ ragStore.knowledgeStats.indexed }}</div>
           </v-card-text>
         </v-card>
@@ -336,24 +366,24 @@ function getStatusColor(status?: string) {
 
       <div class="content-grid two-column">
         <v-card class="soft-panel">
-          <v-card-title>当前 Prompt 策略</v-card-title>
+          <v-card-title>当前提示词策略</v-card-title>
           <v-list lines="three">
-            <v-list-item title="RAG 检索 Prompt" :subtitle="currentQueryPrompt || '未配置'" />
-            <v-list-item title="知识抽取 Prompt" :subtitle="currentExtractPrompt || '未配置'" />
+            <v-list-item title="知识检索提示词" :subtitle="currentQueryPrompt || '未配置'" />
+            <v-list-item title="知识抽取提示词" :subtitle="currentExtractPrompt || '未配置'" />
           </v-list>
         </v-card>
 
         <v-card class="soft-panel">
           <v-card-text class="d-flex ga-3 align-center">
             <v-text-field v-model="searchText" label="检索知识条目" hide-details />
-            <v-btn color="primary" @click="queryKnowledge">检索</v-btn>
+            <v-btn color="primary" @click="queryKnowledge">开始检索</v-btn>
           </v-card-text>
         </v-card>
       </div>
 
       <div class="content-grid two-column">
         <v-card class="soft-panel">
-          <v-card-title>知识文档</v-card-title>
+          <v-card-title>知识条目</v-card-title>
           <v-list lines="three">
             <v-list-item
               v-for="doc in ragStore.documents"
@@ -364,9 +394,9 @@ function getStatusColor(status?: string) {
               <template #append>
                 <div class="d-flex flex-column align-end ga-2">
                   <div class="d-flex ga-2">
-                    <v-chip size="small" variant="tonal">{{ doc.sourceType || 'manual' }}</v-chip>
+                    <v-chip size="small" variant="tonal">{{ getSourceTypeLabel(doc.sourceType) }}</v-chip>
                     <v-chip size="small" :color="getStatusColor(doc.status)" variant="tonal">
-                      {{ doc.status || 'ready' }}
+                      {{ getStatusLabel(doc.status) }}
                     </v-chip>
                   </div>
                   <div class="d-flex ga-2">
@@ -389,7 +419,7 @@ function getStatusColor(status?: string) {
               :subtitle="doc.summary || doc.contentText || '暂无内容'"
             >
               <template #append>
-                <v-chip size="small" variant="tonal">{{ doc.sourceType || 'manual' }}</v-chip>
+                <v-chip size="small" variant="tonal">{{ getSourceTypeLabel(doc.sourceType) }}</v-chip>
               </template>
             </v-list-item>
           </v-list>

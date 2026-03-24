@@ -1,6 +1,7 @@
 package com.storyweaver.controller;
 
 import com.storyweaver.domain.entity.AIProvider;
+import com.storyweaver.domain.vo.ProviderDiscoveryVO;
 import com.storyweaver.security.SecurityUtils;
 import com.storyweaver.service.AIProviderService;
 import org.springframework.http.ResponseEntity;
@@ -53,7 +54,7 @@ public class AIProviderController {
         SecurityUtils.getCurrentUserId(authentication);
         AIProvider provider = aiProviderService.getById(id);
         if (provider == null) {
-            return ResponseEntity.status(404).body(Map.of("code", 404, "message", "Provider 不存在"));
+            return ResponseEntity.status(404).body(Map.of("code", 404, "message", "模型服务不存在"));
         }
         return ResponseEntity.ok(Map.of("code", 200, "message", "获取成功", "data", provider));
     }
@@ -70,7 +71,7 @@ public class AIProviderController {
         SecurityUtils.getCurrentUserId(authentication);
         AIProvider updated = aiProviderService.updateProvider(id, provider);
         if (updated == null) {
-            return ResponseEntity.status(404).body(Map.of("code", 404, "message", "Provider 不存在"));
+            return ResponseEntity.status(404).body(Map.of("code", 404, "message", "模型服务不存在"));
         }
         return ResponseEntity.ok(Map.of("code", 200, "message", "更新成功", "data", updated));
     }
@@ -85,7 +86,7 @@ public class AIProviderController {
         }
         SecurityUtils.getCurrentUserId(authentication);
         if (!aiProviderService.deleteProvider(id)) {
-            return ResponseEntity.status(404).body(Map.of("code", 404, "message", "Provider 不存在"));
+            return ResponseEntity.status(404).body(Map.of("code", 404, "message", "模型服务不存在"));
         }
         return ResponseEntity.ok(Map.of("code", 200, "message", "删除成功"));
     }
@@ -100,6 +101,27 @@ public class AIProviderController {
         }
         SecurityUtils.getCurrentUserId(authentication);
         boolean success = aiProviderService.testProvider(id);
-        return ResponseEntity.ok(Map.of("code", 200, "message", success ? "连通性测试通过" : "连通性测试失败", "data", Map.of("success", success)));
+        return ResponseEntity.ok(Map.of(
+                "code", 200,
+                "message", success ? "连接测试通过" : "连接测试失败",
+                "data", Map.of("success", success)
+        ));
+    }
+
+    @PostMapping("/discover-models")
+    public ResponseEntity<Map<String, Object>> discoverModels(
+            @RequestBody AIProvider provider,
+            @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
+            Authentication authentication) {
+        if (!AuthHeaderSupport.hasValidBearerToken(authorizationHeader)) {
+            return AuthHeaderSupport.unauthorizedResponse();
+        }
+        SecurityUtils.getCurrentUserId(authentication);
+        ProviderDiscoveryVO discovery = aiProviderService.discoverModels(provider);
+        return ResponseEntity.ok(Map.of(
+                "code", 200,
+                "message", discovery.message(),
+                "data", discovery
+        ));
     }
 }
