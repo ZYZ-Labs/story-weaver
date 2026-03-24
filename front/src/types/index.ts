@@ -16,6 +16,7 @@ export interface Project {
   genre?: string
   tags?: string
   worldSettingIds?: number[]
+  worldSettingNames?: string[]
   createTime?: string
   updateTime?: string
 }

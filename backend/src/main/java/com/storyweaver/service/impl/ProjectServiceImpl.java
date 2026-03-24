@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.storyweaver.domain.dto.ProjectRequestDTO;
 import com.storyweaver.domain.entity.Project;
+import com.storyweaver.domain.vo.WorldSettingVO;
 import com.storyweaver.repository.ProjectMapper;
 import com.storyweaver.service.ProjectService;
 import com.storyweaver.service.WorldSettingService;
@@ -12,6 +13,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 import java.util.List;
+import java.util.stream.Collectors;
 
 @Service
 public class ProjectServiceImpl extends ServiceImpl<ProjectMapper, Project> implements ProjectService {
@@ -28,7 +30,9 @@ public class ProjectServiceImpl extends ServiceImpl<ProjectMapper, Project> impl
         queryWrapper.eq("user_id", userId)
                 .eq("deleted", 0)
                 .orderByDesc("update_time");
-        return list(queryWrapper);
+        List<Project> projects = list(queryWrapper);
+        attachWorldSettingSummaries(projects);
+        return projects;
     }
 
     @Override
@@ -44,6 +48,7 @@ public class ProjectServiceImpl extends ServiceImpl<ProjectMapper, Project> impl
 
         save(project);
         worldSettingService.syncProjectAssociations(project.getId(), userId, requestDTO.getWorldSettingIds());
+        attachWorldSettingSummaries(List.of(project));
         return project;
     }
 
@@ -100,5 +105,18 @@ public class ProjectServiceImpl extends ServiceImpl<ProjectMapper, Project> impl
 
     private String trimOrNull(String value) {
         return StringUtils.hasText(value) ? value.trim() : null;
+    }
+
+    private void attachWorldSettingSummaries(List<Project> projects) {
+        for (Project project : projects) {
+            List<WorldSettingVO> worldSettings = worldSettingService.getWorldSettingsByProjectId(project.getId());
+            project.setWorldSettingIds(worldSettings.stream()
+                    .map(WorldSettingVO::getId)
+                    .collect(Collectors.toList()));
+            project.setWorldSettingNames(worldSettings.stream()
+                    .map(item -> StringUtils.hasText(item.getName()) ? item.getName() : item.getTitle())
+                    .filter(StringUtils::hasText)
+                    .collect(Collectors.toList()));
+        }
     }
 }

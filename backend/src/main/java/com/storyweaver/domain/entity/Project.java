@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.annotation.*;
 import lombok.Data;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Data
 @TableName("project")
@@ -24,6 +25,12 @@ public class Project {
     private String genre;
     
     private String tags;
+
+    @TableField(exist = false)
+    private List<Long> worldSettingIds;
+
+    @TableField(exist = false)
+    private List<String> worldSettingNames;
     
     @TableField(fill = FieldFill.INSERT)
     private LocalDateTime createTime;
@@ -58,6 +65,12 @@ public class Project {
     
     public String getTags() { return tags; }
     public void setTags(String tags) { this.tags = tags; }
+
+    public List<Long> getWorldSettingIds() { return worldSettingIds; }
+    public void setWorldSettingIds(List<Long> worldSettingIds) { this.worldSettingIds = worldSettingIds; }
+
+    public List<String> getWorldSettingNames() { return worldSettingNames; }
+    public void setWorldSettingNames(List<String> worldSettingNames) { this.worldSettingNames = worldSettingNames; }
     
     public LocalDateTime getCreateTime() { return createTime; }
     public void setCreateTime(LocalDateTime createTime) { this.createTime = createTime; }

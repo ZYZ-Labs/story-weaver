@@ -64,11 +64,13 @@ async function openEdit(projectId: number) {
     description: project.description || '',
     genre: project.genre || '',
     tags: project.tags || '',
-    worldSettingIds: [],
+    worldSettingIds: project.worldSettingIds ? [...project.worldSettingIds] : [],
   })
 
-  const associatedSettings = await getWorldSettings(projectId).catch(() => [])
-  form.worldSettingIds = associatedSettings.map((item) => item.id)
+  if (!project.worldSettingIds) {
+    const associatedSettings = await getWorldSettings(projectId).catch(() => [])
+    form.worldSettingIds = associatedSettings.map((item) => item.id)
+  }
   dialog.value = true
 }
 
@@ -151,6 +153,34 @@ onMounted(async () => {
 
             <div class="mt-2 text-caption text-medium-emphasis">
               标签：{{ project.tags || '暂无标签' }}
+            </div>
+
+            <div class="mt-4">
+              <div class="text-caption text-medium-emphasis">关联世界观</div>
+              <div class="d-flex flex-wrap ga-2 mt-2">
+                <v-chip
+                  v-for="name in (project.worldSettingNames || []).slice(0, 3)"
+                  :key="name"
+                  color="secondary"
+                  size="small"
+                  variant="tonal"
+                >
+                  {{ name }}
+                </v-chip>
+                <span
+                  v-if="!project.worldSettingNames?.length"
+                  class="text-caption text-medium-emphasis"
+                >
+                  暂未关联已有世界观
+                </span>
+                <v-chip
+                  v-else-if="project.worldSettingNames.length > 3"
+                  size="small"
+                  variant="outlined"
+                >
+                  +{{ project.worldSettingNames.length - 3 }}
+                </v-chip>
+              </div>
             </div>
 
             <v-spacer />

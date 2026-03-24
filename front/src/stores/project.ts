@@ -42,10 +42,7 @@ export const useProjectStore = defineStore('project', () => {
 
   async function update(id: number, payload: Partial<Project>) {
     await projectApi.updateProject(id, payload)
-    const target = projects.value.find((item) => item.id === id)
-    if (target) {
-      Object.assign(target, payload)
-    }
+    await fetchProjects()
   }
 
   async function remove(id: number) {
