@@ -57,6 +57,9 @@ export interface AIWritingRequest {
   userInstruction?: string
   writingType: string
   maxTokens?: number
+  selectedProviderId?: number | null
+  selectedModel?: string
+  promptSnapshot?: string
 }
 
 export interface AIWritingRecord {
@@ -66,6 +69,9 @@ export interface AIWritingRecord {
   generatedContent: string
   writingType: string
   userInstruction?: string
+  selectedProviderId?: number | null
+  selectedModel?: string
+  promptSnapshot?: string
   status?: string
   createTime?: string
 }
@@ -145,6 +151,15 @@ export interface KnowledgeDocument {
   contentText?: string
   summary?: string
   status?: string
+  createTime?: string
+  updateTime?: string
+}
+
+export interface SystemConfig {
+  id?: number
+  configKey: string
+  configValue: string
+  description?: string
   createTime?: string
   updateTime?: string
 }

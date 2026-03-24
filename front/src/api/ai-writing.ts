@@ -9,6 +9,10 @@ export function getWritingRecords(chapterId: number) {
   return http.get<never, AIWritingRecord[]>(`/ai-writing/chapter/${chapterId}`)
 }
 
+export function getProjectWritingRecords(projectId: number) {
+  return http.get<never, AIWritingRecord[]>(`/ai-writing/project/${projectId}`)
+}
+
 export function acceptWriting(id: number) {
   return http.post<never, AIWritingRecord>(`/ai-writing/${id}/accept`)
 }

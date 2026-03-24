@@ -4,11 +4,16 @@ import com.storyweaver.domain.dto.AIWritingRequestDTO;
 import com.storyweaver.domain.vo.AIWritingResponseVO;
 import com.storyweaver.security.SecurityUtils;
 import com.storyweaver.service.AIWritingService;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.validation.annotation.Validated;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
 
@@ -16,8 +21,11 @@ import java.util.List;
 @RequestMapping("/api/ai-writing")
 public class AIWritingController {
 
-    @Autowired
-    private AIWritingService aiWritingService;
+    private final AIWritingService aiWritingService;
+
+    public AIWritingController(AIWritingService aiWritingService) {
+        this.aiWritingService = aiWritingService;
+    }
 
     @PostMapping("/generate")
     public ResponseEntity<AIWritingResponseVO> generateContent(
@@ -51,8 +59,21 @@ public class AIWritingController {
         }
         SecurityUtils.getCurrentUserId(authentication);
 
-        List<AIWritingResponseVO> records = aiWritingService.getRecordsByChapterId(chapterId);
-        return ResponseEntity.ok(records);
+        return ResponseEntity.ok(aiWritingService.getRecordsByChapterId(chapterId));
+    }
+
+    @GetMapping("/project/{projectId}")
+    public ResponseEntity<List<AIWritingResponseVO>> getRecordsByProjectId(
+            @PathVariable Long projectId,
+            @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
+            Authentication authentication) {
+
+        if (!AuthHeaderSupport.hasValidBearerToken(authorizationHeader)) {
+            return ResponseEntity.status(401).build();
+        }
+        SecurityUtils.getCurrentUserId(authentication);
+
+        return ResponseEntity.ok(aiWritingService.getRecordsByProjectId(projectId));
     }
 
     @GetMapping("/{id}")

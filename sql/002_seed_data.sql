@@ -50,12 +50,22 @@ INSERT INTO ai_writing_record (chapter_id, original_content, generated_content, 
 INSERT INTO system_config (config_key, config_value, description) VALUES
 ('site_name', 'Story Weaver', '网站名称'),
 ('site_description', 'AI小说创作平台', '网站描述'),
-('default_ai_model', 'gpt-4', '默认AI模型'),
+('default_ai_model', 'gpt-4.1', '默认AI模型'),
+('default_ai_provider_id', '1', '默认AI Provider'),
+('default_embedding_provider_id', '1', '默认Embedding Provider'),
 ('max_chapter_length', '5000', '章节最大字数'),
 ('rag_enabled', 'true', 'RAG功能是否启用'),
 ('auto_save_interval', '300', '自动保存间隔（秒）'),
 ('default_theme', 'light', '默认主题'),
-('registration_enabled', 'true', '是否允许注册');
+('registration_enabled', 'true', '是否允许注册'),
+('prompt.continue', '延续当前章节的叙事节奏，保持人物口吻与设定一致，优先推进当前冲突。', '续写 Prompt 模板'),
+('prompt.expand', '在不偏离原意的前提下补足细节、动作、环境与情绪描写，让场景更饱满。', '扩写 Prompt 模板'),
+('prompt.rewrite', '保留关键信息与剧情目标，重写表达方式，提升节奏、清晰度和戏剧性。', '改写 Prompt 模板'),
+('prompt.polish', '在不改变剧情事实的前提下润色语言，让句子更自然、流畅、有画面感。', '润色 Prompt 模板'),
+('prompt.plot', '围绕当前章节与角色目标，输出可执行的剧情推进建议，明确冲突、转折和结果。', '剧情 Prompt 模板'),
+('prompt.causality', '分析事件之间的因果链路，明确原因、结果、触发条件和影响强度。', '因果 Prompt 模板'),
+('prompt.rag_query', '根据当前项目上下文组织检索关键词，优先召回与角色、章节、剧情和因果强相关的知识片段。', 'RAG 检索 Prompt 模板'),
+('prompt.knowledge_extract', '从确认后的正文中抽取人物、设定、事件、因果和可复用事实，整理成适合入库的知识摘要。', '知识抽取 Prompt 模板');
 
 -- 插入示例情节
 INSERT INTO plot (project_id, chapter_id, title, description, content, plot_type, sequence, characters, locations, timeline, conflicts, resolutions, tags, status, create_by, update_by) VALUES

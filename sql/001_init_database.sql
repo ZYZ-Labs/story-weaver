@@ -98,11 +98,15 @@ CREATE TABLE IF NOT EXISTS ai_writing_record (
     generated_content LONGTEXT COMMENT 'AI生成内容',
     writing_type VARCHAR(50) COMMENT '写作类型',
     user_instruction TEXT COMMENT '用户指令',
+    selected_provider_id BIGINT COMMENT '所选 Provider ID',
+    selected_model VARCHAR(100) COMMENT '所选模型',
+    prompt_snapshot LONGTEXT COMMENT 'Prompt 快照',
     status VARCHAR(20) NOT NULL DEFAULT 'draft' COMMENT '状态: draft/accepted/rejected',
     create_time DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     update_time DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
     deleted INT DEFAULT 0 COMMENT '删除标记: 0-未删除, 1-已删除',
     INDEX idx_chapter_id (chapter_id),
+    INDEX idx_selected_provider_id (selected_provider_id),
     INDEX idx_status (status),
     FOREIGN KEY (chapter_id) REFERENCES chapter(id) ON DELETE CASCADE
 ) COMMENT='AI写作记录表';
