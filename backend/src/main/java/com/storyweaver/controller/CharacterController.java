@@ -1,12 +1,22 @@
 package com.storyweaver.controller;
 
+import com.storyweaver.domain.dto.CharacterAttributeSuggestionRequestDTO;
 import com.storyweaver.domain.entity.Character;
 import com.storyweaver.security.SecurityUtils;
+import com.storyweaver.service.CharacterAttributeSuggestionService;
 import com.storyweaver.service.CharacterService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
 
 import java.util.HashMap;
 import java.util.List;
@@ -17,6 +27,9 @@ import java.util.Map;
 public class CharacterController {
     @Autowired
     private CharacterService characterService;
+
+    @Autowired
+    private CharacterAttributeSuggestionService characterAttributeSuggestionService;
 
     @GetMapping
     public ResponseEntity<Map<String, Object>> getProjectCharacters(
@@ -55,16 +68,16 @@ public class CharacterController {
 
         if (name == null || name.trim().isEmpty()) {
             return ResponseEntity.badRequest().body(Map.of(
-                "code", 400,
-                "message", "角色名称不能为空"
+                    "code", 400,
+                    "message", "角色名称不能为空"
             ));
         }
 
         Character character = characterService.createCharacter(projectId, userId, name, description, attributes);
         if (character == null) {
             return ResponseEntity.status(404).body(Map.of(
-                "code", 404,
-                "message", "项目不存在或无权访问"
+                    "code", 404,
+                    "message", "项目不存在或无权访问"
             ));
         }
 
@@ -91,8 +104,8 @@ public class CharacterController {
         boolean success = characterService.updateCharacter(characterId, userId, character);
         if (!success) {
             return ResponseEntity.status(404).body(Map.of(
-                "code", 404,
-                "message", "角色不存在或无权访问"
+                    "code", 404,
+                    "message", "角色不存在或无权访问"
             ));
         }
 
@@ -117,8 +130,8 @@ public class CharacterController {
         boolean success = characterService.deleteCharacter(characterId, userId);
         if (!success) {
             return ResponseEntity.status(404).body(Map.of(
-                "code", 404,
-                "message", "角色不存在或无权访问"
+                    "code", 404,
+                    "message", "角色不存在或无权访问"
             ));
         }
 
@@ -126,6 +139,24 @@ public class CharacterController {
         result.put("code", 200);
         result.put("message", "删除成功");
 
+        return ResponseEntity.ok(result);
+    }
+
+    @PostMapping("/attribute-suggestions")
+    public ResponseEntity<Map<String, Object>> generateCharacterAttributes(
+            @PathVariable Long projectId,
+            @RequestBody CharacterAttributeSuggestionRequestDTO requestDTO,
+            @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
+            Authentication authentication) {
+        if (!AuthHeaderSupport.hasValidBearerToken(authorizationHeader)) {
+            return AuthHeaderSupport.unauthorizedResponse();
+        }
+        Long userId = SecurityUtils.getCurrentUserId(authentication);
+
+        Map<String, Object> result = new HashMap<>();
+        result.put("code", 200);
+        result.put("message", "获取成功");
+        result.put("data", characterAttributeSuggestionService.generateAttributes(projectId, userId, requestDTO));
         return ResponseEntity.ok(result);
     }
 
@@ -143,8 +174,8 @@ public class CharacterController {
         Character character = characterService.getCharacterWithAuth(characterId, userId);
         if (character == null) {
             return ResponseEntity.status(404).body(Map.of(
-                "code", 404,
-                "message", "角色不存在或无权访问"
+                    "code", 404,
+                    "message", "角色不存在或无权访问"
             ));
         }
 

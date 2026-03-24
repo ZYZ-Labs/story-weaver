@@ -1,12 +1,21 @@
 package com.storyweaver.controller;
 
+import com.storyweaver.domain.dto.ProjectRequestDTO;
 import com.storyweaver.domain.entity.Project;
 import com.storyweaver.security.SecurityUtils;
 import com.storyweaver.service.ProjectService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
 
 import java.util.HashMap;
 import java.util.List;
@@ -39,7 +48,7 @@ public class ProjectController {
 
     @PostMapping
     public ResponseEntity<Map<String, Object>> createProject(
-            @RequestBody Map<String, String> requestBody,
+            @RequestBody ProjectRequestDTO requestDTO,
             @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
             Authentication authentication) {
         if (!AuthHeaderSupport.hasValidBearerToken(authorizationHeader)) {
@@ -47,19 +56,14 @@ public class ProjectController {
         }
         Long userId = SecurityUtils.getCurrentUserId(authentication);
 
-        String name = requestBody.get("name");
-        String description = requestBody.get("description");
-        String genre = requestBody.get("genre");
-        String tags = requestBody.get("tags");
-
-        if (name == null || name.trim().isEmpty()) {
+        if (requestDTO.getName() == null || requestDTO.getName().trim().isEmpty()) {
             return ResponseEntity.badRequest().body(Map.of(
-                "code", 400,
-                "message", "项目名称不能为空"
+                    "code", 400,
+                    "message", "项目名称不能为空"
             ));
         }
 
-        Project project = projectService.createProject(userId, name, description, genre, tags);
+        Project project = projectService.createProject(userId, requestDTO);
 
         Map<String, Object> result = new HashMap<>();
         result.put("code", 200);
@@ -72,7 +76,7 @@ public class ProjectController {
     @PutMapping("/{id}")
     public ResponseEntity<Map<String, Object>> updateProject(
             @PathVariable Long id,
-            @RequestBody Project project,
+            @RequestBody ProjectRequestDTO requestDTO,
             @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
             Authentication authentication) {
         if (!AuthHeaderSupport.hasValidBearerToken(authorizationHeader)) {
@@ -80,11 +84,11 @@ public class ProjectController {
         }
         Long userId = SecurityUtils.getCurrentUserId(authentication);
 
-        boolean success = projectService.updateProject(id, userId, project);
+        boolean success = projectService.updateProject(id, userId, requestDTO);
         if (!success) {
             return ResponseEntity.status(404).body(Map.of(
-                "code", 404,
-                "message", "项目不存在或无权访问"
+                    "code", 404,
+                    "message", "项目不存在或无权访问"
             ));
         }
 
@@ -108,8 +112,8 @@ public class ProjectController {
         boolean success = projectService.deleteProject(id, userId);
         if (!success) {
             return ResponseEntity.status(404).body(Map.of(
-                "code", 404,
-                "message", "项目不存在或无权访问"
+                    "code", 404,
+                    "message", "项目不存在或无权访问"
             ));
         }
 

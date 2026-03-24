@@ -1,5 +1,5 @@
 import http from './http'
-import type { Character } from '@/types'
+import type { Character, CharacterAttributeSuggestionResult } from '@/types'
 
 export function getProjectCharacters(projectId: number) {
   return http.get<never, Character[]>(`/projects/${projectId}/characters`)
@@ -15,4 +15,18 @@ export function updateCharacter(projectId: number, characterId: number, payload:
 
 export function deleteCharacter(projectId: number, characterId: number) {
   return http.delete(`/projects/${projectId}/characters/${characterId}`)
+}
+
+export function generateCharacterAttributes(
+  projectId: number,
+  payload: {
+    name?: string
+    description?: string
+    extraRequirements?: string
+  },
+) {
+  return http.post<never, CharacterAttributeSuggestionResult>(
+    `/projects/${projectId}/characters/attribute-suggestions`,
+    payload,
+  )
 }

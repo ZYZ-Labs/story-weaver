@@ -79,16 +79,35 @@ CREATE TABLE IF NOT EXISTS character (
 CREATE TABLE IF NOT EXISTS world_setting (
     id BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '设定ID',
     project_id BIGINT NOT NULL COMMENT '项目ID',
+    owner_user_id BIGINT NOT NULL COMMENT '所属用户ID',
     name VARCHAR(100) NOT NULL COMMENT '设定名称',
     description TEXT COMMENT '设定描述',
     category VARCHAR(50) COMMENT '分类',
+    title VARCHAR(100) COMMENT '兼容旧标题',
+    content TEXT COMMENT '兼容旧内容',
+    order_num INT DEFAULT 0 COMMENT '排序号',
     create_time DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     update_time DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
     deleted INT DEFAULT 0 COMMENT '删除标记: 0-未删除, 1-已删除',
     INDEX idx_project_id (project_id),
+    INDEX idx_owner_user_id (owner_user_id),
     INDEX idx_category (category),
-    FOREIGN KEY (project_id) REFERENCES project(id) ON DELETE CASCADE
+    FOREIGN KEY (project_id) REFERENCES project(id) ON DELETE CASCADE,
+    FOREIGN KEY (owner_user_id) REFERENCES user(id) ON DELETE CASCADE
 ) COMMENT='世界设定表';
+
+CREATE TABLE IF NOT EXISTS project_world_setting (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '关联ID',
+    project_id BIGINT NOT NULL COMMENT '项目ID',
+    world_setting_id BIGINT NOT NULL COMMENT '世界观模型ID',
+    create_time DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    update_time DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    UNIQUE KEY uq_project_world_setting (project_id, world_setting_id),
+    INDEX idx_pws_project_id (project_id),
+    INDEX idx_pws_world_setting_id (world_setting_id),
+    FOREIGN KEY (project_id) REFERENCES project(id) ON DELETE CASCADE,
+    FOREIGN KEY (world_setting_id) REFERENCES world_setting(id) ON DELETE CASCADE
+) COMMENT='项目与世界观关联表';
 
 -- AI写作记录表（与 AIWritingRecord 实体对齐）
 CREATE TABLE IF NOT EXISTS ai_writing_record (

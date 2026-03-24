@@ -47,6 +47,12 @@ const router = createRouter({
           meta: { title: '人物管理' },
         },
         {
+          path: 'world-settings',
+          name: 'world-settings',
+          component: () => import('@/views/world-setting/WorldSettingView.vue'),
+          meta: { title: '世界观管理' },
+        },
+        {
           path: 'plots',
           name: 'plots',
           component: () => import('@/views/plot/PlotView.vue'),

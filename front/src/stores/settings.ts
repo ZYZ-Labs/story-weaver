@@ -13,6 +13,9 @@ const promptTemplateKeys = [
   'prompt.causality',
   'prompt.rag_query',
   'prompt.knowledge_extract',
+  'prompt.naming.chapter',
+  'prompt.naming.character',
+  'prompt.character_attributes',
 ] as const
 
 type PromptTemplateKey = (typeof promptTemplateKeys)[number]

@@ -15,6 +15,7 @@ export interface Project {
   status?: number
   genre?: string
   tags?: string
+  worldSettingIds?: number[]
   createTime?: string
   updateTime?: string
 }
@@ -44,11 +45,14 @@ export interface Character {
 export interface WorldSetting {
   id: number
   projectId: number
+  ownerUserId?: number
   name?: string
   description?: string
   category?: string
   title?: string
   content?: string
+  orderNum?: number
+  associationCount?: number
   createTime?: string
   updateTime?: string
 }
@@ -149,6 +153,32 @@ export interface ProviderDiscoveryResult {
   message: string
   models: string[]
   embeddingModels: string[]
+}
+
+export interface NameSuggestionResult {
+  suggestions: string[]
+  providerName?: string
+  modelName?: string
+}
+
+export interface CharacterAttributeSuggestionResult {
+  age?: string
+  gender?: string
+  identity?: string
+  camp?: string
+  goal?: string
+  background?: string
+  appearance?: string
+  traits?: string[]
+  talents?: string[]
+  skills?: string[]
+  weaknesses?: string[]
+  equipment?: string[]
+  tags?: string[]
+  relations?: string[]
+  notes?: string
+  providerName?: string
+  modelName?: string
 }
 
 export interface KnowledgeDocument {

@@ -60,13 +60,12 @@ public class PlotService extends ServiceImpl<PlotMapper, Plot> {
     
     @Transactional
     public boolean deletePlot(Long plotId) {
-        Plot plot = getById(plotId);
-        if (plot == null) {
+        if (getPlotById(plotId) == null) {
             return false;
         }
-        
-        plot.setDeleted(1);
-        return updateById(plot);
+
+        // Use MyBatis-Plus logical delete so the deleted flag is persisted consistently.
+        return removeById(plotId);
     }
     
     public Plot getPlotById(Long plotId) {

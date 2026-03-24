@@ -13,4 +13,5 @@ public interface AIProviderService extends IService<AIProvider> {
     boolean deleteProvider(Long id);
     boolean testProvider(Long id);
     ProviderDiscoveryVO discoverModels(AIProvider provider);
+    String generateText(AIProvider provider, String modelName, String systemPrompt, String userPrompt, Double temperature, Integer maxTokens);
 }

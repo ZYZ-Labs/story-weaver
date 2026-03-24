@@ -3,7 +3,9 @@ import { computed, onMounted, reactive, ref, watch } from 'vue'
 
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import EmptyState from '@/components/EmptyState.vue'
+import NameSuggestionDialog from '@/components/NameSuggestionDialog.vue'
 import PageContainer from '@/components/PageContainer.vue'
+import { generateNameSuggestions } from '@/api/name-suggestion'
 import { useChapterStore } from '@/stores/chapter'
 import { useProjectStore } from '@/stores/project'
 import type { Chapter } from '@/types'
@@ -15,6 +17,10 @@ const dialog = ref(false)
 const deletingId = ref<number | null>(null)
 const confirmVisible = ref(false)
 const editingId = ref<number | null>(null)
+const nameSuggestionDialog = ref(false)
+const nameSuggestionLoading = ref(false)
+const nameSuggestions = ref<string[]>([])
+const nameSuggestionSourceLabel = ref('')
 
 const currentProjectId = computed(() => projectStore.selectedProjectId)
 const currentPreview = computed(() => chapterStore.currentChapter)
@@ -104,6 +110,33 @@ async function submit() {
   }
 
   dialog.value = false
+}
+
+async function generateTitleSuggestions() {
+  if (!currentProjectId.value) {
+    return
+  }
+
+  nameSuggestionLoading.value = true
+  nameSuggestionDialog.value = true
+
+  try {
+    const result = await generateNameSuggestions(currentProjectId.value, {
+      entityType: 'chapter',
+      brief: form.content.trim() || form.title.trim() || '请根据当前项目风格生成一个章节标题。',
+      extraRequirements: `当前章节顺序：第 ${Number(form.orderNum) || 1} 章。标题要适合中文长篇连载。`,
+      count: 6,
+    })
+    nameSuggestions.value = result.suggestions || []
+    nameSuggestionSourceLabel.value = `生成模型：${result.providerName || '未命名服务'} / ${result.modelName || '未命名模型'}`
+  } finally {
+    nameSuggestionLoading.value = false
+  }
+}
+
+function applySuggestedTitle(value: string) {
+  form.title = value
+  nameSuggestionDialog.value = false
 }
 
 async function confirmDelete() {
@@ -197,7 +230,12 @@ async function confirmDelete() {
         <v-card-text class="pt-4">
           <v-row>
             <v-col cols="12" md="8">
-              <v-text-field v-model="form.title" label="章节标题" />
+              <div class="d-flex ga-2 align-start">
+                <v-text-field v-model="form.title" class="flex-grow-1" label="章节标题" />
+                <v-btn class="mt-2" variant="outlined" @click="generateTitleSuggestions">
+                  AI 生成标题
+                </v-btn>
+              </div>
             </v-col>
             <v-col cols="12" md="4">
               <v-text-field v-model="form.orderNum" type="number" label="章节顺序" />
@@ -219,6 +257,17 @@ async function confirmDelete() {
       title="删除章节"
       text="确认删除这章吗？删除后不会再出现在章节列表、写作中心和项目概览里。"
       @confirm="confirmDelete"
+    />
+
+    <NameSuggestionDialog
+      v-model="nameSuggestionDialog"
+      title="选择章节标题"
+      :loading="nameSuggestionLoading"
+      :suggestions="nameSuggestions"
+      :source-label="nameSuggestionSourceLabel"
+      empty-text="这次没有拿到可用标题候选，可以重试一次。"
+      @refresh="generateTitleSuggestions"
+      @select="applySuggestedTitle"
     />
   </PageContainer>
 </template>

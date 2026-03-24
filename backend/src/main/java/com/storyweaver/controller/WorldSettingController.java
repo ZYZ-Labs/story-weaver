@@ -3,12 +3,20 @@ package com.storyweaver.controller;
 import com.storyweaver.domain.dto.WorldSettingDTO;
 import com.storyweaver.domain.vo.WorldSettingVO;
 import com.storyweaver.security.SecurityUtils;
+import com.storyweaver.service.ProjectService;
 import com.storyweaver.service.WorldSettingService;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.validation.annotation.Validated;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
 
@@ -16,8 +24,13 @@ import java.util.List;
 @RequestMapping("/api/world-settings")
 public class WorldSettingController {
 
-    @Autowired
-    private WorldSettingService worldSettingService;
+    private final WorldSettingService worldSettingService;
+    private final ProjectService projectService;
+
+    public WorldSettingController(WorldSettingService worldSettingService, ProjectService projectService) {
+        this.worldSettingService = worldSettingService;
+        this.projectService = projectService;
+    }
 
     @GetMapping("/project/{projectId}")
     public ResponseEntity<List<WorldSettingVO>> getWorldSettingsByProjectId(
@@ -27,9 +40,25 @@ public class WorldSettingController {
         if (!AuthHeaderSupport.hasValidBearerToken(authorizationHeader)) {
             return ResponseEntity.status(401).build();
         }
-        SecurityUtils.getCurrentUserId(authentication);
-        List<WorldSettingVO> worldSettings = worldSettingService.getWorldSettingsByProjectId(projectId);
-        return ResponseEntity.ok(worldSettings);
+
+        Long userId = SecurityUtils.getCurrentUserId(authentication);
+        if (!projectService.hasProjectAccess(projectId, userId)) {
+            return ResponseEntity.status(404).build();
+        }
+
+        return ResponseEntity.ok(worldSettingService.getWorldSettingsByProjectId(projectId));
+    }
+
+    @GetMapping("/library")
+    public ResponseEntity<List<WorldSettingVO>> getWorldSettingLibrary(
+            @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
+            Authentication authentication) {
+        if (!AuthHeaderSupport.hasValidBearerToken(authorizationHeader)) {
+            return ResponseEntity.status(401).build();
+        }
+
+        Long userId = SecurityUtils.getCurrentUserId(authentication);
+        return ResponseEntity.ok(worldSettingService.listLibraryWorldSettings(userId));
     }
 
     @GetMapping("/{id}")
@@ -40,13 +69,10 @@ public class WorldSettingController {
         if (!AuthHeaderSupport.hasValidBearerToken(authorizationHeader)) {
             return ResponseEntity.status(401).build();
         }
-        SecurityUtils.getCurrentUserId(authentication);
-        WorldSettingVO worldSetting = worldSettingService.getWorldSettingById(id);
-        if (worldSetting == null) {
-            return ResponseEntity.notFound().build();
-        }
 
-        return ResponseEntity.ok(worldSetting);
+        Long userId = SecurityUtils.getCurrentUserId(authentication);
+        WorldSettingVO worldSettingVO = worldSettingService.getWorldSettingById(id, userId);
+        return worldSettingVO == null ? ResponseEntity.notFound().build() : ResponseEntity.ok(worldSettingVO);
     }
 
     @PostMapping
@@ -57,9 +83,13 @@ public class WorldSettingController {
         if (!AuthHeaderSupport.hasValidBearerToken(authorizationHeader)) {
             return ResponseEntity.status(401).build();
         }
-        SecurityUtils.getCurrentUserId(authentication);
-        WorldSettingVO createdWorldSetting = worldSettingService.createWorldSetting(worldSettingDTO);
-        return ResponseEntity.ok(createdWorldSetting);
+
+        Long userId = SecurityUtils.getCurrentUserId(authentication);
+        if (!projectService.hasProjectAccess(worldSettingDTO.getProjectId(), userId)) {
+            return ResponseEntity.status(404).build();
+        }
+
+        return ResponseEntity.ok(worldSettingService.createWorldSetting(worldSettingDTO, userId));
     }
 
     @PutMapping("/{id}")
@@ -71,13 +101,14 @@ public class WorldSettingController {
         if (!AuthHeaderSupport.hasValidBearerToken(authorizationHeader)) {
             return ResponseEntity.status(401).build();
         }
-        SecurityUtils.getCurrentUserId(authentication);
-        WorldSettingVO updatedWorldSetting = worldSettingService.updateWorldSetting(id, worldSettingDTO);
-        if (updatedWorldSetting == null) {
+
+        Long userId = SecurityUtils.getCurrentUserId(authentication);
+        if (!worldSettingService.hasAccess(id, userId)) {
             return ResponseEntity.notFound().build();
         }
 
-        return ResponseEntity.ok(updatedWorldSetting);
+        WorldSettingVO updatedWorldSetting = worldSettingService.updateWorldSetting(id, worldSettingDTO, userId);
+        return updatedWorldSetting == null ? ResponseEntity.notFound().build() : ResponseEntity.ok(updatedWorldSetting);
     }
 
     @DeleteMapping("/{id}")
@@ -88,8 +119,53 @@ public class WorldSettingController {
         if (!AuthHeaderSupport.hasValidBearerToken(authorizationHeader)) {
             return ResponseEntity.status(401).build();
         }
-        SecurityUtils.getCurrentUserId(authentication);
-        worldSettingService.deleteWorldSetting(id);
+
+        Long userId = SecurityUtils.getCurrentUserId(authentication);
+        if (!worldSettingService.hasAccess(id, userId)) {
+            return ResponseEntity.notFound().build();
+        }
+
+        worldSettingService.deleteWorldSetting(id, userId);
         return ResponseEntity.ok().build();
+    }
+
+    @PostMapping("/{id}/projects/{projectId}")
+    public ResponseEntity<Void> attachWorldSettingToProject(
+            @PathVariable Long id,
+            @PathVariable Long projectId,
+            @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
+            Authentication authentication) {
+        if (!AuthHeaderSupport.hasValidBearerToken(authorizationHeader)) {
+            return ResponseEntity.status(401).build();
+        }
+
+        Long userId = SecurityUtils.getCurrentUserId(authentication);
+        if (!projectService.hasProjectAccess(projectId, userId)) {
+            return ResponseEntity.status(404).build();
+        }
+
+        return worldSettingService.attachWorldSettingToProject(id, projectId, userId)
+                ? ResponseEntity.ok().build()
+                : ResponseEntity.notFound().build();
+    }
+
+    @DeleteMapping("/{id}/projects/{projectId}")
+    public ResponseEntity<Void> detachWorldSettingFromProject(
+            @PathVariable Long id,
+            @PathVariable Long projectId,
+            @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
+            Authentication authentication) {
+        if (!AuthHeaderSupport.hasValidBearerToken(authorizationHeader)) {
+            return ResponseEntity.status(401).build();
+        }
+
+        Long userId = SecurityUtils.getCurrentUserId(authentication);
+        if (!projectService.hasProjectAccess(projectId, userId)) {
+            return ResponseEntity.status(404).build();
+        }
+
+        return worldSettingService.detachWorldSettingFromProject(id, projectId, userId)
+                ? ResponseEntity.ok().build()
+                : ResponseEntity.notFound().build();
     }
 }
