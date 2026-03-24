@@ -1,6 +1,5 @@
 package com.storyweaver.domain.dto;
 
-import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import lombok.Data;
 
@@ -10,12 +9,11 @@ public class AIWritingRequestDTO {
     @NotNull(message = "章节ID不能为空")
     private Long chapterId;
 
-    @NotBlank(message = "当前内容不能为空")
     private String currentContent;
 
     private String userInstruction;
 
-    private String writingType; // continue, polish, expand, rewrite
+    private String writingType; // draft, continue, polish, expand, rewrite
 
     private Integer maxTokens = 500;
 

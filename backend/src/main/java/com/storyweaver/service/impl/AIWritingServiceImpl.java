@@ -8,18 +8,21 @@ import com.storyweaver.domain.entity.AIProvider;
 import com.storyweaver.domain.entity.AIWritingRecord;
 import com.storyweaver.domain.entity.Chapter;
 import com.storyweaver.domain.entity.KnowledgeDocument;
+import com.storyweaver.domain.entity.Project;
 import com.storyweaver.domain.vo.AIWritingResponseVO;
 import com.storyweaver.repository.AIWritingRecordMapper;
 import com.storyweaver.service.AIProviderService;
 import com.storyweaver.service.AIWritingService;
 import com.storyweaver.service.ChapterService;
 import com.storyweaver.service.KnowledgeDocumentService;
+import com.storyweaver.service.ProjectService;
+import com.storyweaver.service.SystemConfigService;
 import org.springframework.beans.BeanUtils;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
 import java.util.List;
-import java.util.Random;
+import java.util.Locale;
 import java.util.stream.Collectors;
 
 @Service
@@ -28,46 +31,56 @@ public class AIWritingServiceImpl extends ServiceImpl<AIWritingRecordMapper, AIW
     private final ChapterService chapterService;
     private final KnowledgeDocumentService knowledgeDocumentService;
     private final AIProviderService aiProviderService;
-    private final Random random = new Random();
+    private final ProjectService projectService;
+    private final SystemConfigService systemConfigService;
 
     public AIWritingServiceImpl(
             ChapterService chapterService,
             KnowledgeDocumentService knowledgeDocumentService,
-            AIProviderService aiProviderService) {
+            AIProviderService aiProviderService,
+            ProjectService projectService,
+            SystemConfigService systemConfigService) {
         this.chapterService = chapterService;
         this.knowledgeDocumentService = knowledgeDocumentService;
         this.aiProviderService = aiProviderService;
+        this.projectService = projectService;
+        this.systemConfigService = systemConfigService;
     }
 
     @Override
     public AIWritingResponseVO generateContent(AIWritingRequestDTO requestDTO) {
         Chapter chapter = chapterService.getById(requestDTO.getChapterId());
-        if (chapter == null) {
-            throw new IllegalArgumentException("chapter not found");
+        if (chapter == null || Integer.valueOf(1).equals(chapter.getDeleted())) {
+            throw new IllegalArgumentException("章节不存在");
         }
 
-        AIProvider selectedProvider = resolveProvider(requestDTO.getSelectedProviderId());
-        Long selectedProviderId = selectedProvider != null ? selectedProvider.getId() : requestDTO.getSelectedProviderId();
-        String selectedModel = StringUtils.hasText(requestDTO.getSelectedModel())
-                ? requestDTO.getSelectedModel()
-                : selectedProvider != null ? selectedProvider.getModelName() : null;
-        String promptSnapshot = StringUtils.hasText(requestDTO.getPromptSnapshot())
-                ? requestDTO.getPromptSnapshot()
-                : requestDTO.getUserInstruction();
+        String currentContent = normalizeText(requestDTO.getCurrentContent());
+        String writingType = normalizeWritingType(requestDTO.getWritingType(), currentContent);
+        AIProvider provider = resolveProvider(requestDTO.getSelectedProviderId());
+        String selectedModel = resolveModelName(provider, requestDTO.getSelectedModel());
+        String promptSnapshot = resolvePromptSnapshot(requestDTO.getPromptSnapshot(), writingType);
+        Project project = chapter.getProjectId() == null ? null : projectService.getById(chapter.getProjectId());
 
-        String generatedContent = generateMockAIContent(
-                requestDTO.getCurrentContent(),
-                requestDTO.getWritingType(),
-                requestDTO.getUserInstruction(),
-                requestDTO.getMaxTokens());
+        String generatedContent = aiProviderService.generateText(
+                provider,
+                selectedModel,
+                buildSystemPrompt(promptSnapshot),
+                buildUserPrompt(project, chapter, currentContent, writingType, normalizeText(requestDTO.getUserInstruction())),
+                null,
+                requestDTO.getMaxTokens()
+        );
+
+        if (!StringUtils.hasText(generatedContent)) {
+            throw new IllegalStateException("模型没有返回可用的正文内容，请稍后重试");
+        }
 
         AIWritingRecord record = new AIWritingRecord();
         record.setChapterId(requestDTO.getChapterId());
-        record.setOriginalContent(requestDTO.getCurrentContent());
-        record.setGeneratedContent(generatedContent);
-        record.setWritingType(StringUtils.hasText(requestDTO.getWritingType()) ? requestDTO.getWritingType() : "continue");
-        record.setUserInstruction(requestDTO.getUserInstruction());
-        record.setSelectedProviderId(selectedProviderId);
+        record.setOriginalContent(currentContent);
+        record.setGeneratedContent(generatedContent.trim());
+        record.setWritingType(writingType);
+        record.setUserInstruction(normalizeText(requestDTO.getUserInstruction()));
+        record.setSelectedProviderId(provider.getId());
         record.setSelectedModel(selectedModel);
         record.setPromptSnapshot(promptSnapshot);
         record.setStatus("draft");
@@ -144,15 +157,110 @@ public class AIWritingServiceImpl extends ServiceImpl<AIWritingRecordMapper, AIW
     private AIProvider resolveProvider(Long selectedProviderId) {
         if (selectedProviderId != null) {
             AIProvider provider = aiProviderService.getById(selectedProviderId);
-            if (provider != null && !Integer.valueOf(1).equals(provider.getDeleted())) {
+            if (provider != null
+                    && !Integer.valueOf(1).equals(provider.getDeleted())
+                    && Integer.valueOf(1).equals(provider.getEnabled())) {
+                return provider;
+            }
+        }
+
+        Long configuredProviderId = parseLong(systemConfigService.getConfigValue("default_ai_provider_id"));
+        if (configuredProviderId != null) {
+            AIProvider provider = aiProviderService.getById(configuredProviderId);
+            if (provider != null
+                    && !Integer.valueOf(1).equals(provider.getDeleted())
+                    && Integer.valueOf(1).equals(provider.getEnabled())) {
                 return provider;
             }
         }
 
         return aiProviderService.listProviders().stream()
-                .filter(item -> Integer.valueOf(1).equals(item.getIsDefault()))
+                .filter(item -> Integer.valueOf(1).equals(item.getEnabled()))
                 .findFirst()
-                .orElse(null);
+                .orElseThrow(() -> new IllegalStateException("当前没有可用的默认模型服务，请先在模型服务页启用一个 Provider"));
+    }
+
+    private String resolveModelName(AIProvider provider, String selectedModel) {
+        if (StringUtils.hasText(selectedModel)) {
+            return selectedModel.trim();
+        }
+
+        if (provider != null && StringUtils.hasText(provider.getModelName())) {
+            return provider.getModelName().trim();
+        }
+
+        String configuredModel = systemConfigService.getConfigValue("default_ai_model");
+        if (StringUtils.hasText(configuredModel)) {
+            return configuredModel.trim();
+        }
+
+        throw new IllegalStateException("当前默认模型尚未配置，请先在系统设置里指定默认模型");
+    }
+
+    private String resolvePromptSnapshot(String requestPromptSnapshot, String writingType) {
+        if (StringUtils.hasText(requestPromptSnapshot)) {
+            return requestPromptSnapshot.trim();
+        }
+
+        String configuredPrompt = systemConfigService.getConfigValue(resolvePromptKey(writingType));
+        if (StringUtils.hasText(configuredPrompt)) {
+            return configuredPrompt.trim();
+        }
+
+        return getDefaultPromptTemplate(writingType);
+    }
+
+    private String buildSystemPrompt(String promptSnapshot) {
+        return """
+                你是一名中文长篇小说写作助手。
+                请只输出可直接使用的小说正文，不要解释，不要标题，不要 Markdown 标记，不要列提纲。
+                %s
+                """.formatted(promptSnapshot);
+    }
+
+    private String buildUserPrompt(
+            Project project,
+            Chapter chapter,
+            String currentContent,
+            String writingType,
+            String userInstruction) {
+        StringBuilder builder = new StringBuilder();
+        builder.append("请帮助我处理当前章节正文。\n");
+        if (project != null) {
+            builder.append("项目名称：").append(safe(project.getName(), "未命名项目")).append('\n');
+            if (StringUtils.hasText(project.getGenre())) {
+                builder.append("项目题材：").append(project.getGenre().trim()).append('\n');
+            }
+            if (StringUtils.hasText(project.getDescription())) {
+                builder.append("项目简介：").append(project.getDescription().trim()).append('\n');
+            }
+        }
+
+        builder.append("章节标题：").append(safe(chapter.getTitle(), "未命名章节")).append('\n');
+        if (chapter.getOrderNum() != null) {
+            builder.append("章节顺序：第 ").append(chapter.getOrderNum()).append(" 章\n");
+        }
+
+        switch (writingType) {
+            case "draft" -> builder.append("当前正文为空，需要先拟生成一段可继续扩写的章节初稿。\n");
+            case "continue" -> builder.append("请基于已有正文自然续写后续内容，不要重复已经写过的句子。\n");
+            case "expand" -> builder.append("请在保留现有情节事实的前提下，输出扩写后的完整章节版本。\n");
+            case "rewrite" -> builder.append("请保留核心剧情意图，输出重写后的完整章节版本。\n");
+            case "polish" -> builder.append("请保留剧情事实，输出润色后的完整章节版本。\n");
+            default -> builder.append("请输出可直接放入章节中的正文内容。\n");
+        }
+
+        if (StringUtils.hasText(currentContent)) {
+            builder.append("\n当前正文：\n").append(currentContent.trim()).append('\n');
+        } else {
+            builder.append("\n当前正文：\n（暂无正文内容）\n");
+        }
+
+        if (StringUtils.hasText(userInstruction)) {
+            builder.append("\n补充要求：\n").append(userInstruction.trim()).append('\n');
+        }
+
+        return builder.toString();
     }
 
     private void syncKnowledgeDocument(Chapter chapter, AIWritingRecord record) {
@@ -194,46 +302,64 @@ public class AIWritingServiceImpl extends ServiceImpl<AIWritingRecordMapper, AIW
         return normalized.length() <= 160 ? normalized : normalized.substring(0, 160);
     }
 
-    private String generateMockAIContent(String currentContent, String writingType, String userInstruction, Integer maxTokens) {
-        StringBuilder content = new StringBuilder();
+    private String normalizeWritingType(String writingType, String currentContent) {
+        String normalized = StringUtils.hasText(writingType)
+                ? writingType.trim().toLowerCase(Locale.ROOT)
+                : "";
 
-        if (writingType == null || "continue".equals(writingType)) {
-            content.append("[AI continuation]\n\n");
-            content.append("As the story moves forward, ");
-
-            String[] continuations = {
-                    "the protagonist senses a new threat and steadies himself before stepping into the unknown.",
-                    "the quiet atmosphere breaks as a hidden clue pushes the conflict toward a sharper turning point.",
-                    "an unexpected ally arrives and changes the direction of the entire chapter.",
-                    "memories from the past resurface, reframing the choice that now stands in front of everyone.",
-                    "the scene grows tense, and even a small action begins to carry irreversible consequences."
-            };
-            content.append(continuations[random.nextInt(continuations.length)]);
-
-            if (StringUtils.hasText(userInstruction)) {
-                content.append("\n\nAdditional instruction: ").append(userInstruction);
+        if (!StringUtils.hasText(currentContent)) {
+            if (!StringUtils.hasText(normalized)
+                    || "continue".equals(normalized)
+                    || "expand".equals(normalized)) {
+                return "draft";
             }
-        } else if ("polish".equals(writingType)) {
-            content.append("[AI polish]\n\n");
-            content.append(currentContent);
-            content.append("\n\nThe prose becomes tighter, smoother, and more vivid while preserving the plot facts.");
-        } else if ("expand".equals(writingType)) {
-            content.append("[AI expansion]\n\n");
-            content.append(currentContent);
-            content.append("\n\nThe scene is expanded with richer sensory detail, emotional beats, and movement.");
-        } else if ("rewrite".equals(writingType)) {
-            content.append("[AI rewrite]\n\n");
-            content.append("The passage is rewritten with clearer rhythm, sharper dramatic focus, and preserved story intent.");
-        } else {
-            content.append("[AI draft]\n\n");
-            content.append(currentContent);
         }
 
-        String result = content.toString();
-        if (maxTokens != null && result.length() > maxTokens) {
-            result = result.substring(0, maxTokens);
+        return switch (normalized) {
+            case "draft", "continue", "expand", "rewrite", "polish" -> normalized;
+            default -> StringUtils.hasText(currentContent) ? "continue" : "draft";
+        };
+    }
+
+    private String normalizeText(String value) {
+        return StringUtils.hasText(value) ? value.trim() : "";
+    }
+
+    private Long parseLong(String value) {
+        if (!StringUtils.hasText(value)) {
+            return null;
         }
-        return result;
+        try {
+            return Long.parseLong(value.trim());
+        } catch (NumberFormatException exception) {
+            return null;
+        }
+    }
+
+    private String resolvePromptKey(String writingType) {
+        return switch (writingType) {
+            case "draft" -> "prompt.draft";
+            case "continue" -> "prompt.continue";
+            case "expand" -> "prompt.expand";
+            case "rewrite" -> "prompt.rewrite";
+            case "polish" -> "prompt.polish";
+            default -> "prompt.continue";
+        };
+    }
+
+    private String getDefaultPromptTemplate(String writingType) {
+        return switch (writingType) {
+            case "draft" -> "先根据章节标题和补充要求拟生成一段可继续扩写的小说正文初稿，优先搭好场景、人物状态和冲突起点。";
+            case "continue" -> "延续当前章节的叙事节奏，保持人物口吻与设定一致，优先推进当前冲突。";
+            case "expand" -> "在不偏离原意的前提下补足细节、动作、环境与情绪描写，让场景更饱满。";
+            case "rewrite" -> "保留关键信息与剧情目标，重写表达方式，提升节奏、清晰度和戏剧性。";
+            case "polish" -> "在不改变剧情事实的前提下润色语言，让句子更自然、流畅、有画面感。";
+            default -> "输出可直接用于章节正文的中文小说内容。";
+        };
+    }
+
+    private String safe(String value, String fallback) {
+        return StringUtils.hasText(value) ? value.trim() : fallback;
     }
 
     private AIWritingResponseVO convertToVO(AIWritingRecord record) {

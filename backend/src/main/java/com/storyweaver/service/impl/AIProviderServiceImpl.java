@@ -233,6 +233,9 @@ public class AIProviderServiceImpl extends ServiceImpl<AIProviderMapper, AIProvi
 
         try {
             if ("ollama".equalsIgnoreCase(provider.getProviderType())) {
+                if (preferCompatibleOllamaEndpoint(provider)) {
+                    return requestCompatibleChat(provider, resolvedModelName, systemPrompt, userPrompt, temperature, maxTokens);
+                }
                 return requestOllamaChat(provider, resolvedModelName, systemPrompt, userPrompt, temperature, maxTokens);
             }
             return requestCompatibleChat(provider, resolvedModelName, systemPrompt, userPrompt, temperature, maxTokens);
@@ -276,6 +279,18 @@ public class AIProviderServiceImpl extends ServiceImpl<AIProviderMapper, AIProvi
         return timeout != null && timeout > 0 ? timeout : 15;
     }
 
+    private int resolveGenerationTimeoutSeconds(AIProvider provider) {
+        return Math.max(resolveTimeoutSeconds(provider), 120);
+    }
+
+    private boolean preferCompatibleOllamaEndpoint(AIProvider provider) {
+        if (provider == null || !StringUtils.hasText(provider.getBaseUrl())) {
+            return false;
+        }
+        String normalized = provider.getBaseUrl().trim().replaceAll("/+$", "");
+        return normalized.endsWith("/v1") || normalized.contains("/v1/");
+    }
+
     private String requestOllamaChat(
             AIProvider provider,
             String modelName,
@@ -287,6 +302,7 @@ public class AIProviderServiceImpl extends ServiceImpl<AIProviderMapper, AIProvi
         requestBody.put("model", modelName);
         requestBody.set("messages", buildMessages(systemPrompt, userPrompt));
         requestBody.put("stream", false);
+        requestBody.put("think", false);
 
         ObjectNode options = requestBody.putObject("options");
         options.put("temperature", resolveTemperature(provider, temperature));
@@ -297,7 +313,7 @@ public class AIProviderServiceImpl extends ServiceImpl<AIProviderMapper, AIProvi
 
         HttpRequest.Builder builder = HttpRequest.newBuilder(URI.create(buildOllamaChatUrl(provider.getBaseUrl())))
                 .POST(HttpRequest.BodyPublishers.ofString(objectMapper.writeValueAsString(requestBody), StandardCharsets.UTF_8))
-                .timeout(Duration.ofSeconds(resolveTimeoutSeconds(provider)))
+                .timeout(Duration.ofSeconds(resolveGenerationTimeoutSeconds(provider)))
                 .header("Accept", "application/json")
                 .header("Content-Type", "application/json; charset=UTF-8");
 
@@ -337,10 +353,13 @@ public class AIProviderServiceImpl extends ServiceImpl<AIProviderMapper, AIProvi
         }
         requestBody.put("max_tokens", resolveMaxTokens(provider, maxTokens));
         requestBody.put("stream", false);
+        if ("ollama".equalsIgnoreCase(provider.getProviderType())) {
+            requestBody.put("reasoning_effort", "none");
+        }
 
         HttpRequest.Builder builder = HttpRequest.newBuilder(URI.create(buildCompatibleChatUrl(provider.getBaseUrl())))
                 .POST(HttpRequest.BodyPublishers.ofString(objectMapper.writeValueAsString(requestBody), StandardCharsets.UTF_8))
-                .timeout(Duration.ofSeconds(resolveTimeoutSeconds(provider)))
+                .timeout(Duration.ofSeconds(resolveGenerationTimeoutSeconds(provider)))
                 .header("Accept", "application/json")
                 .header("Content-Type", "application/json; charset=UTF-8");
 

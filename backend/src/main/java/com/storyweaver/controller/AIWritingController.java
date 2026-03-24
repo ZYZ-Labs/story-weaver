@@ -37,15 +37,8 @@ public class AIWritingController {
             return ResponseEntity.status(401).build();
         }
         SecurityUtils.getCurrentUserId(authentication);
-
-        try {
-            AIWritingResponseVO response = aiWritingService.generateContent(requestDTO);
-            return ResponseEntity.ok(response);
-        } catch (IllegalArgumentException e) {
-            return ResponseEntity.badRequest().build();
-        } catch (Exception e) {
-            return ResponseEntity.internalServerError().build();
-        }
+        AIWritingResponseVO response = aiWritingService.generateContent(requestDTO);
+        return ResponseEntity.ok(response);
     }
 
     @GetMapping("/chapter/{chapterId}")

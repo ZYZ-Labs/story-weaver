@@ -35,7 +35,15 @@ export const useChapterStore = defineStore('chapter', () => {
   }
 
   async function fetchDetail(projectId: number, chapterId: number) {
-    currentChapter.value = await chapterApi.getChapter(projectId, chapterId)
+    const detail = await chapterApi.getChapter(projectId, chapterId)
+    currentChapter.value = detail
+
+    const target = chapters.value.find((item) => item.id === chapterId)
+    if (target) {
+      Object.assign(target, detail)
+      chapters.value = sortChapters(chapters.value)
+    }
+
     return currentChapter.value
   }
 

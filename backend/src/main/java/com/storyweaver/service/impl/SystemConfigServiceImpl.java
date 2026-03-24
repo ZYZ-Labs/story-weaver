@@ -120,6 +120,14 @@ public class SystemConfigServiceImpl extends ServiceImpl<SystemConfigMapper, Sys
         defaults.put("default_theme", createDefault("default_theme", "light", "默认主题"));
 
         defaults.put(
+                "prompt.draft",
+                createDefault(
+                        "prompt.draft",
+                        "先根据章节标题和补充要求拟生成一段可继续扩写的小说正文初稿，优先搭好场景、人物状态和冲突起点。",
+                        "初稿拟生成提示词模板"
+                )
+        );
+        defaults.put(
                 "prompt.continue",
                 createDefault(
                         "prompt.continue",

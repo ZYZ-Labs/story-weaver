@@ -5,6 +5,7 @@ import * as settingsApi from '@/api/settings'
 import type { SystemConfig } from '@/types'
 
 const promptTemplateKeys = [
+  'prompt.draft',
   'prompt.continue',
   'prompt.expand',
   'prompt.rewrite',
@@ -78,6 +79,7 @@ export const useSettingsStore = defineStore('settings', () => {
   function getPromptTemplateByWritingType(writingType: string) {
     const mapping: Record<string, PromptTemplateKey> = {
       continue: 'prompt.continue',
+      draft: 'prompt.draft',
       expand: 'prompt.expand',
       rewrite: 'prompt.rewrite',
       polish: 'prompt.polish',

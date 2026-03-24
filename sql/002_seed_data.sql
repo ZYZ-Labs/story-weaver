@@ -65,6 +65,7 @@ INSERT INTO system_config (config_key, config_value, description) VALUES
 ('auto_save_interval', '300', '自动保存间隔（秒）'),
 ('default_theme', 'light', '默认主题'),
 ('registration_enabled', 'true', '是否允许注册'),
+('prompt.draft', '先根据章节标题和补充要求拟生成一段可继续扩写的小说正文初稿，优先搭好场景、人物状态和冲突起点。', '初稿拟生成提示词模板'),
 ('prompt.continue', '延续当前章节的叙事节奏，保持人物口吻与设定一致，优先推进当前冲突。', '续写提示词模板'),
 ('prompt.expand', '在不偏离原意的前提下补足细节、动作、环境与情绪描写，让场景更饱满。', '扩写提示词模板'),
 ('prompt.rewrite', '保留关键信息与剧情目标，重写表达方式，提升节奏、清晰度和戏剧性。', '改写提示词模板'),

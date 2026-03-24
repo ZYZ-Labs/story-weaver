@@ -27,8 +27,18 @@ const errorMessage = ref('')
 
 const projectId = computed(() => projectStore.selectedProjectId)
 const chapterId = computed(() => chapterStore.currentChapter?.id || null)
+const isCurrentChapterEmpty = computed(() => !chapterStore.currentChapter?.content?.trim())
 const enabledProviders = computed(() => providerStore.providers.filter((item) => item.enabled === 1))
-const currentPromptTemplate = computed(() => settingsStore.getPromptTemplateByWritingType(draftForm.writingType))
+const resolvedWritingType = computed(() => {
+  if (draftForm.writingType === 'draft') {
+    return 'draft'
+  }
+  if (isCurrentChapterEmpty.value && ['continue', 'expand'].includes(draftForm.writingType)) {
+    return 'draft'
+  }
+  return draftForm.writingType
+})
+const currentPromptTemplate = computed(() => settingsStore.getPromptTemplateByWritingType(resolvedWritingType.value))
 const selectedProvider = computed(() =>
   enabledProviders.value.find((item) => item.id === draftForm.selectedProviderId) || null,
 )
@@ -50,9 +60,19 @@ const providerModelOptions = computed(() => {
   return Array.from(values)
 })
 const isOllamaSelected = computed(() => selectedProvider.value?.providerType === 'ollama')
+const generateButtonLabel = computed(() => {
+  const mapping: Record<string, string> = {
+    draft: '拟生成正文初稿',
+    continue: '续写当前正文',
+    expand: '扩写当前正文',
+    polish: '润色当前正文',
+    rewrite: '重写当前正文',
+  }
+  return mapping[resolvedWritingType.value] || '发起 AI 生成'
+})
 
 const draftForm = reactive({
-  writingType: 'continue',
+  writingType: 'draft',
   userInstruction: '',
   maxTokens: 600,
   selectedProviderId: null as number | null,
@@ -148,6 +168,7 @@ function buildInstruction() {
 
 function getWritingTypeLabel(value: string) {
   const mapping: Record<string, string> = {
+    draft: '拟生成',
     continue: '续写',
     polish: '润色',
     expand: '扩写',
@@ -179,7 +200,7 @@ async function generate() {
       chapterId: chapterStore.currentChapter.id,
       currentContent: chapterStore.currentChapter.content || '',
       userInstruction: buildInstruction(),
-      writingType: draftForm.writingType,
+      writingType: resolvedWritingType.value,
       maxTokens: draftForm.maxTokens,
       selectedProviderId: draftForm.selectedProviderId,
       selectedModel: draftForm.selectedModel,
@@ -268,6 +289,7 @@ async function saveCurrentChapter() {
               v-model="draftForm.writingType"
               label="任务类型"
               :items="[
+                { title: '拟生成初稿', value: 'draft' },
                 { title: '续写', value: 'continue' },
                 { title: '润色', value: 'polish' },
                 { title: '扩写', value: 'expand' },
@@ -301,6 +323,10 @@ async function saveCurrentChapter() {
 
             <v-alert type="info" variant="tonal" class="mt-4">
               当前模型服务：{{ selectedProvider?.name || '未设置' }}，对话模型：{{ draftForm.selectedModel || '未设置' }}
+            </v-alert>
+
+            <v-alert v-if="isCurrentChapterEmpty" type="info" variant="tonal" class="mt-4">
+              当前章节正文还是空的。现在发起生成时会自动按“拟生成初稿”处理，先帮你搭出一版可继续扩写的正文。
             </v-alert>
 
             <v-alert v-if="isOllamaSelected" type="success" variant="tonal" class="mt-4">
@@ -340,7 +366,7 @@ async function saveCurrentChapter() {
               :disabled="!chapterStore.currentChapter?.id || !draftForm.selectedProviderId"
               @click="generate"
             >
-              发起 AI 生成
+              {{ generateButtonLabel }}
             </v-btn>
           </v-card-text>
         </v-card>

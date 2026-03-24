@@ -44,6 +44,7 @@ export const useWritingStore = defineStore('writing', () => {
     if (projectTarget) {
       Object.assign(projectTarget, updated)
     }
+    return updated
   }
 
   async function reject(id: number) {
@@ -56,6 +57,7 @@ export const useWritingStore = defineStore('writing', () => {
     if (projectTarget) {
       projectTarget.status = 'rejected'
     }
+    return 'rejected'
   }
 
   return {
