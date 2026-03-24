@@ -13,4 +13,6 @@ public interface ProjectService extends IService<Project> {
     boolean updateProject(Long projectId, Long userId, Project project);
     
     boolean deleteProject(Long projectId, Long userId);
+
+    boolean hasProjectAccess(Long projectId, Long userId);
 }

@@ -10,6 +10,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.Map;
 
 @RestController
@@ -36,16 +37,7 @@ public class AuthController {
         Map<String, Object> result = new HashMap<>();
         result.put("code", 200);
         result.put("message", "登录成功");
-        result.put("data", Map.of(
-            "token", token,
-            "user", Map.of(
-                "id", user.getId(),
-                "username", user.getUsername(),
-                "nickname", user.getNickname(),
-                "email", user.getEmail(),
-                "avatar", user.getAvatar()
-            )
-        ));
+        result.put("data", buildAuthPayload(token, user));
         
         return ResponseEntity.ok(result);
     }
@@ -72,17 +64,22 @@ public class AuthController {
         Map<String, Object> result = new HashMap<>();
         result.put("code", 200);
         result.put("message", "注册成功");
-        result.put("data", Map.of(
-            "token", token,
-            "user", Map.of(
-                "id", user.getId(),
-                "username", user.getUsername(),
-                "nickname", user.getNickname(),
-                "email", user.getEmail(),
-                "avatar", user.getAvatar()
-            )
-        ));
+        result.put("data", buildAuthPayload(token, user));
         
         return ResponseEntity.ok(result);
+    }
+
+    private Map<String, Object> buildAuthPayload(String token, User user) {
+        Map<String, Object> userPayload = new LinkedHashMap<>();
+        userPayload.put("id", user.getId());
+        userPayload.put("username", user.getUsername());
+        userPayload.put("nickname", user.getNickname());
+        userPayload.put("email", user.getEmail());
+        userPayload.put("avatar", user.getAvatar());
+
+        Map<String, Object> data = new LinkedHashMap<>();
+        data.put("token", token);
+        data.put("user", userPayload);
+        return data;
     }
 }

@@ -1,35 +1,4 @@
 services:
-  mysql:
-    image: mysql:8.4
-    container_name: story-weaver-mysql
-    environment:
-      MYSQL_ROOT_PASSWORD: root
-      MYSQL_DATABASE: story_weaver
-      TZ: Asia/Shanghai
-    ports:
-      - "3306:3306"
-    volumes:
-      - mysql_data:/var/lib/mysql
-      - ./sql:/docker-entrypoint-initdb.d:ro
-    healthcheck:
-      test: ["CMD-SHELL", "mysqladmin ping -h localhost -uroot -proot"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
-
-  redis:
-    image: redis:7-alpine
-    container_name: story-weaver-redis
-    ports:
-      - "6379:6379"
-    volumes:
-      - redis_data:/data
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
-
   backend:
     image: maven:3.9.9-eclipse-temurin-21
     container_name: story-weaver-backend
@@ -39,18 +8,14 @@ services:
       - ./backend:/app
       - maven_repo:/root/.m2
     environment:
-      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/story_weaver?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai
+      SPRING_DATASOURCE_URL: jdbc:mysql://192.168.5.249:3306/story_weaver?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
       SPRING_DATASOURCE_USERNAME: root
-      SPRING_DATASOURCE_PASSWORD: root
-      SPRING_DATA_REDIS_HOST: redis
+      SPRING_DATASOURCE_PASSWORD: your-local-password
+      SPRING_DATA_REDIS_HOST: 192.168.5.249
       SPRING_DATA_REDIS_PORT: 6379
+      SPRING_DATA_REDIS_PASSWORD: your-local-password
     ports:
       - "8080:8080"
-    depends_on:
-      mysql:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
 
   front:
     image: node:20-alpine
@@ -67,6 +32,4 @@ services:
       - backend
 
 volumes:
-  mysql_data:
-  redis_data:
   maven_repo:

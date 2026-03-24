@@ -23,7 +23,8 @@
 ### Linux/macOS 用户
 1. 执行数据库初始化：
    ```bash
-   mysql -u root -p < backend/src/main/resources/schema.sql
+   chmod +x scripts/init-db.sh
+   ./scripts/init-db.sh
    ```
 2. 启动后端：
    ```bash
@@ -52,11 +53,15 @@ powershell -ExecutionPolicy Bypass -File test-start.ps1
 ### 2. 数据库初始化
 ```bash
 # 创建数据库和表结构
-mysql -u root -p < backend/src/main/resources/schema.sql
+mysql -u root -p < sql/001_init_database.sql
+
+# 导入默认种子数据
+mysql -u root -p < sql/002_seed_data.sql
 
 # 默认账户
-# - admin / admin123
-# - testuser / admin123
+# - admin / Admin@123456
+# - author / Admin@123456
+# - testuser / Admin@123456
 ```
 
 ### 3. 后端启动
@@ -87,7 +92,7 @@ npm run dev
 1. 打开浏览器访问 http://localhost:5173
 2. 使用默认账户登录：
    - 用户名：admin
-   - 密码：admin123
+   - 密码：Admin@123456
 
 ## 配置文件
 
@@ -151,7 +156,7 @@ VITE_API_URL=http://localhost:8080/api
 - 检查端口占用：`netstat -ano | findstr :5173`
 
 #### 4. 登录失败
-**问题**: 无法使用 admin/admin123 登录
+**问题**: 无法使用 admin/Admin@123456 登录
 **解决**:
 - 确认数据库已正确初始化
 - 检查后端日志中的错误信息

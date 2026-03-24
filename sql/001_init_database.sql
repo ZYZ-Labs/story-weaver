@@ -166,6 +166,47 @@ CREATE TABLE IF NOT EXISTS causality (
     FOREIGN KEY (project_id) REFERENCES project(id) ON DELETE CASCADE
 ) COMMENT='因果关系表';
 
+-- AI 提供商表
+CREATE TABLE IF NOT EXISTS ai_provider (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '提供商ID',
+    name VARCHAR(100) NOT NULL COMMENT '提供商名称',
+    provider_type VARCHAR(50) NOT NULL COMMENT '提供商类型',
+    base_url VARCHAR(500) COMMENT '基础地址',
+    api_key VARCHAR(255) COMMENT 'API Key',
+    model_name VARCHAR(100) COMMENT '模型名称',
+    embedding_model VARCHAR(100) COMMENT '向量模型',
+    temperature DECIMAL(5,2) DEFAULT 0.70 COMMENT 'Temperature',
+    top_p DECIMAL(5,2) DEFAULT 1.00 COMMENT 'Top P',
+    max_tokens INT DEFAULT 2048 COMMENT '最大 Tokens',
+    timeout_seconds INT DEFAULT 60 COMMENT '超时时间',
+    enabled INT DEFAULT 1 COMMENT '是否启用',
+    is_default INT DEFAULT 0 COMMENT '是否默认',
+    remark VARCHAR(500) COMMENT '备注',
+    create_time DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    update_time DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    deleted INT DEFAULT 0 COMMENT '删除标记: 0-未删除, 1-已删除',
+    INDEX idx_provider_type (provider_type),
+    INDEX idx_enabled (enabled)
+) COMMENT='AI提供商表';
+
+-- RAG 知识文档表
+CREATE TABLE IF NOT EXISTS knowledge_document (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '知识文档ID',
+    project_id BIGINT NOT NULL COMMENT '项目ID',
+    source_type VARCHAR(50) COMMENT '来源类型',
+    source_ref_id VARCHAR(100) COMMENT '来源引用ID',
+    title VARCHAR(200) NOT NULL COMMENT '标题',
+    content_text LONGTEXT COMMENT '正文内容',
+    summary TEXT COMMENT '摘要',
+    status VARCHAR(50) DEFAULT 'ready' COMMENT '状态',
+    create_time DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    update_time DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    deleted INT DEFAULT 0 COMMENT '删除标记: 0-未删除, 1-已删除',
+    INDEX idx_project_id (project_id),
+    INDEX idx_source_type (source_type),
+    FOREIGN KEY (project_id) REFERENCES project(id) ON DELETE CASCADE
+) COMMENT='RAG知识文档表';
+
 -- 操作日志表
 CREATE TABLE IF NOT EXISTS operation_log (
     id BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '日志ID',

@@ -22,44 +22,51 @@ story-weaver/
 
 - JDK 21+
 - Node.js 20+
-- MySQL 8.x（**必需**，默认端口 `3306`）
-- Redis（**可选**，默认端口 `6379`，当前版本未强依赖）
+- MySQL 8.x（**必需**，固定地址 `192.168.5.249:3306`）
+- Redis（**必需**，固定地址 `192.168.5.249:6379`）
+- 数据库账号：`root`
+- 数据库密码：`your-local-password`
+- Redis 密码：`your-local-password`
 
-### 后端启动
+### 一键启动
 
-先复制后端配置模板并填写本地账号密码：
+Windows:
+
+```bat
+start-dev.bat
+```
+
+Linux/macOS:
 
 ```bash
-cd backend/src/main/resources
-cp application-example.yml application.yml
+chmod +x start-dev.sh
+./start-dev.sh
 ```
+
+默认演示账号：
+
+- `admin / Admin@123456`
+- `author / Admin@123456`
+- `testuser / Admin@123456`
+
+启动脚本会自动做这些事：
+
+- 检查 `JDK 21+`、`Maven`、`Node.js`、`npm`
+- 若检测到 `nvm`，尝试切换到根目录 `.nvmrc` 中的 Node 版本
+- 检查 `192.168.5.249` 上的 MySQL / Redis 端口与凭据
+- 安装前端依赖并启动前后端
+
+### 手动启动
 
 ```bash
 cd backend
 mvn spring-boot:run
 ```
 
-### 前端启动
-
 ```bash
 cd front
 npm install
 npm run dev
-```
-
-### 前端环境变量
-
-复制示例文件并按需修改：
-
-```bash
-cd front
-cp .env.example .env
-```
-
-默认配置：
-
-```env
-VITE_API_BASE_URL=http://localhost:8080/api
 ```
 
 
@@ -93,3 +100,26 @@ VITE_API_BASE_URL=http://localhost:8080/api
 - `POST /api/world-settings`
 - `PUT /api/world-settings/{id}`
 - `DELETE /api/world-settings/{id}`
+- `GET /api/projects/{projectId}/plotlines`
+- `POST /api/projects/{projectId}/plotlines`
+- `GET /api/plotlines/{id}`
+- `PUT /api/plotlines/{id}`
+- `DELETE /api/plotlines/{id}`
+- `GET /api/projects/{projectId}/causalities`
+- `POST /api/projects/{projectId}/causalities`
+- `GET /api/causalities/{id}`
+- `PUT /api/causalities/{id}`
+- `DELETE /api/causalities/{id}`
+- `GET /api/providers`
+- `POST /api/providers`
+- `GET /api/providers/{id}`
+- `PUT /api/providers/{id}`
+- `DELETE /api/providers/{id}`
+- `POST /api/providers/{id}/test`
+- `GET /api/projects/{projectId}/knowledge/documents`
+- `POST /api/projects/{projectId}/knowledge/documents`
+- `GET /api/knowledge/documents/{id}`
+- `PUT /api/knowledge/documents/{id}`
+- `DELETE /api/knowledge/documents/{id}`
+- `POST /api/projects/{projectId}/rag/query`
+- `POST /api/projects/{projectId}/rag/reindex`

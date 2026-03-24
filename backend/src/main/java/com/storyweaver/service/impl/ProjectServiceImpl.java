@@ -69,4 +69,13 @@ public class ProjectServiceImpl extends ServiceImpl<ProjectMapper, Project> impl
         
         return removeById(projectId);
     }
+
+    @Override
+    public boolean hasProjectAccess(Long projectId, Long userId) {
+        QueryWrapper<Project> queryWrapper = new QueryWrapper<>();
+        queryWrapper.eq("id", projectId)
+                .eq("user_id", userId)
+                .eq("deleted", 0);
+        return count(queryWrapper) > 0;
+    }
 }

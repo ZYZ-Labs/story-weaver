@@ -1,5 +1,8 @@
 # Dependencies
 node_modules/
+front/node_modules/
+front/node_modules_stale/
+.nvmrc
 *.log
 
 # IDE

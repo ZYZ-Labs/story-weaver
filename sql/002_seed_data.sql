@@ -4,11 +4,11 @@
 
 USE story_weaver;
 
--- 插入默认管理员用户 (密码: admin123)
+-- 插入默认管理员用户 (密码: Admin@123456)
 INSERT INTO user (username, password, email, nickname, status) VALUES
-('admin', '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy', 'admin@storyweaver.com', '系统管理员', 1),
-('author', '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy', 'author@storyweaver.com', '创作作者', 1),
-('testuser', '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy', 'test@storyweaver.com', '测试用户', 1);
+('admin', '$2a$10$228wUNRq6YP2luC0OdgRiODuZFBAglkp8o1lX5Gru.aFRCQ4ZjmB2', 'admin@storyweaver.com', '系统管理员', 1),
+('author', '$2a$10$228wUNRq6YP2luC0OdgRiODuZFBAglkp8o1lX5Gru.aFRCQ4ZjmB2', 'author@storyweaver.com', '创作作者', 1),
+('testuser', '$2a$10$228wUNRq6YP2luC0OdgRiODuZFBAglkp8o1lX5Gru.aFRCQ4ZjmB2', 'test@storyweaver.com', '测试用户', 1);
 
 -- 插入示例项目
 INSERT INTO project (name, description, user_id, status, genre, tags) VALUES
@@ -56,6 +56,27 @@ INSERT INTO system_config (config_key, config_value, description) VALUES
 ('auto_save_interval', '300', '自动保存间隔（秒）'),
 ('default_theme', 'light', '默认主题'),
 ('registration_enabled', 'true', '是否允许注册');
+
+-- 插入示例情节
+INSERT INTO plot (project_id, chapter_id, title, description, content, plot_type, sequence, characters, locations, timeline, conflicts, resolutions, tags, status, create_by, update_by) VALUES
+(1, 1, '主角觉醒', '艾伦开始意识到自己与常人不同', '铁匠铺事故之后，艾伦第一次主动控制火焰。', 1, 1, '艾伦·星辉,梅林·智慧', '铁匠铺', '第一章', '能力失控', '被导师发现并引导', '觉醒,成长', 1, 1, 1),
+(1, 2, '导师登场', '梅林将主角带入更大的世界', '艾伦从村庄走向星辰学院的旅程就此开始。', 2, 2, '艾伦·星辉,梅林·智慧', '村庄,山道', '第二章', '是否离开故乡', '选择接受命运', '引导,转折', 1, 1, 1);
+
+-- 插入示例因果
+INSERT INTO causality (project_id, name, description, cause_type, effect_type, cause_entity_id, effect_entity_id, cause_entity_type, effect_entity_type, relationship, strength, conditions, tags, status, create_by, update_by) VALUES
+(1, '火焰失控触发导师关注', '主角能力暴露后被更高层力量注意到', '事件', '转折', 'chapter-1', 'chapter-2', 'chapter', 'chapter', 'causes', 88, '艾伦首次施法', '觉醒,导师', 1, 1, 1),
+(2, '数据泄露引发追杀', '主角触碰公司秘密后被追捕', '秘密', '冲突', 'chapter-4', 'chapter-5', 'chapter', 'chapter', 'escalates', 92, '进入核心数据库', '赛博朋克,追捕', 1, 2, 2);
+
+-- 插入示例 AI Provider
+INSERT INTO ai_provider (name, provider_type, base_url, api_key, model_name, embedding_model, temperature, top_p, max_tokens, timeout_seconds, enabled, is_default, remark) VALUES
+('OpenAI Compatible', 'openai-compatible', 'http://127.0.0.1:8000/v1', 'your-local-api-key-reference', 'gpt-4.1', 'text-embedding-3-large', 0.70, 1.00, 4096, 60, 1, 1, '默认云模型'),
+('DeepSeek', 'deepseek', 'https://api.deepseek.com', 'your-local-api-key-reference', 'deepseek-chat', 'deepseek-embedding', 0.70, 1.00, 4096, 60, 1, 0, '备用模型');
+
+-- 插入示例知识文档
+INSERT INTO knowledge_document (project_id, source_type, source_ref_id, title, content_text, summary, status) VALUES
+(1, 'chapter', '1', '艾伦初次觉醒', '艾伦在铁匠铺事故后第一次感知并控制火元素，命运从此改变。', '主角能力觉醒的关键节点。', 'ready'),
+(1, 'character', '1', '艾伦人物设定', '艾伦·星辉，16岁，铁匠之子，拥有星辰血脉，擅长剑术与火系魔法。', '项目主角的基础人物设定。', 'ready'),
+(2, 'chapter', '4', '夜之城追踪任务', '李阳在夜之城接到危险委托，并在霓虹街区中躲避公司追捕。', '赛博朋克项目的主线起点。', 'indexed');
 
 -- 插入操作日志示例
 INSERT INTO operation_log (user_id, module, action, target_id, description, ip_address) VALUES
