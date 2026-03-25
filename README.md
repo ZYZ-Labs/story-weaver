@@ -1,6 +1,6 @@
 # Story Weaver
 
-Story Weaver 是一个面向长篇小说创作的 AI 辅助平台，当前项目已经包含可运行的前后端、局域网开发访问、AI 流式正文生成、世界观关联、RAG、模型服务管理，以及 Docker Hub 私有镜像发布链路。
+Story Weaver 是一个面向长篇小说创作的 AI 辅助平台，当前项目已经包含可运行的前后端、局域网开发访问、AI 流式正文生成、世界观关联、RAG、模型服务管理，以及镜像发布与服务端部署链路。
 
 ## 当前能力
 
@@ -10,7 +10,8 @@ Story Weaver 是一个面向长篇小说创作的 AI 辅助平台，当前项目
 - 项目与已有世界观关联
 - 角色属性选择式组装与 AI 辅助生成
 - 局域网开发访问
-- Docker Hub 私有镜像发布与服务端 `docker compose` 部署
+- Docker Hub / 阿里云 ACR / 自定义镜像仓库发布
+- 服务端 `docker compose` 镜像部署
 
 ## 目录结构
 
@@ -34,7 +35,7 @@ story-weaver/
 - JDK 21+
 - Maven 3.9+
 - Node.js 20+  
-  说明：当前脚本会优先尝试 `.nvmrc` 中的版本；如果本机是 Node 22，也可以正常开发运行
+  说明：启动脚本会优先尝试 `.nvmrc` 中的版本；如果本机是 Node 22，也可以正常开发运行
 - MySQL 8.x
 - Redis 6.x+
 
@@ -138,13 +139,31 @@ mysql -u root -p < sql/005_world_setting_association_and_character_attributes.sq
 - `scripts/deploy.bat`
 - `scripts/deploy.ps1`
 - `scripts/deploy.sh`  
-  用于把前后端镜像发布到 Docker Hub 私有仓库
+  用于将前后端镜像发布到所选镜像仓库
 
-## 生产部署概览
+- `.deploy/registry.env.example`  
+  发布脚本的配置示例文件
 
-1. 本地运行发布脚本，将前后端镜像推送到 Docker Hub 私有仓库
-2. 在服务端准备 `.env`
-3. 使用 `docker-compose.server.yml` 拉取镜像并启动
+## 发布与部署概览
+
+1. 本地运行发布脚本
+2. 首次执行时交互式选择镜像仓库类型
+3. 构建并推送前后端镜像
+4. 在服务端准备 `.env`
+5. 使用 `docker-compose.server.yml` 拉取镜像并启动
+
+当前发布脚本支持三类仓库：
+
+- Docker Hub
+- 阿里云 ACR
+- 自定义 Docker Registry
+
+发布完成后，脚本还会直接输出一份 Dockge 可用的 `compose.yaml` 模板。
+
+说明：
+
+- `volumes` 中所有以 `xxx` 开头的路径，表示需要替换成服务器本地实际目录
+- 输出内容可以直接复制到 Dockge 的 `compose.yaml`
 
 详细步骤见 [DEPLOYMENT.md](./DEPLOYMENT.md)。
 

@@ -1,9 +1,9 @@
 # Story Weaver Deployment Guide
 
-本文档描述当前项目的发布与部署方式，目标是：
+本文档描述当前项目的镜像发布与服务端部署方式，目标是：
 
 - 本地构建前后端镜像
-- 推送到 Docker Hub 私有仓库
+- 推送到选定的私有镜像仓库
 - 在服务端通过 `docker compose` 拉取镜像并启动
 
 ## 一、当前发布方案
@@ -21,20 +21,26 @@
 - Windows: `scripts/deploy.bat` / `scripts/deploy.ps1`
 - Linux / macOS: `scripts/deploy.sh`
 
+当前脚本支持三类镜像仓库：
+
+- Docker Hub
+- 阿里云 ACR
+- 自定义 Docker Registry
+
 ## 二、发布前准备
 
 本地机器需要：
 
 - Docker 可用
-- 可以登录 Docker Hub
-- 已在 Docker Hub 中创建前后端私有仓库
+- 可以登录目标镜像仓库
+- 已在目标仓库中创建前后端私有仓库或命名空间
 
 建议的仓库名：
 
 - `story-weaver-backend`
 - `story-weaver-front`
 
-## 三、本地发布到 Docker Hub
+## 三、本地发布到镜像仓库
 
 ### Windows
 
@@ -89,11 +95,15 @@ chmod +x scripts/deploy.sh
 ./scripts/deploy.sh --skip-login
 ```
 
-### 交互式配置内容
+## 四、交互式配置内容
 
-首次执行时，脚本会询问并保存这些配置：
+首次执行时，脚本会交互式询问并保存这些配置：
 
-- Docker Hub 用户名或组织名
+- 镜像仓库类型
+- 镜像仓库地址
+- 登录服务地址
+- 登录用户名
+- 仓库命名空间
 - 后端仓库名
 - 前端仓库名
 - 镜像标签
@@ -101,25 +111,64 @@ chmod +x scripts/deploy.sh
 配置文件位置：
 
 ```text
-.deploy/dockerhub.env
+.deploy/registry.env
 ```
 
 示例文件：
 
 ```text
-.deploy/dockerhub.env.example
+.deploy/registry.env.example
 ```
 
-脚本执行完成后，会输出类似这样的镜像地址：
+旧版本如果已经存在：
 
 ```text
-BACKEND_IMAGE=your-namespace/story-weaver-backend:latest
-FRONTEND_IMAGE=your-namespace/story-weaver-front:latest
+.deploy/dockerhub.env
 ```
 
-这些值会在服务端 `.env` 中使用。
+脚本会自动兼容并在下次保存时迁移到新配置文件。
 
-## 四、服务端部署
+另外，脚本在发布完成后还会额外打印一份 Dockge 可用的 `compose.yaml` 模板。
+
+说明：
+
+- 其中 `volumes` 里的 `xxx/...` 是本地路径占位符
+- 你需要把 `xxx` 替换成服务器上的真实目录
+- 替换完成后可以直接粘贴到 Dockge
+
+### 交互式选择示例
+
+脚本会提示选择：
+
+```text
+1. Docker Hub
+2. Alibaba Cloud ACR
+3. Custom registry
+```
+
+其中：
+
+- Docker Hub 会生成类似 `namespace/repository:tag` 的镜像地址
+- 阿里云 ACR 会生成类似 `registry.cn-hangzhou.aliyuncs.com/namespace/repository:tag` 的镜像地址
+- 自定义 Registry 会根据你输入的 host 和 namespace 生成镜像地址
+
+### 阿里云 ACR 说明
+
+如果你选择阿里云 ACR，脚本会要求输入：
+
+- ACR registry host  
+  例如：`registry.cn-hangzhou.aliyuncs.com`
+
+- ACR login server  
+  通常与 registry host 相同
+
+- ACR namespace
+
+- ACR login username
+
+脚本不会保存密码，`docker login` 时由 Docker 自己进行交互输入。
+
+## 五、服务端部署
 
 ### 1. 准备文件
 
@@ -139,8 +188,8 @@ cp .env.server.example .env
 至少需要确认这些配置：
 
 ```env
-BACKEND_IMAGE=your-dockerhub-namespace/story-weaver-backend:latest
-FRONTEND_IMAGE=your-dockerhub-namespace/story-weaver-front:latest
+BACKEND_IMAGE=your-registry/story-weaver-backend:latest
+FRONTEND_IMAGE=your-registry/story-weaver-front:latest
 
 BACKEND_PORT=8080
 FRONTEND_PORT=80
@@ -197,7 +246,7 @@ docker compose --env-file .env -f docker-compose.server.yml pull
 docker compose --env-file .env -f docker-compose.server.yml up -d
 ```
 
-## 五、网络与反向代理说明
+## 六、网络与反向代理说明
 
 当前前端生产镜像内置了 Nginx，行为如下：
 
@@ -211,7 +260,7 @@ docker compose --env-file .env -f docker-compose.server.yml up -d
 - 不需要在浏览器里直接请求 `http://backend:8080`
 - 只要访问前端域名或 IP，API 也会随之生效
 
-## 六、CORS 说明
+## 七、CORS 说明
 
 后端现在支持通过 `APP_CORS_ALLOWED_ORIGIN_PATTERNS` 配置允许来源。
 
@@ -223,7 +272,7 @@ APP_CORS_ALLOWED_ORIGIN_PATTERNS=http://localhost:*,http://127.0.0.1:*,http://19
 
 如果你前端和后端都走同一个 Nginx 域名，通常不会再遇到浏览器跨域问题。
 
-## 七、数据库初始化与迁移
+## 八、数据库初始化与迁移
 
 全新库：
 
@@ -246,7 +295,7 @@ mysql -u root -p < sql/005_world_setting_association_and_character_attributes.sq
 - `author / Admin@123456`
 - `testuser / Admin@123456`
 
-## 八、常见问题
+## 九、常见问题
 
 ### 1. 发布脚本提示找不到 docker
 
@@ -269,10 +318,11 @@ mysql -u root -p < sql/005_world_setting_association_and_character_attributes.sq
 - 前端请求的是 `/api/ai-writing/generate-stream`
 - 使用的是当前仓库内置的生产 Nginx 配置
 
-### 4. Docker Hub 私有仓库拉取失败
+### 4. 镜像仓库拉取失败
 
 检查：
 
 - 服务端是否执行过 `docker login`
 - 镜像地址和标签是否正确
-- Docker Hub 仓库是否已创建且账号有权限
+- 目标仓库是否已创建且当前账号有权限
+- 如果是阿里云 ACR，确认登录地址、命名空间和账号信息都正确
