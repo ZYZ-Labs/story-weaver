@@ -1,5 +1,6 @@
 package com.storyweaver.controller;
 
+import com.storyweaver.service.CharacterAttributeSuggestionService;
 import com.storyweaver.service.ChapterService;
 import com.storyweaver.service.CharacterService;
 import com.storyweaver.service.ProjectService;
@@ -22,21 +23,17 @@ class ApiPathConsistencyTest {
     @BeforeEach
     void setUp() {
         ProjectController projectController = new ProjectController();
-        ChapterController chapterController = new ChapterController();
-        CharacterController characterController = new CharacterController();
-        AuthController authController = new AuthController();
+        ChapterController chapterController = new ChapterController(mock(ChapterService.class));
+        CharacterController characterController = new CharacterController(
+                mock(CharacterService.class),
+                mock(CharacterAttributeSuggestionService.class)
+        );
+        AuthController authController = new AuthController(
+                mock(UserService.class),
+                mock(JwtUtil.class)
+        );
 
         ReflectionTestUtils.setField(projectController, "projectService", mock(ProjectService.class));
-        ReflectionTestUtils.setField(projectController, "jwtUtil", mock(JwtUtil.class));
-
-        ReflectionTestUtils.setField(chapterController, "chapterService", mock(ChapterService.class));
-        ReflectionTestUtils.setField(chapterController, "jwtUtil", mock(JwtUtil.class));
-
-        ReflectionTestUtils.setField(characterController, "characterService", mock(CharacterService.class));
-        ReflectionTestUtils.setField(characterController, "jwtUtil", mock(JwtUtil.class));
-
-        ReflectionTestUtils.setField(authController, "userService", mock(UserService.class));
-        ReflectionTestUtils.setField(authController, "jwtUtil", mock(JwtUtil.class));
 
         mockMvc = MockMvcBuilders.standaloneSetup(
                 projectController,
