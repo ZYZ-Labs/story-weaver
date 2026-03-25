@@ -10,6 +10,7 @@ import com.storyweaver.domain.entity.Chapter;
 import com.storyweaver.domain.entity.KnowledgeDocument;
 import com.storyweaver.domain.entity.Project;
 import com.storyweaver.domain.vo.AIWritingResponseVO;
+import com.storyweaver.domain.vo.AIWritingStreamEventVO;
 import com.storyweaver.repository.AIWritingRecordMapper;
 import com.storyweaver.service.AIProviderService;
 import com.storyweaver.service.AIWritingService;
@@ -23,6 +24,7 @@ import org.springframework.util.StringUtils;
 
 import java.util.List;
 import java.util.Locale;
+import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
 @Service
@@ -49,44 +51,48 @@ public class AIWritingServiceImpl extends ServiceImpl<AIWritingRecordMapper, AIW
 
     @Override
     public AIWritingResponseVO generateContent(AIWritingRequestDTO requestDTO) {
-        Chapter chapter = chapterService.getById(requestDTO.getChapterId());
-        if (chapter == null || Integer.valueOf(1).equals(chapter.getDeleted())) {
-            throw new IllegalArgumentException("章节不存在");
-        }
-
-        String currentContent = normalizeText(requestDTO.getCurrentContent());
-        String writingType = normalizeWritingType(requestDTO.getWritingType(), currentContent);
-        AIProvider provider = resolveProvider(requestDTO.getSelectedProviderId());
-        String selectedModel = resolveModelName(provider, requestDTO.getSelectedModel());
-        String promptSnapshot = resolvePromptSnapshot(requestDTO.getPromptSnapshot(), writingType);
-        Project project = chapter.getProjectId() == null ? null : projectService.getById(chapter.getProjectId());
-
+        PreparedGenerationContext context = prepareGeneration(requestDTO);
         String generatedContent = aiProviderService.generateText(
-                provider,
-                selectedModel,
-                buildSystemPrompt(promptSnapshot),
-                buildUserPrompt(project, chapter, currentContent, writingType, normalizeText(requestDTO.getUserInstruction())),
+                context.provider(),
+                context.selectedModel(),
+                context.systemPrompt(),
+                context.userPrompt(),
                 null,
-                requestDTO.getMaxTokens()
+                context.maxTokens()
+        );
+        return persistGeneratedRecord(context, generatedContent);
+    }
+
+    @Override
+    public void streamContent(AIWritingRequestDTO requestDTO, Consumer<AIWritingStreamEventVO> eventConsumer) {
+        PreparedGenerationContext context = prepareGeneration(requestDTO);
+
+        eventConsumer.accept(AIWritingStreamEventVO.meta(
+                context.writingType(),
+                context.provider().getId(),
+                context.selectedModel(),
+                context.maxTokens()
+        ));
+
+        StringBuilder contentBuilder = new StringBuilder();
+        aiProviderService.streamText(
+                context.provider(),
+                context.selectedModel(),
+                context.systemPrompt(),
+                context.userPrompt(),
+                null,
+                context.maxTokens(),
+                delta -> {
+                    if (delta == null || delta.isEmpty()) {
+                        return;
+                    }
+                    contentBuilder.append(delta);
+                    eventConsumer.accept(AIWritingStreamEventVO.chunk(delta));
+                }
         );
 
-        if (!StringUtils.hasText(generatedContent)) {
-            throw new IllegalStateException("模型没有返回可用的正文内容，请稍后重试");
-        }
-
-        AIWritingRecord record = new AIWritingRecord();
-        record.setChapterId(requestDTO.getChapterId());
-        record.setOriginalContent(currentContent);
-        record.setGeneratedContent(generatedContent.trim());
-        record.setWritingType(writingType);
-        record.setUserInstruction(normalizeText(requestDTO.getUserInstruction()));
-        record.setSelectedProviderId(provider.getId());
-        record.setSelectedModel(selectedModel);
-        record.setPromptSnapshot(promptSnapshot);
-        record.setStatus("draft");
-
-        save(record);
-        return convertToVO(record);
+        AIWritingResponseVO response = persistGeneratedRecord(context, contentBuilder.toString());
+        eventConsumer.accept(AIWritingStreamEventVO.complete(response));
     }
 
     @Override
@@ -154,6 +160,55 @@ public class AIWritingServiceImpl extends ServiceImpl<AIWritingRecordMapper, AIW
         }
     }
 
+    private PreparedGenerationContext prepareGeneration(AIWritingRequestDTO requestDTO) {
+        Chapter chapter = chapterService.getById(requestDTO.getChapterId());
+        if (chapter == null || Integer.valueOf(1).equals(chapter.getDeleted())) {
+            throw new IllegalArgumentException("章节不存在");
+        }
+
+        String currentContent = normalizeText(requestDTO.getCurrentContent());
+        String writingType = normalizeWritingType(requestDTO.getWritingType(), currentContent);
+        String userInstruction = normalizeText(requestDTO.getUserInstruction());
+        AIProvider provider = resolveProvider(requestDTO.getSelectedProviderId());
+        String selectedModel = resolveModelName(provider, requestDTO.getSelectedModel());
+        String promptSnapshot = resolvePromptSnapshot(requestDTO.getPromptSnapshot(), writingType);
+        Project project = chapter.getProjectId() == null ? null : projectService.getById(chapter.getProjectId());
+
+        return new PreparedGenerationContext(
+                chapter,
+                currentContent,
+                writingType,
+                userInstruction,
+                provider,
+                selectedModel,
+                promptSnapshot,
+                buildSystemPrompt(promptSnapshot),
+                buildUserPrompt(project, chapter, currentContent, writingType, userInstruction),
+                normalizeMaxTokens(requestDTO.getMaxTokens())
+        );
+    }
+
+    private AIWritingResponseVO persistGeneratedRecord(PreparedGenerationContext context, String generatedContent) {
+        String normalizedContent = generatedContent == null ? "" : generatedContent.trim();
+        if (!StringUtils.hasText(normalizedContent)) {
+            throw new IllegalStateException("模型没有返回可用的正文内容，请稍后重试");
+        }
+
+        AIWritingRecord record = new AIWritingRecord();
+        record.setChapterId(context.chapter().getId());
+        record.setOriginalContent(context.currentContent());
+        record.setGeneratedContent(normalizedContent);
+        record.setWritingType(context.writingType());
+        record.setUserInstruction(context.userInstruction());
+        record.setSelectedProviderId(context.provider().getId());
+        record.setSelectedModel(context.selectedModel());
+        record.setPromptSnapshot(context.promptSnapshot());
+        record.setStatus("draft");
+
+        save(record);
+        return convertToVO(record);
+    }
+
     private AIProvider resolveProvider(Long selectedProviderId) {
         if (selectedProviderId != null) {
             AIProvider provider = aiProviderService.getById(selectedProviderId);
@@ -208,6 +263,10 @@ public class AIWritingServiceImpl extends ServiceImpl<AIWritingRecordMapper, AIW
         }
 
         return getDefaultPromptTemplate(writingType);
+    }
+
+    private Integer normalizeMaxTokens(Integer maxTokens) {
+        return maxTokens != null && maxTokens > 0 ? maxTokens : null;
     }
 
     private String buildSystemPrompt(String promptSnapshot) {
@@ -366,5 +425,18 @@ public class AIWritingServiceImpl extends ServiceImpl<AIWritingRecordMapper, AIW
         AIWritingResponseVO vo = new AIWritingResponseVO();
         BeanUtils.copyProperties(record, vo);
         return vo;
+    }
+
+    private record PreparedGenerationContext(
+            Chapter chapter,
+            String currentContent,
+            String writingType,
+            String userInstruction,
+            AIProvider provider,
+            String selectedModel,
+            String promptSnapshot,
+            String systemPrompt,
+            String userPrompt,
+            Integer maxTokens) {
     }
 }

@@ -2,9 +2,9 @@ package com.storyweaver.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
-import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.storyweaver.domain.entity.AIProvider;
 import com.storyweaver.domain.vo.ProviderDiscoveryVO;
@@ -14,7 +14,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
+import java.io.BufferedReader;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -24,8 +27,8 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Locale;
 import java.util.Set;
+import java.util.function.Consumer;
 
 @Service
 public class AIProviderServiceImpl extends ServiceImpl<AIProviderMapper, AIProvider> implements AIProviderService {
@@ -120,7 +123,6 @@ public class AIProviderServiceImpl extends ServiceImpl<AIProviderMapper, AIProvi
         if (!StringUtils.hasText(provider.getBaseUrl())) {
             return new ProviderDiscoveryVO(false, "请先填写服务地址。", List.of(), List.of());
         }
-
         if (!"ollama".equalsIgnoreCase(provider.getProviderType())) {
             return new ProviderDiscoveryVO(false, "当前仅支持从 Ollama 自动获取模型列表。", List.of(), List.of());
         }
@@ -217,19 +219,7 @@ public class AIProviderServiceImpl extends ServiceImpl<AIProviderMapper, AIProvi
             String userPrompt,
             Double temperature,
             Integer maxTokens) {
-        if (provider == null || Integer.valueOf(1).equals(provider.getDeleted())) {
-            throw new IllegalStateException("模型服务不存在或已被删除");
-        }
-
-        String resolvedModelName = StringUtils.hasText(modelName)
-                ? modelName.trim()
-                : StringUtils.trimWhitespace(provider.getModelName());
-        if (!StringUtils.hasText(resolvedModelName)) {
-            throw new IllegalStateException("当前模型服务尚未配置对话模型");
-        }
-        if (!StringUtils.hasText(provider.getBaseUrl())) {
-            throw new IllegalStateException("当前模型服务尚未配置服务地址");
-        }
+        String resolvedModelName = validateGenerationRequest(provider, modelName);
 
         try {
             if ("ollama".equalsIgnoreCase(provider.getProviderType())) {
@@ -247,8 +237,54 @@ public class AIProviderServiceImpl extends ServiceImpl<AIProviderMapper, AIProvi
         }
     }
 
+    @Override
+    public void streamText(
+            AIProvider provider,
+            String modelName,
+            String systemPrompt,
+            String userPrompt,
+            Double temperature,
+            Integer maxTokens,
+            Consumer<String> onChunk) {
+        String resolvedModelName = validateGenerationRequest(provider, modelName);
+
+        try {
+            if ("ollama".equalsIgnoreCase(provider.getProviderType())) {
+                if (preferCompatibleOllamaEndpoint(provider)) {
+                    requestCompatibleChatStream(provider, resolvedModelName, systemPrompt, userPrompt, temperature, maxTokens, onChunk);
+                    return;
+                }
+                requestOllamaChatStream(provider, resolvedModelName, systemPrompt, userPrompt, temperature, maxTokens, onChunk);
+                return;
+            }
+            requestCompatibleChatStream(provider, resolvedModelName, systemPrompt, userPrompt, temperature, maxTokens, onChunk);
+        } catch (IOException exception) {
+            throw new IllegalStateException("调用模型服务失败，无法读取返回结果");
+        } catch (InterruptedException exception) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("调用模型服务时被中断，请稍后重试");
+        }
+    }
+
+    private String validateGenerationRequest(AIProvider provider, String modelName) {
+        if (provider == null || Integer.valueOf(1).equals(provider.getDeleted())) {
+            throw new IllegalStateException("模型服务不存在或已被删除");
+        }
+
+        String resolvedModelName = StringUtils.hasText(modelName)
+                ? modelName.trim()
+                : StringUtils.trimWhitespace(provider.getModelName());
+        if (!StringUtils.hasText(resolvedModelName)) {
+            throw new IllegalStateException("当前模型服务尚未配置对话模型");
+        }
+        if (!StringUtils.hasText(provider.getBaseUrl())) {
+            throw new IllegalStateException("当前模型服务尚未配置服务地址");
+        }
+        return resolvedModelName;
+    }
+
     private String buildOllamaTagsUrl(String baseUrl) {
-        String normalized = baseUrl.trim().replaceAll("/+$", "");
+        String normalized = normalizeBaseUrl(baseUrl);
         if (normalized.endsWith("/v1")) {
             normalized = normalized.substring(0, normalized.length() - 3);
         }
@@ -256,7 +292,7 @@ public class AIProviderServiceImpl extends ServiceImpl<AIProviderMapper, AIProvi
     }
 
     private String buildOllamaChatUrl(String baseUrl) {
-        String normalized = baseUrl.trim().replaceAll("/+$", "");
+        String normalized = normalizeBaseUrl(baseUrl);
         if (normalized.endsWith("/v1")) {
             normalized = normalized.substring(0, normalized.length() - 3);
         }
@@ -264,7 +300,7 @@ public class AIProviderServiceImpl extends ServiceImpl<AIProviderMapper, AIProvi
     }
 
     private String buildCompatibleChatUrl(String baseUrl) {
-        String normalized = baseUrl.trim().replaceAll("/+$", "");
+        String normalized = normalizeBaseUrl(baseUrl);
         if (normalized.endsWith("/chat/completions")) {
             return normalized;
         }
@@ -272,6 +308,10 @@ public class AIProviderServiceImpl extends ServiceImpl<AIProviderMapper, AIProvi
             return normalized + "/chat/completions";
         }
         return normalized + "/v1/chat/completions";
+    }
+
+    private String normalizeBaseUrl(String baseUrl) {
+        return baseUrl.trim().replaceAll("/+$", "");
     }
 
     private int resolveTimeoutSeconds(AIProvider provider) {
@@ -287,7 +327,7 @@ public class AIProviderServiceImpl extends ServiceImpl<AIProviderMapper, AIProvi
         if (provider == null || !StringUtils.hasText(provider.getBaseUrl())) {
             return false;
         }
-        String normalized = provider.getBaseUrl().trim().replaceAll("/+$", "");
+        String normalized = normalizeBaseUrl(provider.getBaseUrl());
         return normalized.endsWith("/v1") || normalized.contains("/v1/");
     }
 
@@ -298,24 +338,13 @@ public class AIProviderServiceImpl extends ServiceImpl<AIProviderMapper, AIProvi
             String userPrompt,
             Double temperature,
             Integer maxTokens) throws IOException, InterruptedException {
-        ObjectNode requestBody = objectMapper.createObjectNode();
-        requestBody.put("model", modelName);
-        requestBody.set("messages", buildMessages(systemPrompt, userPrompt));
-        requestBody.put("stream", false);
-        requestBody.put("think", false);
-
-        ObjectNode options = requestBody.putObject("options");
-        options.put("temperature", resolveTemperature(provider, temperature));
-        if (provider.getTopP() != null) {
-            options.put("top_p", provider.getTopP());
-        }
-        options.put("num_predict", resolveMaxTokens(provider, maxTokens));
-
-        HttpRequest.Builder builder = HttpRequest.newBuilder(URI.create(buildOllamaChatUrl(provider.getBaseUrl())))
-                .POST(HttpRequest.BodyPublishers.ofString(objectMapper.writeValueAsString(requestBody), StandardCharsets.UTF_8))
-                .timeout(Duration.ofSeconds(resolveGenerationTimeoutSeconds(provider)))
-                .header("Accept", "application/json")
-                .header("Content-Type", "application/json; charset=UTF-8");
+        HttpRequest.Builder builder = createJsonPostBuilder(
+                URI.create(buildOllamaChatUrl(provider.getBaseUrl())),
+                objectMapper.writeValueAsString(buildOllamaChatRequestBody(provider, modelName, systemPrompt, userPrompt, temperature, maxTokens, false)),
+                provider,
+                resolveGenerationTimeoutSeconds(provider),
+                "application/json"
+        );
 
         HttpResponse<String> response = httpClient.send(
                 builder.build(),
@@ -327,14 +356,62 @@ public class AIProviderServiceImpl extends ServiceImpl<AIProviderMapper, AIProvi
         }
 
         JsonNode root = objectMapper.readTree(response.body());
-        String content = root.path("message").path("content").asText("");
-        if (!StringUtils.hasText(content)) {
-            content = root.path("response").asText("");
-        }
+        String content = extractOllamaContent(root);
         if (!StringUtils.hasText(content)) {
             throw new IllegalStateException("模型服务没有返回可用文本");
         }
         return content.trim();
+    }
+
+    private void requestOllamaChatStream(
+            AIProvider provider,
+            String modelName,
+            String systemPrompt,
+            String userPrompt,
+            Double temperature,
+            Integer maxTokens,
+            Consumer<String> onChunk) throws IOException, InterruptedException {
+        HttpRequest.Builder builder = createJsonPostBuilder(
+                URI.create(buildOllamaChatUrl(provider.getBaseUrl())),
+                objectMapper.writeValueAsString(buildOllamaChatRequestBody(provider, modelName, systemPrompt, userPrompt, temperature, maxTokens, true)),
+                provider,
+                resolveGenerationTimeoutSeconds(provider),
+                "application/x-ndjson, application/json"
+        );
+
+        HttpResponse<InputStream> response = httpClient.send(
+                builder.build(),
+                HttpResponse.BodyHandlers.ofInputStream()
+        );
+
+        if (response.statusCode() < 200 || response.statusCode() >= 300) {
+            throw new IllegalStateException("模型服务返回异常状态码：" + response.statusCode() + " " + readErrorBody(response.body()));
+        }
+
+        try (BufferedReader reader = new BufferedReader(new InputStreamReader(response.body(), StandardCharsets.UTF_8))) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                String payload = line.trim();
+                if (!StringUtils.hasText(payload)) {
+                    continue;
+                }
+                if (payload.startsWith("data:")) {
+                    payload = payload.substring(5).trim();
+                }
+                if (!StringUtils.hasText(payload) || "[DONE]".equals(payload)) {
+                    break;
+                }
+
+                JsonNode root = objectMapper.readTree(payload);
+                String delta = extractOllamaContent(root);
+                if (hasRawText(delta)) {
+                    onChunk.accept(delta);
+                }
+                if (root.path("done").asBoolean(false)) {
+                    break;
+                }
+            }
+        }
     }
 
     private String requestCompatibleChat(
@@ -344,28 +421,13 @@ public class AIProviderServiceImpl extends ServiceImpl<AIProviderMapper, AIProvi
             String userPrompt,
             Double temperature,
             Integer maxTokens) throws IOException, InterruptedException {
-        ObjectNode requestBody = objectMapper.createObjectNode();
-        requestBody.put("model", modelName);
-        requestBody.set("messages", buildMessages(systemPrompt, userPrompt));
-        requestBody.put("temperature", resolveTemperature(provider, temperature));
-        if (provider.getTopP() != null) {
-            requestBody.put("top_p", provider.getTopP());
-        }
-        requestBody.put("max_tokens", resolveMaxTokens(provider, maxTokens));
-        requestBody.put("stream", false);
-        if ("ollama".equalsIgnoreCase(provider.getProviderType())) {
-            requestBody.put("reasoning_effort", "none");
-        }
-
-        HttpRequest.Builder builder = HttpRequest.newBuilder(URI.create(buildCompatibleChatUrl(provider.getBaseUrl())))
-                .POST(HttpRequest.BodyPublishers.ofString(objectMapper.writeValueAsString(requestBody), StandardCharsets.UTF_8))
-                .timeout(Duration.ofSeconds(resolveGenerationTimeoutSeconds(provider)))
-                .header("Accept", "application/json")
-                .header("Content-Type", "application/json; charset=UTF-8");
-
-        if (StringUtils.hasText(provider.getApiKey())) {
-            builder.header("Authorization", "Bearer " + provider.getApiKey().trim());
-        }
+        HttpRequest.Builder builder = createJsonPostBuilder(
+                URI.create(buildCompatibleChatUrl(provider.getBaseUrl())),
+                objectMapper.writeValueAsString(buildCompatibleRequestBody(provider, modelName, systemPrompt, userPrompt, temperature, maxTokens, false)),
+                provider,
+                resolveGenerationTimeoutSeconds(provider),
+                "application/json"
+        );
 
         HttpResponse<String> response = httpClient.send(
                 builder.build(),
@@ -377,17 +439,129 @@ public class AIProviderServiceImpl extends ServiceImpl<AIProviderMapper, AIProvi
         }
 
         JsonNode root = objectMapper.readTree(response.body());
-        JsonNode firstChoice = root.path("choices").isArray() && root.path("choices").size() > 0
-                ? root.path("choices").get(0)
-                : null;
-        String content = firstChoice == null ? "" : firstChoice.path("message").path("content").asText("");
-        if (!StringUtils.hasText(content) && firstChoice != null) {
-            content = firstChoice.path("text").asText("");
-        }
+        String content = extractCompatibleContent(root);
         if (!StringUtils.hasText(content)) {
             throw new IllegalStateException("模型服务没有返回可用文本");
         }
         return content.trim();
+    }
+
+    private void requestCompatibleChatStream(
+            AIProvider provider,
+            String modelName,
+            String systemPrompt,
+            String userPrompt,
+            Double temperature,
+            Integer maxTokens,
+            Consumer<String> onChunk) throws IOException, InterruptedException {
+        HttpRequest.Builder builder = createJsonPostBuilder(
+                URI.create(buildCompatibleChatUrl(provider.getBaseUrl())),
+                objectMapper.writeValueAsString(buildCompatibleRequestBody(provider, modelName, systemPrompt, userPrompt, temperature, maxTokens, true)),
+                provider,
+                resolveGenerationTimeoutSeconds(provider),
+                "text/event-stream, application/json"
+        );
+
+        HttpResponse<InputStream> response = httpClient.send(
+                builder.build(),
+                HttpResponse.BodyHandlers.ofInputStream()
+        );
+
+        if (response.statusCode() < 200 || response.statusCode() >= 300) {
+            throw new IllegalStateException("模型服务返回异常状态码：" + response.statusCode() + " " + readErrorBody(response.body()));
+        }
+
+        try (BufferedReader reader = new BufferedReader(new InputStreamReader(response.body(), StandardCharsets.UTF_8))) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                String payload = line.trim();
+                if (!StringUtils.hasText(payload)
+                        || payload.startsWith(":")
+                        || payload.startsWith("event:")) {
+                    continue;
+                }
+
+                if (payload.startsWith("data:")) {
+                    payload = payload.substring(5).trim();
+                }
+                if (!StringUtils.hasText(payload)) {
+                    continue;
+                }
+                if ("[DONE]".equals(payload)) {
+                    break;
+                }
+
+                JsonNode root = objectMapper.readTree(payload);
+                String delta = extractCompatibleDelta(root);
+                if (hasRawText(delta)) {
+                    onChunk.accept(delta);
+                }
+            }
+        }
+    }
+
+    private HttpRequest.Builder createJsonPostBuilder(
+            URI uri,
+            String payload,
+            AIProvider provider,
+            int timeoutSeconds,
+            String accept) {
+        HttpRequest.Builder builder = HttpRequest.newBuilder(uri)
+                .POST(HttpRequest.BodyPublishers.ofString(payload, StandardCharsets.UTF_8))
+                .timeout(Duration.ofSeconds(timeoutSeconds))
+                .header("Accept", accept)
+                .header("Content-Type", "application/json; charset=UTF-8");
+
+        if (StringUtils.hasText(provider.getApiKey())) {
+            builder.header("Authorization", "Bearer " + provider.getApiKey().trim());
+        }
+        return builder;
+    }
+
+    private ObjectNode buildOllamaChatRequestBody(
+            AIProvider provider,
+            String modelName,
+            String systemPrompt,
+            String userPrompt,
+            Double temperature,
+            Integer maxTokens,
+            boolean stream) {
+        ObjectNode requestBody = objectMapper.createObjectNode();
+        requestBody.put("model", modelName);
+        requestBody.set("messages", buildMessages(systemPrompt, userPrompt));
+        requestBody.put("stream", stream);
+        requestBody.put("think", false);
+
+        ObjectNode options = requestBody.putObject("options");
+        options.put("temperature", resolveTemperature(provider, temperature));
+        if (provider.getTopP() != null) {
+            options.put("top_p", provider.getTopP());
+        }
+        options.put("num_predict", resolveMaxTokens(provider, maxTokens));
+        return requestBody;
+    }
+
+    private ObjectNode buildCompatibleRequestBody(
+            AIProvider provider,
+            String modelName,
+            String systemPrompt,
+            String userPrompt,
+            Double temperature,
+            Integer maxTokens,
+            boolean stream) {
+        ObjectNode requestBody = objectMapper.createObjectNode();
+        requestBody.put("model", modelName);
+        requestBody.set("messages", buildMessages(systemPrompt, userPrompt));
+        requestBody.put("temperature", resolveTemperature(provider, temperature));
+        if (provider.getTopP() != null) {
+            requestBody.put("top_p", provider.getTopP());
+        }
+        requestBody.put("max_tokens", resolveMaxTokens(provider, maxTokens));
+        requestBody.put("stream", stream);
+        if ("ollama".equalsIgnoreCase(provider.getProviderType())) {
+            requestBody.put("reasoning_effort", "none");
+        }
+        return requestBody;
     }
 
     private ArrayNode buildMessages(String systemPrompt, String userPrompt) {
@@ -408,6 +582,67 @@ public class AIProviderServiceImpl extends ServiceImpl<AIProviderMapper, AIProvi
         return messages;
     }
 
+    private String extractOllamaContent(JsonNode root) {
+        String content = root.path("message").path("content").asText("");
+        if (!hasRawText(content)) {
+            content = root.path("response").asText("");
+        }
+        return content;
+    }
+
+    private String extractCompatibleContent(JsonNode root) {
+        JsonNode firstChoice = getFirstChoice(root);
+        if (firstChoice == null) {
+            return "";
+        }
+
+        String content = firstChoice.path("message").path("content").asText("");
+        if (!hasRawText(content)) {
+            content = firstChoice.path("text").asText("");
+        }
+        if (!hasRawText(content)) {
+            content = firstChoice.path("delta").path("content").asText("");
+        }
+        return content;
+    }
+
+    private String extractCompatibleDelta(JsonNode root) {
+        JsonNode firstChoice = getFirstChoice(root);
+        if (firstChoice == null) {
+            return "";
+        }
+
+        String delta = firstChoice.path("delta").path("content").asText("");
+        if (!hasRawText(delta)) {
+            delta = firstChoice.path("message").path("content").asText("");
+        }
+        if (!hasRawText(delta)) {
+            delta = firstChoice.path("text").asText("");
+        }
+        return delta;
+    }
+
+    private JsonNode getFirstChoice(JsonNode root) {
+        JsonNode choices = root.path("choices");
+        if (!choices.isArray() || choices.isEmpty()) {
+            return null;
+        }
+        return choices.get(0);
+    }
+
+    private String readErrorBody(InputStream inputStream) {
+        try {
+            String body = new String(inputStream.readAllBytes(), StandardCharsets.UTF_8).trim();
+            return body.isEmpty() ? "" : "- " + body;
+        } catch (IOException exception) {
+            return "";
+        }
+    }
+
+    private boolean hasRawText(String value) {
+        return value != null && !value.isEmpty();
+    }
+
     private double resolveTemperature(AIProvider provider, Double overrideTemperature) {
         if (overrideTemperature != null) {
             return overrideTemperature;
@@ -422,22 +657,25 @@ public class AIProviderServiceImpl extends ServiceImpl<AIProviderMapper, AIProvi
         return provider.getMaxTokens() != null && provider.getMaxTokens() > 0 ? provider.getMaxTokens() : 512;
     }
 
-    private boolean isEmbeddingModel(String modelName) {
-        String lower = modelName.toLowerCase(Locale.ROOT);
-        return lower.contains("embed")
-                || lower.contains("embedding")
-                || lower.contains("bge")
-                || lower.contains("mxbai")
-                || lower.contains("nomic")
-                || lower.contains("jina");
+    private boolean isEmbeddingModel(String name) {
+        String normalized = name == null ? "" : name.toLowerCase();
+        return normalized.contains("embed")
+                || normalized.contains("embedding")
+                || normalized.contains("bge")
+                || normalized.contains("nomic")
+                || normalized.contains("mxbai");
     }
 
     private void clearOtherDefaults(Long currentId) {
-        for (AIProvider item : listProviders()) {
-            if (!item.getId().equals(currentId) && Integer.valueOf(1).equals(item.getIsDefault())) {
-                item.setIsDefault(0);
-                updateById(item);
-            }
+        if (currentId == null) {
+            return;
+        }
+        QueryWrapper<AIProvider> queryWrapper = new QueryWrapper<>();
+        queryWrapper.ne("id", currentId).eq("deleted", 0).eq("is_default", 1);
+        List<AIProvider> providers = list(queryWrapper);
+        for (AIProvider provider : providers) {
+            provider.setIsDefault(0);
+            updateById(provider);
         }
     }
 }

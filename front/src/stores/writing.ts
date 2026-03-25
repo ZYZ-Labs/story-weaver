@@ -2,7 +2,7 @@ import { ref } from 'vue'
 import { defineStore } from 'pinia'
 
 import * as writingApi from '@/api/ai-writing'
-import type { AIWritingRecord, AIWritingRequest } from '@/types'
+import type { AIWritingRecord, AIWritingRequest, AIWritingStreamEvent } from '@/types'
 
 export const useWritingStore = defineStore('writing', () => {
   const records = ref<AIWritingRecord[]>([])
@@ -20,6 +20,18 @@ export const useWritingStore = defineStore('writing', () => {
 
   async function generate(payload: AIWritingRequest) {
     const record = await writingApi.generateWriting(payload)
+    records.value.unshift(record)
+    projectRecords.value.unshift(record)
+    return record
+  }
+
+  async function generateStream(
+    payload: AIWritingRequest,
+    handlers: {
+      onEvent?: (event: AIWritingStreamEvent) => void
+    } = {},
+  ) {
+    const record = await writingApi.streamGenerateWriting(payload, handlers)
     records.value.unshift(record)
     projectRecords.value.unshift(record)
     return record
@@ -67,6 +79,7 @@ export const useWritingStore = defineStore('writing', () => {
     fetchByChapter,
     fetchByProject,
     generate,
+    generateStream,
     accept,
     reject,
   }

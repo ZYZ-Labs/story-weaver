@@ -69,6 +69,17 @@ export interface AIWritingRequest {
   promptSnapshot?: string
 }
 
+export interface AIWritingStreamEvent {
+  type: 'meta' | 'chunk' | 'complete' | 'error' | string
+  delta?: string
+  message?: string
+  writingType?: string
+  selectedProviderId?: number | null
+  selectedModel?: string
+  maxTokens?: number | null
+  record?: AIWritingRecord
+}
+
 export interface AIWritingRecord {
   id: number
   chapterId: number

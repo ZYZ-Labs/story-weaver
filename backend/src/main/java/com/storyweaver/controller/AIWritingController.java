@@ -2,8 +2,11 @@ package com.storyweaver.controller;
 
 import com.storyweaver.domain.dto.AIWritingRequestDTO;
 import com.storyweaver.domain.vo.AIWritingResponseVO;
+import com.storyweaver.domain.vo.AIWritingStreamEventVO;
 import com.storyweaver.security.SecurityUtils;
 import com.storyweaver.service.AIWritingService;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.validation.annotation.Validated;
@@ -14,7 +17,9 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
+import java.io.IOException;
 import java.util.List;
 
 @RestController
@@ -39,6 +44,33 @@ public class AIWritingController {
         SecurityUtils.getCurrentUserId(authentication);
         AIWritingResponseVO response = aiWritingService.generateContent(requestDTO);
         return ResponseEntity.ok(response);
+    }
+
+    @PostMapping(value = "/generate-stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    public ResponseEntity<SseEmitter> generateContentStream(
+            @Validated @RequestBody AIWritingRequestDTO requestDTO,
+            @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
+            Authentication authentication) {
+        if (!AuthHeaderSupport.hasValidBearerToken(authorizationHeader)) {
+            return ResponseEntity.status(401).build();
+        }
+        SecurityUtils.getCurrentUserId(authentication);
+
+        SseEmitter emitter = new SseEmitter(0L);
+        Thread.startVirtualThread(() -> {
+            try {
+                aiWritingService.streamContent(requestDTO, event -> sendStreamEvent(emitter, event));
+                emitter.complete();
+            } catch (Exception exception) {
+                sendStreamEvent(emitter, AIWritingStreamEventVO.error(resolveMessage(exception)));
+                emitter.complete();
+            }
+        });
+
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CACHE_CONTROL, "no-cache")
+                .header(HttpHeaders.CONNECTION, "keep-alive")
+                .body(emitter);
     }
 
     @GetMapping("/chapter/{chapterId}")
@@ -120,5 +152,18 @@ public class AIWritingController {
 
         aiWritingService.rejectGeneratedContent(id);
         return ResponseEntity.ok().build();
+    }
+
+    private void sendStreamEvent(SseEmitter emitter, AIWritingStreamEventVO event) {
+        try {
+            emitter.send(SseEmitter.event().name(event.getType()).data(event));
+        } catch (IOException exception) {
+            throw new IllegalStateException("流式连接已中断");
+        }
+    }
+
+    private String resolveMessage(Exception exception) {
+        String message = exception.getMessage();
+        return message == null || message.isBlank() ? "AI 流式生成失败，请稍后重试" : message;
     }
 }

@@ -5,6 +5,7 @@ import com.storyweaver.domain.entity.AIProvider;
 import com.storyweaver.domain.vo.ProviderDiscoveryVO;
 
 import java.util.List;
+import java.util.function.Consumer;
 
 public interface AIProviderService extends IService<AIProvider> {
     List<AIProvider> listProviders();
@@ -14,4 +15,12 @@ public interface AIProviderService extends IService<AIProvider> {
     boolean testProvider(Long id);
     ProviderDiscoveryVO discoverModels(AIProvider provider);
     String generateText(AIProvider provider, String modelName, String systemPrompt, String userPrompt, Double temperature, Integer maxTokens);
+    void streamText(
+            AIProvider provider,
+            String modelName,
+            String systemPrompt,
+            String userPrompt,
+            Double temperature,
+            Integer maxTokens,
+            Consumer<String> onChunk);
 }
