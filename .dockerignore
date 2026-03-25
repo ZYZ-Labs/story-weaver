@@ -1,0 +1,11 @@
+.git
+.gitignore
+.codex-runtime
+logs
+node_modules
+front/node_modules
+front/node_modules_stale
+front/dist
+backend/target
+**/*.log
+**/.DS_Store

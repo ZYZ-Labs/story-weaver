@@ -16,9 +16,11 @@ export async function streamGenerateWriting(payload: AIWritingRequest, handlers:
   const response = await fetch(`${appEnv.apiBaseUrl}/ai-writing/generate-stream`, {
     method: 'POST',
     headers: {
+      Accept: 'text/event-stream',
       'Content-Type': 'application/json',
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
     },
+    cache: 'no-store',
     body: JSON.stringify(payload),
   })
 
@@ -28,7 +30,7 @@ export async function streamGenerateWriting(payload: AIWritingRequest, handlers:
 
   const reader = response.body?.getReader()
   if (!reader) {
-    throw new Error('未收到流式响应内容')
+    throw new Error('No stream body was returned by the server.')
   }
 
   const decoder = new TextDecoder()
@@ -47,10 +49,12 @@ export async function streamGenerateWriting(payload: AIWritingRequest, handlers:
       if (event) {
         handlers.onEvent?.(event)
         if (event.type === 'error') {
-          throw new Error(event.message || 'AI 生成失败')
+          throw new Error(event.message || 'AI generation failed.')
         }
         if (event.type === 'complete' && event.record) {
           completedRecord = event.record
+          await reader.cancel().catch(() => undefined)
+          return completedRecord
         }
       }
       separatorIndex = buffer.indexOf('\n\n')
@@ -65,15 +69,16 @@ export async function streamGenerateWriting(payload: AIWritingRequest, handlers:
   if (tailEvent) {
     handlers.onEvent?.(tailEvent)
     if (tailEvent.type === 'error') {
-      throw new Error(tailEvent.message || 'AI 生成失败')
+      throw new Error(tailEvent.message || 'AI generation failed.')
     }
     if (tailEvent.type === 'complete' && tailEvent.record) {
       completedRecord = tailEvent.record
+      return completedRecord
     }
   }
 
   if (!completedRecord) {
-    throw new Error('流式生成提前结束，未收到最终结果')
+    throw new Error('The stream ended before a final record was returned.')
   }
 
   return completedRecord
@@ -132,7 +137,7 @@ function parseSseEvent(rawEvent: string) {
 async function readErrorMessage(response: Response) {
   const text = await response.text()
   if (!text) {
-    return 'AI 生成失败'
+    return 'AI generation failed.'
   }
 
   try {

@@ -403,6 +403,7 @@ public class AIProviderServiceImpl extends ServiceImpl<AIProviderMapper, AIProvi
                 }
 
                 JsonNode root = objectMapper.readTree(payload);
+                validateStreamPayload(root);
                 String delta = extractOllamaContent(root);
                 if (hasRawText(delta)) {
                     onChunk.accept(delta);
@@ -492,9 +493,13 @@ public class AIProviderServiceImpl extends ServiceImpl<AIProviderMapper, AIProvi
                 }
 
                 JsonNode root = objectMapper.readTree(payload);
+                validateStreamPayload(root);
                 String delta = extractCompatibleDelta(root);
                 if (hasRawText(delta)) {
                     onChunk.accept(delta);
+                }
+                if (isCompatibleStreamFinished(root)) {
+                    break;
                 }
             }
         }
@@ -628,6 +633,32 @@ public class AIProviderServiceImpl extends ServiceImpl<AIProviderMapper, AIProvi
             return null;
         }
         return choices.get(0);
+    }
+
+    private void validateStreamPayload(JsonNode root) {
+        JsonNode errorNode = root.path("error");
+        if (!errorNode.isMissingNode() && !errorNode.isNull()) {
+            String message = errorNode.isTextual()
+                    ? errorNode.asText()
+                    : errorNode.path("message").asText("");
+            throw new IllegalStateException(
+                    StringUtils.hasText(message) ? message : "模型服务流式返回了错误信息"
+            );
+        }
+    }
+
+    private boolean isCompatibleStreamFinished(JsonNode root) {
+        if (root.path("done").asBoolean(false)) {
+            return true;
+        }
+
+        JsonNode firstChoice = getFirstChoice(root);
+        if (firstChoice == null) {
+            return false;
+        }
+
+        JsonNode finishReason = firstChoice.path("finish_reason");
+        return !finishReason.isMissingNode() && !finishReason.isNull() && hasRawText(finishReason.asText(""));
     }
 
     private String readErrorBody(InputStream inputStream) {
