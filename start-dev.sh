@@ -26,11 +26,11 @@ mkdir -p "$LOG_DIR"
 
 ensure_command() {
   if ! command -v "$1" >/dev/null 2>&1; then
-    echo "[ERROR] 未找到命令: $1"
+    echo "[ERROR] Missing command: $1"
     echo "[HINT] $2"
     exit 1
   fi
-  echo "[OK] 已找到命令: $1"
+  echo "[OK] Found command: $1"
 }
 
 check_port() {
@@ -39,15 +39,15 @@ check_port() {
   local name="$3"
   local retries="${4:-8}"
 
-  for ((i=1;i<=retries;i++)); do
+  for ((i=1; i<=retries; i++)); do
     if (echo >"/dev/tcp/$host/$port") >/dev/null 2>&1; then
-      echo "[OK] $name 可连接 ($host:$port)"
+      echo "[OK] $name reachable at $host:$port"
       return 0
     fi
     sleep 2
   done
 
-  echo "[ERROR] $name 无法连接 ($host:$port)"
+  echo "[ERROR] $name is not reachable at $host:$port"
   return 1
 }
 
@@ -55,35 +55,47 @@ check_java_version() {
   local major
   major="$(java -version 2>&1 | awk -F[\".] '/version/ {print $2; exit}')"
   if [[ -z "$major" || "$major" -lt 21 ]]; then
-    echo "[ERROR] 当前 JDK 版本不足 21"
+    echo "[ERROR] JDK 21+ is required"
     exit 1
   fi
-  echo "[OK] JDK 版本满足要求: $major"
+  echo "[OK] Java version: $major"
 }
 
 select_node_version() {
   if command -v nvm >/dev/null 2>&1; then
-    echo "[OK] 检测到 nvm，尝试切换到 $REQUIRED_NODE_VERSION"
-    nvm use "$REQUIRED_NODE_VERSION" >/dev/null
-  else
-    local major
-    major="$(node -v | sed 's/^v//' | cut -d. -f1)"
-    if [[ "$major" -lt 20 ]]; then
-      echo "[ERROR] 当前 Node 版本不足 20，且未检测到 nvm"
-      exit 1
-    fi
-    echo "[OK] 使用当前 Node 版本: $(node -v)"
+    echo "[INFO] nvm detected, trying Node $REQUIRED_NODE_VERSION"
+    nvm use "$REQUIRED_NODE_VERSION" >/dev/null || true
+  fi
+
+  local major
+  major="$(node -v | sed 's/^v//' | cut -d. -f1)"
+  if [[ "$major" -lt 20 ]]; then
+    echo "[ERROR] Node 20+ is required"
+    exit 1
+  fi
+  echo "[OK] Node version: $(node -v)"
+}
+
+print_lan_frontend_urls() {
+  if command -v hostname >/dev/null 2>&1; then
+    local ips
+    ips="$(hostname -I 2>/dev/null || true)"
+    for ip in $ips; do
+      if [[ "$ip" != 127.* && "$ip" != 169.254.* ]]; then
+        echo "Frontend LAN: http://$ip:5173"
+      fi
+    done
   fi
 }
 
 echo "========================================"
-echo "Story Weaver 一键开发启动"
+echo "Story Weaver Dev Startup"
 echo "========================================"
 
-ensure_command java "请安装 JDK 21+ 并确保 java 在 PATH 中"
-ensure_command mvn "请安装 Maven 3.9+ 并确保 mvn 在 PATH 中"
-ensure_command node "请安装 Node.js 20+ 或使用 nvm"
-ensure_command npm "请重新安装 Node.js 以恢复 npm"
+ensure_command java "Install JDK 21+ and make sure java is in PATH"
+ensure_command mvn "Install Maven 3.9+ and make sure mvn is in PATH"
+ensure_command node "Install Node.js 20+ or use nvm"
+ensure_command npm "Reinstall Node.js if npm is missing"
 
 check_java_version
 select_node_version
@@ -91,34 +103,35 @@ select_node_version
 check_port "$MYSQL_HOST" "$MYSQL_PORT" "MySQL" 8
 if command -v mysql >/dev/null 2>&1; then
   mysql -h"$MYSQL_HOST" -P"$MYSQL_PORT" -u"$MYSQL_USER" -p"$MYSQL_PASSWORD" -e "SELECT 1;" >/dev/null
-  echo "[OK] MySQL 账号密码可用"
+  echo "[OK] MySQL credential check passed"
 else
-  echo "[WARN] 未找到 mysql 客户端，跳过账号密码校验"
+  echo "[WARN] mysql client not found, skipping credential check"
 fi
 
 check_port "$REDIS_HOST" "$REDIS_PORT" "Redis" 8
 if command -v redis-cli >/dev/null 2>&1; then
   redis-cli -h "$REDIS_HOST" -p "$REDIS_PORT" -a "$REDIS_PASSWORD" ping >/dev/null
-  echo "[OK] Redis 账号密码可用"
+  echo "[OK] Redis password check passed"
 else
-  echo "[WARN] 未找到 redis-cli，跳过密码校验"
+  echo "[WARN] redis-cli not found, skipping password check"
 fi
 
-echo "[OK] 安装前端依赖"
+echo "[INFO] Installing frontend dependencies"
 (cd "$FRONTEND_DIR" && npm install >/dev/null)
 
-echo "[OK] 启动后端，日志: $BACKEND_LOG"
-(cd "$BACKEND_DIR" && nohup mvn spring-boot:run >"$BACKEND_LOG" 2>&1 &) 
-check_port "127.0.0.1" "8080" "后端服务" 45
+echo "[INFO] Starting backend, log: $BACKEND_LOG"
+(cd "$BACKEND_DIR" && nohup mvn spring-boot:run >"$BACKEND_LOG" 2>&1 &)
+check_port "127.0.0.1" "8080" "Backend" 45
 
-echo "[OK] 启动前端，日志: $FRONTEND_LOG"
-(cd "$FRONTEND_DIR" && nohup npm run dev -- --host 0.0.0.0 --port 5173 >"$FRONTEND_LOG" 2>&1 &)
-check_port "127.0.0.1" "5173" "前端服务" 45
+echo "[INFO] Starting frontend, log: $FRONTEND_LOG"
+(cd "$FRONTEND_DIR" && nohup npm run dev >"$FRONTEND_LOG" 2>&1 &)
+check_port "127.0.0.1" "5173" "Frontend" 45
 
 echo "========================================"
-echo "启动完成"
-echo "前端: http://localhost:5173"
-echo "后端: http://localhost:8080/api"
+echo "Startup complete"
+echo "Frontend: http://localhost:5173"
+echo "Backend:  http://localhost:8080/api"
+print_lan_frontend_urls
 echo "MySQL: $MYSQL_HOST:$MYSQL_PORT"
 echo "Redis: $REDIS_HOST:$REDIS_PORT"
 echo "========================================"

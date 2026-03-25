@@ -71,6 +71,23 @@ function Test-TcpOnce {
     }
 }
 
+function Get-LanIPv4Addresses {
+    $addresses = Get-NetIPAddress -AddressFamily IPv4 -ErrorAction SilentlyContinue |
+        Where-Object {
+            $_.IPAddress -and
+            $_.IPAddress -ne '127.0.0.1' -and
+            -not $_.IPAddress.StartsWith('169.254.') -and
+            $_.PrefixOrigin -ne 'WellKnown'
+        } |
+        Select-Object -ExpandProperty IPAddress -Unique
+
+    if (-not $addresses) {
+        return @()
+    }
+
+    return @($addresses)
+}
+
 Write-Host "========================================"
 Write-Host "Story Weaver Dev Startup (PowerShell)"
 Write-Host "========================================"
@@ -153,6 +170,9 @@ Write-Host '========================================'
 Write-Host 'Startup complete'
 Write-Host 'Frontend: http://localhost:5173'
 Write-Host 'Backend:  http://localhost:8080/api'
+foreach ($ip in Get-LanIPv4Addresses) {
+    Write-Host "Frontend LAN: http://${ip}:5173"
+}
 Write-Host "Backend log: $BackendLog"
 Write-Host "Frontend log: $FrontendLog"
 Write-Host '========================================'

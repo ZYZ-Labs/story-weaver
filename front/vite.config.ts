@@ -35,6 +35,7 @@ export default defineConfig(({ mode }) => {
     server: {
       host: '0.0.0.0',
       port: 5173,
+      strictPort: true,
       proxy: env.VITE_API_PROXY_TARGET
         ? {
             '/api': {
@@ -43,6 +44,11 @@ export default defineConfig(({ mode }) => {
             },
           }
         : undefined,
+    },
+    preview: {
+      host: '0.0.0.0',
+      port: 4173,
+      strictPort: true,
     },
     build: {
       sourcemap: mode !== 'production',
