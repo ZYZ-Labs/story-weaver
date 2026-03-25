@@ -77,7 +77,11 @@ public class AIProviderServiceImpl extends ServiceImpl<AIProviderMapper, AIProvi
         existing.setName(provider.getName());
         existing.setProviderType(provider.getProviderType());
         existing.setBaseUrl(provider.getBaseUrl());
-        existing.setApiKey(provider.getApiKey());
+        if ("ollama".equalsIgnoreCase(provider.getProviderType())) {
+            existing.setApiKey("");
+        } else if (StringUtils.hasText(provider.getApiKey())) {
+            existing.setApiKey(provider.getApiKey().trim());
+        }
         existing.setModelName(provider.getModelName());
         existing.setEmbeddingModel(provider.getEmbeddingModel());
         existing.setTemperature(provider.getTemperature());

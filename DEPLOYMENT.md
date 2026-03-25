@@ -32,7 +32,7 @@
 - `REGISTRY_HOST=crpi-2iicgf8z27uyvaq1.cn-hangzhou.personal.cr.aliyuncs.com`
 - `LOGIN_SERVER=crpi-2iicgf8z27uyvaq1.cn-hangzhou.personal.cr.aliyuncs.com`
 - `REGISTRY_NAMESPACE=silvericekey`
-- `LOGIN_USERNAME=your-registry-login-username`
+- `LOGIN_USERNAME=your-acr-login-username`
 - `BACKEND_IMAGE_NAME=story-weaver-backend`
 - `FRONTEND_IMAGE_NAME=story-weaver-front`
 

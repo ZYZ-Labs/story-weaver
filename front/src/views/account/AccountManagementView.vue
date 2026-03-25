@@ -17,7 +17,6 @@ const resetLoading = ref(false)
 const unlockingId = ref<number | null>(null)
 const resetTarget = ref<ManagedUser | null>(null)
 const feedbackMessage = ref('')
-const feedbackSecret = ref('')
 const feedbackType = ref<'success' | 'error'>('success')
 
 const form = reactive({
@@ -46,6 +45,15 @@ const headers = [
 const isCreateMode = computed(() => editingId.value == null)
 const hasUsers = computed(() => userAdminStore.users.length > 0)
 
+function generateStrongPassword() {
+  const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%^&*'
+  let value = ''
+  for (let index = 0; index < 14; index += 1) {
+    value += alphabet[Math.floor(Math.random() * alphabet.length)]
+  }
+  return `${value}8A`
+}
+
 function resetForm() {
   Object.assign(form, {
     username: '',
@@ -60,7 +68,6 @@ function resetForm() {
 function openCreate() {
   editingId.value = null
   resetForm()
-  form.password = generateStrongPassword()
   dialog.value = true
 }
 
@@ -79,23 +86,13 @@ function openEdit(user: ManagedUser) {
 
 function openResetPassword(user: ManagedUser) {
   resetTarget.value = user
-  passwordForm.newPassword = generateStrongPassword()
+  passwordForm.newPassword = ''
   resetPasswordDialog.value = true
 }
 
-function generateStrongPassword() {
-  const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%^&*'
-  let value = ''
-  for (let index = 0; index < 14; index += 1) {
-    value += alphabet[Math.floor(Math.random() * alphabet.length)]
-  }
-  return `${value}8A`
-}
-
-function setFeedback(type: 'success' | 'error', message: string, secret = '') {
+function setFeedback(type: 'success' | 'error', message: string) {
   feedbackType.value = type
   feedbackMessage.value = message
-  feedbackSecret.value = secret
 }
 
 function getRoleLabel(roleCode: string) {
@@ -127,6 +124,10 @@ async function submit() {
   try {
     if (isCreateMode.value) {
       const password = form.password.trim()
+      if (!password) {
+        throw new Error('请填写初始密码，或点击“生成密码”。')
+      }
+
       await userAdminStore.create({
         username: form.username.trim(),
         password,
@@ -135,7 +136,7 @@ async function submit() {
         roleCode: form.roleCode,
         status: Number(form.status),
       })
-      setFeedback('success', `账号 ${form.username.trim()} 创建成功`, password)
+      setFeedback('success', `账号 ${form.username.trim()} 创建成功。`)
     } else if (editingId.value) {
       await userAdminStore.update(editingId.value, {
         nickname: form.nickname.trim(),
@@ -143,7 +144,7 @@ async function submit() {
         roleCode: form.roleCode,
         status: Number(form.status),
       })
-      setFeedback('success', `账号 ${form.username.trim()} 已更新`)
+      setFeedback('success', `账号 ${form.username.trim()} 已更新。`)
     }
     dialog.value = false
   } catch (error) {
@@ -161,8 +162,12 @@ async function submitResetPassword() {
   resetLoading.value = true
   try {
     const password = passwordForm.newPassword.trim()
+    if (!password) {
+      throw new Error('请填写新密码，或点击“生成密码”。')
+    }
+
     await userAdminStore.resetPassword(resetTarget.value.id, password)
-    setFeedback('success', `已重置 ${resetTarget.value.username} 的密码`, password)
+    setFeedback('success', `已重置 ${resetTarget.value.username} 的密码。`)
     resetPasswordDialog.value = false
   } catch (error) {
     setFeedback('error', error instanceof Error ? error.message : '重置密码失败')
@@ -175,7 +180,7 @@ async function unlockUser(user: ManagedUser) {
   unlockingId.value = user.id
   try {
     await userAdminStore.unlock(user.id)
-    setFeedback('success', `账号 ${user.username} 已解除锁定并清空失败次数`)
+    setFeedback('success', `账号 ${user.username} 已解除锁定并清空失败次数。`)
   } catch (error) {
     setFeedback('error', error instanceof Error ? error.message : '解除锁定失败')
   } finally {
@@ -196,18 +201,17 @@ onMounted(async () => {
     description="集中管理管理员和创作者账号，支持创建账号、重置密码、解除锁定和禁用高风险账号。"
   >
     <template #actions>
-      <v-btn color="primary" prepend-icon="mdi-account-plus-outline" @click="openCreate">新增账号</v-btn>
+      <v-btn color="primary" prepend-icon="mdi-account-plus-outline" @click="openCreate">
+        新增账号
+      </v-btn>
     </template>
 
     <v-alert v-if="feedbackMessage" :type="feedbackType" variant="tonal">
-      <div>{{ feedbackMessage }}</div>
-      <div v-if="feedbackSecret" class="text-caption mt-2">
-        请立即记录临时密码：<code>{{ feedbackSecret }}</code>
-      </div>
+      {{ feedbackMessage }}
     </v-alert>
 
     <v-alert type="info" variant="tonal">
-      建议外网环境关闭公开注册，仅通过这里创建账号；如果某个账号连续输错密码被锁定，也可以在这里直接解除锁定。
+      建议外网环境关闭公开注册，仅通过这里创建账号；密码字段默认不再预填，若需要随机密码可手动点击“生成密码”。
     </v-alert>
 
     <EmptyState
@@ -216,7 +220,9 @@ onMounted(async () => {
       description="先创建第一个可登录账号，后续即可在这里继续重置密码和维护角色权限。"
       icon="mdi-account-lock-open-outline"
     >
-      <v-btn color="primary" prepend-icon="mdi-account-plus-outline" @click="openCreate">创建账号</v-btn>
+      <v-btn color="primary" prepend-icon="mdi-account-plus-outline" @click="openCreate">
+        创建账号
+      </v-btn>
     </EmptyState>
 
     <v-card v-else class="soft-panel">
@@ -269,7 +275,9 @@ onMounted(async () => {
         <template #[`item.actions`]="{ item }">
           <div class="d-flex justify-end ga-2 flex-wrap">
             <v-btn size="small" variant="outlined" @click="openEdit(item)">编辑</v-btn>
-            <v-btn size="small" color="primary" variant="text" @click="openResetPassword(item)">重置密码</v-btn>
+            <v-btn size="small" color="primary" variant="text" @click="openResetPassword(item)">
+              重置密码
+            </v-btn>
             <v-btn
               v-if="item.locked || item.failedLoginAttempts > 0"
               size="small"
@@ -335,7 +343,9 @@ onMounted(async () => {
                   v-model="form.password"
                   class="flex-grow-1"
                   label="初始密码"
-                  hint="密码至少 8 位，并同时包含字母和数字。"
+                  type="password"
+                  autocomplete="new-password"
+                  hint="密码至少 8 位，并同时包含字母和数字。提交前请自行记录。"
                   persistent-hint
                 />
                 <v-btn class="mt-2" variant="outlined" @click="form.password = generateStrongPassword()">
@@ -364,7 +374,9 @@ onMounted(async () => {
               v-model="passwordForm.newPassword"
               class="flex-grow-1"
               label="新密码"
-              hint="建议使用生成密码后再发给对应用户。"
+              type="password"
+              autocomplete="new-password"
+              hint="默认不预填密码；如需随机密码可点击右侧生成，并在提交前自行记录。"
               persistent-hint
             />
             <v-btn class="mt-2" variant="outlined" @click="passwordForm.newPassword = generateStrongPassword()">

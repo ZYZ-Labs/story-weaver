@@ -9,7 +9,7 @@ CONFIG_PATH="$CONFIG_DIR/registry.env"
 LEGACY_CONFIG_PATH="$CONFIG_DIR/dockerhub.env"
 DEFAULT_ACR_HOST="crpi-2iicgf8z27uyvaq1.cn-hangzhou.personal.cr.aliyuncs.com"
 DEFAULT_ACR_NAMESPACE="silvericekey"
-DEFAULT_ACR_LOGIN_USERNAME="your-registry-login-username"
+DEFAULT_ACR_LOGIN_USERNAME=""
 
 print_info() { echo "[INFO] $1"; }
 print_warn() { echo "[WARN] $1"; }
@@ -254,11 +254,11 @@ services:
     environment:
       TZ: Asia/Shanghai
       SPRING_DATASOURCE_URL: jdbc:mysql://192.168.5.249:3306/story_weaver?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
-      SPRING_DATASOURCE_USERNAME: root
-      SPRING_DATASOURCE_PASSWORD: your-local-password
+      SPRING_DATASOURCE_USERNAME: your-mysql-username
+      SPRING_DATASOURCE_PASSWORD: your-mysql-password
       SPRING_DATA_REDIS_HOST: 192.168.5.249
       SPRING_DATA_REDIS_PORT: 6379
-      SPRING_DATA_REDIS_PASSWORD: your-local-password
+      SPRING_DATA_REDIS_PASSWORD: your-redis-password
       JWT_SECRET: change-this-to-a-long-random-jwt-secret-at-least-32-characters
       APP_CORS_ALLOWED_ORIGIN_PATTERNS: http://localhost:*,http://127.0.0.1:*,http://192.168.*:*,http://10.*:*,https://home.silvericekey.fun,https://home.silvericekey.fun:*
     ports:

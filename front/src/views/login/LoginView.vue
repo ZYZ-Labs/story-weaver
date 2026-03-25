@@ -20,8 +20,8 @@ const publicConfig = ref<AuthPublicConfig>({
 })
 
 const form = reactive({
-  username: 'admin',
-  password: 'Admin@123456',
+  username: '',
+  password: '',
 })
 
 const registrationEnabled = computed(() => publicConfig.value.registrationEnabled)
@@ -107,10 +107,9 @@ onMounted(() => {
       <v-col cols="12" lg="5" class="d-flex align-center justify-center">
         <v-card width="100%" max-width="520" class="mx-4 soft-panel">
           <v-card-text class="pa-8">
-            <div class="text-h4 font-weight-bold">进入织文者 Story Weaver</div>
+            <div class="text-h4 font-weight-bold">进入 Story Weaver</div>
             <div class="text-body-2 text-medium-emphasis mt-2">
-              默认管理员账号已预填：
-              <code style="background: rgba(30, 77, 120, 0.08); padding: 2px 6px; border-radius: 6px">admin / Admin@123456</code>
+              请使用管理员分配的账号登录，页面不再预填任何默认账号或密码。
             </div>
 
             <v-alert type="info" variant="tonal" class="mt-6">
@@ -138,16 +137,26 @@ onMounted(() => {
             </v-chip>
 
             <v-form class="mt-6" @submit.prevent="submit">
-              <v-text-field v-model="form.username" label="用户名" prepend-inner-icon="mdi-account-outline" />
+              <v-text-field
+                v-model="form.username"
+                label="用户名"
+                prepend-inner-icon="mdi-account-outline"
+                autocomplete="username"
+              />
               <v-text-field
                 v-model="form.password"
                 label="密码"
                 type="password"
                 prepend-inner-icon="mdi-lock-outline"
+                autocomplete="current-password"
               />
 
               <div class="text-caption text-medium-emphasis mb-4">
-                {{ registrationEnabled ? '登录使用已有账号；切换到注册后会直接创建新账号并自动登录。' : '外网环境推荐关闭公开注册，仅保留管理员分配账号。' }}
+                {{
+                  registrationEnabled
+                    ? '登录使用已有账号；切换到注册后会直接创建新账号并自动登录。'
+                    : '外网环境推荐关闭公开注册，仅保留管理员分配账号。'
+                }}
               </div>
 
               <v-alert v-if="errorMessage" type="error" variant="tonal" class="mb-4">

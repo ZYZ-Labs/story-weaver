@@ -176,7 +176,7 @@ function openEdit(id: number) {
     name: target.name,
     providerType: target.providerType,
     baseUrl: target.baseUrl || '',
-    apiKey: target.apiKey || '',
+    apiKey: '',
     modelName: target.modelName || '',
     embeddingModel: target.embeddingModel || '',
     temperature: target.temperature || 0.7,
