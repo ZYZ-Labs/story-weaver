@@ -6,6 +6,7 @@ import EmptyState from '@/components/EmptyState.vue'
 import NameSuggestionDialog from '@/components/NameSuggestionDialog.vue'
 import PageContainer from '@/components/PageContainer.vue'
 import { generateNameSuggestions } from '@/api/name-suggestion'
+import { useCharacterStore } from '@/stores/character'
 import { useChapterStore } from '@/stores/chapter'
 import { useProjectStore } from '@/stores/project'
 import { useProviderStore } from '@/stores/provider'
@@ -17,6 +18,7 @@ import { formatDateTime } from '@/utils/format'
 
 const projectStore = useProjectStore()
 const chapterStore = useChapterStore()
+const characterStore = useCharacterStore()
 const writingStore = useWritingStore()
 const settingsStore = useSettingsStore()
 const providerStore = useProviderStore()
@@ -38,6 +40,17 @@ const lastChapterAiModelSignature = ref('')
 const currentProjectId = computed(() => projectStore.selectedProjectId)
 const currentPreview = computed(() => chapterStore.currentChapter)
 const currentPreviewHasContent = computed(() => Boolean(currentPreview.value?.content?.trim()))
+const currentChapterStreamState = computed(() => writingStore.getStreamState(currentPreview.value?.id || null))
+const displayChapterAiGenerating = computed(
+  () => currentChapterStreamState.value.generating || chapterAiGenerating.value,
+)
+const displayChapterAiError = computed(() => currentChapterStreamState.value.error || chapterAiError.value)
+const displayChapterAiStreamingContent = computed(
+  () => currentChapterStreamState.value.content || chapterAiStreamingContent.value,
+)
+const displayChapterAiLatestRecord = computed<AIWritingRecord | null>(
+  () => currentChapterStreamState.value.lastRecord || chapterAiLatestRecord.value || writingStore.records[0] || null,
+)
 const enabledProviders = computed(() => providerStore.providers.filter((item) => item.enabled === 1))
 const defaultProvider = computed(() => {
   const configuredId = settingsStore.getNumberValue('default_ai_provider_id', null)
@@ -63,7 +76,7 @@ const tableHeaders = [
   { title: '顺序', key: 'orderNum', width: 88 },
   { title: '标题', key: 'title' },
   { title: '字数', key: 'wordCount', width: 100 },
-  { title: '操作', key: 'actions', sortable: false, width: 168 },
+  { title: '操作', key: 'actions', sortable: false, width: 188 },
 ]
 
 const toneOptions = ['紧张压迫', '轻松日常', '神秘悬疑', '热血推进', '伤感克制', '史诗宏大']
@@ -72,6 +85,7 @@ const form = reactive({
   title: '',
   content: '',
   orderNum: 1,
+  requiredCharacterIds: [] as number[],
 })
 
 const chapterAiForm = reactive({
@@ -88,7 +102,10 @@ watch(
     if (!projectId) {
       return
     }
-    await chapterStore.fetchByProject(projectId).catch(() => undefined)
+    await Promise.allSettled([
+      chapterStore.fetchByProject(projectId),
+      characterStore.fetchByProject(projectId),
+    ])
   },
   { immediate: true },
 )
@@ -120,7 +137,10 @@ watch(
       chapterAiForm.maxTokens = profile.recommended
       return
     }
-    chapterAiForm.maxTokens = Math.min(Math.max(chapterAiForm.maxTokens || profile.recommended, profile.min), profile.max)
+    chapterAiForm.maxTokens = Math.min(
+      Math.max(chapterAiForm.maxTokens || profile.recommended, profile.min),
+      profile.max,
+    )
   },
   { immediate: true },
 )
@@ -137,6 +157,7 @@ function fillForm(chapter?: Chapter | null) {
     title: chapter?.title || '',
     content: chapter?.content || '',
     orderNum: chapter?.orderNum || chapterStore.chapters.length + 1,
+    requiredCharacterIds: [...(chapter?.requiredCharacterIds || [])],
   })
 }
 
@@ -203,6 +224,7 @@ async function submit() {
   const payload = {
     ...form,
     orderNum: Number(form.orderNum) || 1,
+    requiredCharacterIds: [...form.requiredCharacterIds],
   }
 
   if (editingId.value) {
@@ -247,6 +269,8 @@ function buildChapterAiInstruction(action: 'draft' | 'continue' | 'expand') {
     chapterAiForm.tone.trim() && `情绪氛围：${chapterAiForm.tone.trim()}`,
     chapterAiForm.characterVoice.trim() && `人物性格 / 口吻要求：${chapterAiForm.characterVoice.trim()}`,
     chapterAiForm.extraInstruction.trim() && `额外补充：${chapterAiForm.extraInstruction.trim()}`,
+    currentPreview.value?.requiredCharacterNames?.length &&
+      `本章必须出现人物：${currentPreview.value.requiredCharacterNames.join('、')}`,
   ].filter(Boolean)
 
   const actionInstruction: Record<typeof action, string> = {
@@ -310,22 +334,22 @@ async function generateChapterAiContent(action: 'draft' | 'continue' | 'expand')
 }
 
 async function acceptLatestAiRecord() {
-  if (!currentProjectId.value || !currentPreview.value?.id || !chapterAiLatestRecord.value?.id) {
+  if (!currentProjectId.value || !currentPreview.value?.id || !displayChapterAiLatestRecord.value?.id) {
     return
   }
 
-  const updated = await writingStore.accept(chapterAiLatestRecord.value.id)
+  const updated = await writingStore.accept(displayChapterAiLatestRecord.value.id)
   chapterAiLatestRecord.value = updated
   await chapterStore.fetchDetail(currentProjectId.value, currentPreview.value.id)
   fillLatestRecordFromStore()
 }
 
 async function rejectLatestAiRecord() {
-  if (!chapterAiLatestRecord.value?.id) {
+  if (!displayChapterAiLatestRecord.value?.id) {
     return
   }
 
-  await writingStore.reject(chapterAiLatestRecord.value.id)
+  await writingStore.reject(displayChapterAiLatestRecord.value.id)
   fillLatestRecordFromStore()
 }
 
@@ -343,7 +367,7 @@ async function confirmDelete() {
 <template>
   <PageContainer
     title="章节管理"
-    description="维护当前项目的章节顺序、标题和正文内容。右侧 AI 助手已经切成流式生成，输出长度也会按默认模型自动调整。"
+    description="维护当前项目的章节顺序、标题和正文内容。现在可以为章节直接勾选必出人物，右侧 AI 助手也会保留跨页面的进行中内容。"
   >
     <template #actions>
       <v-btn color="primary" prepend-icon="mdi-plus" :disabled="!currentProjectId" @click="openCreate">
@@ -354,13 +378,13 @@ async function confirmDelete() {
     <EmptyState
       v-if="!currentProjectId"
       title="先选择一个项目"
-      description="左侧导航里切换当前项目后，章节列表会自动加载。"
+      description="左侧项目切换后，这里会自动加载该项目的章节。"
     />
 
     <EmptyState
       v-else-if="!chapterStore.chapters.length"
       title="还没有章节"
-      description="先创建第一章，后续写作中心和这里的 AI 助手都可以直接围绕它来起草和扩写。"
+      description="先创建第一章，后续人物、剧情和 AI 写作都会围绕它展开。"
     >
       <v-btn color="primary" prepend-icon="mdi-plus" @click="openCreate">创建章节</v-btn>
     </EmptyState>
@@ -402,7 +426,18 @@ async function confirmDelete() {
           <v-card-text v-if="currentPreview" class="chapter-preview-body">
             <div class="text-h6">{{ currentPreview.title }}</div>
             <div class="text-body-2 text-medium-emphasis mt-2">
-              章节序号：{{ currentPreview.orderNum || '-' }} · 字数：{{ getWordCount(currentPreview) }}
+              章节顺序：{{ currentPreview.orderNum || '-' }} · 字数：{{ getWordCount(currentPreview) }}
+            </div>
+            <div v-if="currentPreview.requiredCharacterNames?.length" class="d-flex flex-wrap ga-2 mt-3">
+              <v-chip
+                v-for="name in currentPreview.requiredCharacterNames"
+                :key="name"
+                size="small"
+                color="secondary"
+                variant="tonal"
+              >
+                必读人物：{{ name }}
+              </v-chip>
             </div>
             <v-divider class="my-4" />
             <div class="chapter-preview-content">
@@ -425,7 +460,7 @@ async function confirmDelete() {
                 <v-text-field
                   v-model="chapterAiForm.sceneGoal"
                   label="场景目标"
-                  placeholder="例如：让主角第一次发现线索"
+                  placeholder="例如：让主角第一次发现关键线索"
                 />
               </v-col>
               <v-col cols="12" md="6">
@@ -440,7 +475,7 @@ async function confirmDelete() {
                 <v-text-field
                   v-model="chapterAiForm.characterVoice"
                   label="人物性格 / 口吻要求"
-                  placeholder="例如：主角嘴硬但克制，配角说话偏冷"
+                  placeholder="例如：主角嘴硬但克制，配角说话更冷静"
                 />
               </v-col>
               <v-col cols="12">
@@ -448,7 +483,7 @@ async function confirmDelete() {
                   v-model="chapterAiForm.extraInstruction"
                   rows="4"
                   label="补充要求"
-                  placeholder="例如：不要写太快，先把场景和人物关系铺开"
+                  placeholder="例如：节奏不要太快，先把场景和人物关系铺开"
                 />
               </v-col>
               <v-col cols="12">
@@ -479,21 +514,21 @@ async function confirmDelete() {
               <v-col cols="12" class="d-flex flex-wrap align-end ga-2">
                 <v-btn
                   color="primary"
-                  :loading="chapterAiGenerating"
+                  :loading="displayChapterAiGenerating"
                   @click="generateChapterAiContent('draft')"
                 >
                   拟生成正文初稿
                 </v-btn>
                 <v-btn
                   variant="outlined"
-                  :loading="chapterAiGenerating"
+                  :loading="displayChapterAiGenerating"
                   @click="generateChapterAiContent('continue')"
                 >
                   {{ currentPreviewHasContent ? '续写当前正文' : '根据设定起草正文' }}
                 </v-btn>
                 <v-btn
                   variant="outlined"
-                  :loading="chapterAiGenerating"
+                  :loading="displayChapterAiGenerating"
                   @click="generateChapterAiContent('expand')"
                 >
                   {{ currentPreviewHasContent ? '扩写当前正文' : '先生成可扩写版本' }}
@@ -505,34 +540,35 @@ async function confirmDelete() {
               当前正文还是空的。点“拟生成正文初稿”最合适；如果直接点续写或扩写，也会自动按初稿模式处理。
             </v-alert>
 
-            <v-alert v-if="chapterAiError" type="error" variant="tonal" class="mt-4">
-              {{ chapterAiError }}
+            <v-alert v-if="displayChapterAiError" type="error" variant="tonal" class="mt-4">
+              {{ displayChapterAiError }}
             </v-alert>
 
             <div class="mt-4">
               <v-progress-linear
-                v-if="chapterAiGenerating"
+                v-if="displayChapterAiGenerating"
                 indeterminate
                 color="primary"
                 class="mb-4"
               />
 
-              <div v-if="chapterAiStreamingContent" class="chapter-ai-result">
-                {{ chapterAiStreamingContent }}
+              <div v-if="displayChapterAiStreamingContent" class="chapter-ai-result">
+                {{ displayChapterAiStreamingContent }}
               </div>
               <div v-else class="text-medium-emphasis">
-                这里会实时显示生成中的正文片段，生成完成后可以直接采纳到当前章节。
+                这里会实时显示生成中的正文片段，生成完成后可直接采纳到当前章节。
               </div>
             </div>
 
-            <div v-if="chapterAiLatestRecord" class="mt-4">
+            <div v-if="displayChapterAiLatestRecord" class="mt-4">
               <div class="d-flex justify-space-between align-center ga-3">
                 <div>
                   <div class="text-subtitle-2 font-weight-medium">
-                    最新 AI 结果：{{ getWritingTypeLabel(chapterAiLatestRecord.writingType) }}
+                    最新 AI 结果：{{ getWritingTypeLabel(displayChapterAiLatestRecord.writingType) }}
                   </div>
                   <div class="text-caption text-medium-emphasis mt-1">
-                    {{ formatDateTime(chapterAiLatestRecord.createTime) }} · {{ getStatusLabel(chapterAiLatestRecord.status) }}
+                    {{ formatDateTime(displayChapterAiLatestRecord.createTime) }} ·
+                    {{ getStatusLabel(displayChapterAiLatestRecord.status) }}
                   </div>
                 </div>
                 <div class="d-flex ga-2">
@@ -540,7 +576,7 @@ async function confirmDelete() {
                     size="small"
                     color="primary"
                     variant="text"
-                    :disabled="chapterAiLatestRecord.status === 'accepted'"
+                    :disabled="displayChapterAiLatestRecord.status === 'accepted'"
                     @click="acceptLatestAiRecord"
                   >
                     采纳到正文
@@ -549,7 +585,7 @@ async function confirmDelete() {
                     size="small"
                     color="error"
                     variant="text"
-                    :disabled="chapterAiLatestRecord.status === 'rejected'"
+                    :disabled="displayChapterAiLatestRecord.status === 'rejected'"
                     @click="rejectLatestAiRecord"
                   >
                     拒绝
@@ -581,6 +617,21 @@ async function confirmDelete() {
             <v-col cols="12">
               <v-textarea v-model="form.content" rows="10" label="正文内容" />
             </v-col>
+            <v-col cols="12">
+              <v-select
+                v-model="form.requiredCharacterIds"
+                label="本章必须出场人物"
+                :items="characterStore.characters"
+                item-title="name"
+                item-value="id"
+                multiple
+                chips
+                closable-chips
+                clearable
+                hint="先在人物管理里把角色关联到当前项目，这里就能直接勾选本章必须出现的人物。"
+                persistent-hint
+              />
+            </v-col>
           </v-row>
         </v-card-text>
         <v-card-actions class="justify-end">
@@ -593,7 +644,7 @@ async function confirmDelete() {
     <ConfirmDialog
       v-model="confirmVisible"
       title="删除章节"
-      text="确认删除这章吗？删除后不会再出现在章节列表、写作中心和项目概览里。"
+      text="确认删除这一章吗？删除后它会从章节列表和写作中心中移除。"
       @confirm="confirmDelete"
     />
 
@@ -603,7 +654,7 @@ async function confirmDelete() {
       :loading="nameSuggestionLoading"
       :suggestions="nameSuggestions"
       :source-label="nameSuggestionSourceLabel"
-      empty-text="这次没有拿到可用标题候选，可以重试一次。"
+      empty-text="这次没有拿到合适的标题候选，可以再试一次。"
       @refresh="generateTitleSuggestions"
       @select="applySuggestedTitle"
     />
@@ -646,7 +697,6 @@ async function confirmDelete() {
 
 .chapter-preview-body {
   display: grid;
-  gap: 0;
 }
 
 .chapter-preview-content {

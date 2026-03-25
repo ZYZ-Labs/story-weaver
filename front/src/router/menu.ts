@@ -10,7 +10,8 @@ export const mainMenu: MenuItem[] = [
   { title: '因果管理', icon: 'mdi-graph-outline', to: '/causality', subtitle: '维护因果节点与关联强度' },
   { title: '写作中心', icon: 'mdi-feather', to: '/writing', subtitle: '结合 AI 生成、续写、改写与润色' },
   { title: '知识库', icon: 'mdi-database-search-outline', to: '/rag', subtitle: '管理知识条目与检索结果' },
-  { title: '模型服务', icon: 'mdi-robot-outline', to: '/providers', subtitle: '优先配置本地或局域网 Ollama' },
-  { title: '系统设置', icon: 'mdi-cog-outline', to: '/settings', subtitle: '管理默认模型、命名模型与提示词模板' },
-  { title: '系统状态', icon: 'mdi-notebook-outline', to: '/system', subtitle: '查看运行状态与操作轨迹' },
+  { title: '模型服务', icon: 'mdi-robot-outline', to: '/providers', subtitle: '配置 Ollama 与兼容模型接口', adminOnly: true },
+  { title: '账号管理', icon: 'mdi-account-cog-outline', to: '/accounts', subtitle: '管理账号、重置密码与解除锁定', adminOnly: true },
+  { title: '系统设置', icon: 'mdi-cog-outline', to: '/settings', subtitle: '管理全局模型、注册开关与登录安全策略', adminOnly: true },
+  { title: '系统状态', icon: 'mdi-notebook-outline', to: '/system', subtitle: '查看运行状态与操作轨迹', adminOnly: true },
 ]

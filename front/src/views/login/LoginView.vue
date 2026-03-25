@@ -1,20 +1,47 @@
 <script setup lang="ts">
-import { reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
+import * as authApi from '@/api/auth'
 import { useAuthStore } from '@/stores/auth'
+import type { AuthPublicConfig } from '@/types'
 
 const authStore = useAuthStore()
 const route = useRoute()
 const router = useRouter()
 const loading = ref(false)
+const configLoading = ref(false)
 const errorMessage = ref('')
 const mode = ref<'login' | 'register'>('login')
+const publicConfig = ref<AuthPublicConfig>({
+  registrationEnabled: false,
+  maxFailedAttempts: 5,
+  lockMinutes: 30,
+})
 
 const form = reactive({
   username: 'admin',
   password: 'Admin@123456',
 })
+
+const registrationEnabled = computed(() => publicConfig.value.registrationEnabled)
+const policyHint = computed(
+  () => `连续输错 ${publicConfig.value.maxFailedAttempts} 次密码后，账号将锁定 ${publicConfig.value.lockMinutes} 分钟。`,
+)
+
+async function loadPublicConfig() {
+  configLoading.value = true
+  try {
+    publicConfig.value = await authApi.getPublicConfig()
+    if (!publicConfig.value.registrationEnabled) {
+      mode.value = 'login'
+    }
+  } catch {
+    mode.value = 'login'
+  } finally {
+    configLoading.value = false
+  }
+}
 
 async function submit() {
   loading.value = true
@@ -30,11 +57,15 @@ async function submit() {
     const redirect = typeof route.query.redirect === 'string' ? route.query.redirect : '/dashboard'
     await router.push(redirect)
   } catch (error) {
-    errorMessage.value = error instanceof Error ? error.message : '登录失败。'
+    errorMessage.value = error instanceof Error ? error.message : '登录失败'
   } finally {
     loading.value = false
   }
 }
+
+onMounted(() => {
+  loadPublicConfig()
+})
 </script>
 
 <template>
@@ -78,11 +109,19 @@ async function submit() {
           <v-card-text class="pa-8">
             <div class="text-h4 font-weight-bold">进入织文者 Story Weaver</div>
             <div class="text-body-2 text-medium-emphasis mt-2">
-              默认演示账号已预填：
+              默认管理员账号已预填：
               <code style="background: rgba(30, 77, 120, 0.08); padding: 2px 6px; border-radius: 6px">admin / Admin@123456</code>
             </div>
 
+            <v-alert type="info" variant="tonal" class="mt-6">
+              <div>{{ policyHint }}</div>
+              <div v-if="!registrationEnabled" class="text-caption mt-2">
+                当前已关闭公开注册，请联系管理员在“账号管理”中创建新账号。
+              </div>
+            </v-alert>
+
             <v-btn-toggle
+              v-if="registrationEnabled"
               v-model="mode"
               mandatory
               class="mt-6"
@@ -94,6 +133,10 @@ async function submit() {
               <v-btn value="register">注册</v-btn>
             </v-btn-toggle>
 
+            <v-chip v-else class="mt-6" color="secondary" variant="tonal">
+              仅开放登录
+            </v-chip>
+
             <v-form class="mt-6" @submit.prevent="submit">
               <v-text-field v-model="form.username" label="用户名" prepend-inner-icon="mdi-account-outline" />
               <v-text-field
@@ -104,15 +147,15 @@ async function submit() {
               />
 
               <div class="text-caption text-medium-emphasis mb-4">
-                登录使用已有账号；切换到注册后会直接创建新用户并自动登录。
+                {{ registrationEnabled ? '登录使用已有账号；切换到注册后会直接创建新账号并自动登录。' : '外网环境推荐关闭公开注册，仅保留管理员分配账号。' }}
               </div>
 
               <v-alert v-if="errorMessage" type="error" variant="tonal" class="mb-4">
                 {{ errorMessage }}
               </v-alert>
 
-              <v-btn block size="large" color="primary" :loading="loading" type="submit">
-                {{ mode === 'login' ? '登录并进入工作台' : '创建账号' }}
+              <v-btn block size="large" color="primary" :loading="loading || configLoading" type="submit">
+                {{ mode === 'login' || !registrationEnabled ? '登录并进入工作台' : '创建账号' }}
               </v-btn>
             </v-form>
           </v-card-text>

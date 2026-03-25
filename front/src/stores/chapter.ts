@@ -23,8 +23,12 @@ export const useChapterStore = defineStore('chapter', () => {
   async function fetchByProject(projectId: number) {
     loading.value = true
     try {
+      const previousId = currentChapter.value?.id
       chapters.value = sortChapters(await chapterApi.getProjectChapters(projectId))
-      currentChapter.value = chapters.value[0] || null
+      currentChapter.value =
+        chapters.value.find((item) => item.id === previousId) ||
+        chapters.value[0] ||
+        null
     } catch (error) {
       chapters.value = []
       currentChapter.value = null
@@ -56,17 +60,7 @@ export const useChapterStore = defineStore('chapter', () => {
 
   async function update(projectId: number, chapterId: number, payload: Partial<Chapter>) {
     await chapterApi.updateChapter(projectId, chapterId, payload)
-
-    const target = chapters.value.find((item) => item.id === chapterId)
-    if (target) {
-      Object.assign(target, payload)
-    }
-
-    if (currentChapter.value?.id === chapterId) {
-      Object.assign(currentChapter.value, payload)
-    }
-
-    chapters.value = sortChapters(chapters.value)
+    await fetchDetail(projectId, chapterId)
   }
 
   async function remove(projectId: number, chapterId: number) {

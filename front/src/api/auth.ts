@@ -1,5 +1,5 @@
 import http from './http'
-import type { UserProfile } from '@/types'
+import type { AuthPublicConfig, UserProfile } from '@/types'
 
 export interface AuthPayload {
   token: string
@@ -12,4 +12,8 @@ export function login(payload: { username: string; password: string }) {
 
 export function register(payload: { username: string; password: string }) {
   return http.post<never, AuthPayload>('/auth/register', payload)
+}
+
+export function getPublicConfig() {
+  return http.get<never, AuthPublicConfig>('/auth/public-config')
 }

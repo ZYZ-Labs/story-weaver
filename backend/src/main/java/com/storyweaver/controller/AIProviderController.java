@@ -6,7 +6,15 @@ import com.storyweaver.security.SecurityUtils;
 import com.storyweaver.service.AIProviderService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
 
 import java.util.Map;
 
@@ -24,10 +32,7 @@ public class AIProviderController {
     public ResponseEntity<Map<String, Object>> listProviders(
             @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
             Authentication authentication) {
-        if (!AuthHeaderSupport.hasValidBearerToken(authorizationHeader)) {
-            return AuthHeaderSupport.unauthorizedResponse();
-        }
-        SecurityUtils.getCurrentUserId(authentication);
+        requireAdmin(authorizationHeader, authentication);
         return ResponseEntity.ok(Map.of("code", 200, "message", "获取成功", "data", aiProviderService.listProviders()));
     }
 
@@ -36,10 +41,7 @@ public class AIProviderController {
             @RequestBody AIProvider provider,
             @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
             Authentication authentication) {
-        if (!AuthHeaderSupport.hasValidBearerToken(authorizationHeader)) {
-            return AuthHeaderSupport.unauthorizedResponse();
-        }
-        SecurityUtils.getCurrentUserId(authentication);
+        requireAdmin(authorizationHeader, authentication);
         return ResponseEntity.ok(Map.of("code", 200, "message", "创建成功", "data", aiProviderService.createProvider(provider)));
     }
 
@@ -48,10 +50,7 @@ public class AIProviderController {
             @PathVariable Long id,
             @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
             Authentication authentication) {
-        if (!AuthHeaderSupport.hasValidBearerToken(authorizationHeader)) {
-            return AuthHeaderSupport.unauthorizedResponse();
-        }
-        SecurityUtils.getCurrentUserId(authentication);
+        requireAdmin(authorizationHeader, authentication);
         AIProvider provider = aiProviderService.getById(id);
         if (provider == null) {
             return ResponseEntity.status(404).body(Map.of("code", 404, "message", "模型服务不存在"));
@@ -65,10 +64,7 @@ public class AIProviderController {
             @RequestBody AIProvider provider,
             @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
             Authentication authentication) {
-        if (!AuthHeaderSupport.hasValidBearerToken(authorizationHeader)) {
-            return AuthHeaderSupport.unauthorizedResponse();
-        }
-        SecurityUtils.getCurrentUserId(authentication);
+        requireAdmin(authorizationHeader, authentication);
         AIProvider updated = aiProviderService.updateProvider(id, provider);
         if (updated == null) {
             return ResponseEntity.status(404).body(Map.of("code", 404, "message", "模型服务不存在"));
@@ -81,10 +77,7 @@ public class AIProviderController {
             @PathVariable Long id,
             @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
             Authentication authentication) {
-        if (!AuthHeaderSupport.hasValidBearerToken(authorizationHeader)) {
-            return AuthHeaderSupport.unauthorizedResponse();
-        }
-        SecurityUtils.getCurrentUserId(authentication);
+        requireAdmin(authorizationHeader, authentication);
         if (!aiProviderService.deleteProvider(id)) {
             return ResponseEntity.status(404).body(Map.of("code", 404, "message", "模型服务不存在"));
         }
@@ -96,10 +89,7 @@ public class AIProviderController {
             @PathVariable Long id,
             @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
             Authentication authentication) {
-        if (!AuthHeaderSupport.hasValidBearerToken(authorizationHeader)) {
-            return AuthHeaderSupport.unauthorizedResponse();
-        }
-        SecurityUtils.getCurrentUserId(authentication);
+        requireAdmin(authorizationHeader, authentication);
         boolean success = aiProviderService.testProvider(id);
         return ResponseEntity.ok(Map.of(
                 "code", 200,
@@ -113,15 +103,19 @@ public class AIProviderController {
             @RequestBody AIProvider provider,
             @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
             Authentication authentication) {
-        if (!AuthHeaderSupport.hasValidBearerToken(authorizationHeader)) {
-            return AuthHeaderSupport.unauthorizedResponse();
-        }
-        SecurityUtils.getCurrentUserId(authentication);
+        requireAdmin(authorizationHeader, authentication);
         ProviderDiscoveryVO discovery = aiProviderService.discoverModels(provider);
         return ResponseEntity.ok(Map.of(
                 "code", 200,
                 "message", discovery.message(),
                 "data", discovery
         ));
+    }
+
+    private void requireAdmin(String authorizationHeader, Authentication authentication) {
+        if (!AuthHeaderSupport.hasValidBearerToken(authorizationHeader)) {
+            throw new org.springframework.security.authentication.InsufficientAuthenticationException("未认证或 token 无效");
+        }
+        SecurityUtils.requireAdmin(authentication);
     }
 }

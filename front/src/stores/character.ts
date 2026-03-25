@@ -6,7 +6,9 @@ import type { Character } from '@/types'
 
 export const useCharacterStore = defineStore('character', () => {
   const characters = ref<Character[]>([])
+  const library = ref<Character[]>([])
   const loading = ref(false)
+  const libraryLoading = ref(false)
 
   async function fetchByProject(projectId: number) {
     loading.value = true
@@ -20,28 +22,37 @@ export const useCharacterStore = defineStore('character', () => {
     }
   }
 
-  async function create(projectId: number, payload: Partial<Character>) {
-    const character = await characterApi.createCharacter(projectId, payload)
-    characters.value.unshift(character)
+  async function fetchLibrary() {
+    libraryLoading.value = true
+    try {
+      library.value = await characterApi.getCharacterLibrary()
+    } finally {
+      libraryLoading.value = false
+    }
   }
 
-  async function update(projectId: number, characterId: number, payload: Partial<Character>) {
+  async function create(projectId: number, payload: Partial<Character> & { existingCharacterId?: number; projectRole?: string }) {
+    await characterApi.createCharacter(projectId, payload)
+    await Promise.allSettled([fetchByProject(projectId), fetchLibrary()])
+  }
+
+  async function update(projectId: number, characterId: number, payload: Partial<Character> & { projectRole?: string }) {
     await characterApi.updateCharacter(projectId, characterId, payload)
-    const target = characters.value.find((item) => item.id === characterId)
-    if (target) {
-      Object.assign(target, payload)
-    }
+    await Promise.allSettled([fetchByProject(projectId), fetchLibrary()])
   }
 
   async function remove(projectId: number, characterId: number) {
     await characterApi.deleteCharacter(projectId, characterId)
-    characters.value = characters.value.filter((item) => item.id !== characterId)
+    await Promise.allSettled([fetchByProject(projectId), fetchLibrary()])
   }
 
   return {
     characters,
+    library,
     loading,
+    libraryLoading,
     fetchByProject,
+    fetchLibrary,
     create,
     update,
     remove,

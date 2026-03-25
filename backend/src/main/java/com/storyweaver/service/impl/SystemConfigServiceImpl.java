@@ -116,7 +116,9 @@ public class SystemConfigServiceImpl extends ServiceImpl<SystemConfigMapper, Sys
         defaults.put("max_chapter_length", createDefault("max_chapter_length", "5000", "章节最大字数"));
         defaults.put("auto_save_interval", createDefault("auto_save_interval", "300", "自动保存间隔（秒）"));
         defaults.put("rag_enabled", createDefault("rag_enabled", "true", "是否启用知识检索"));
-        defaults.put("registration_enabled", createDefault("registration_enabled", "true", "是否允许注册"));
+        defaults.put("registration_enabled", createDefault("registration_enabled", "false", "是否允许注册"));
+        defaults.put("auth.max_failed_attempts", createDefault("auth.max_failed_attempts", "5", "登录失败最大尝试次数"));
+        defaults.put("auth.lock_minutes", createDefault("auth.lock_minutes", "30", "登录失败后的锁定时长（分钟）"));
         defaults.put("default_theme", createDefault("default_theme", "light", "默认主题"));
 
         defaults.put(

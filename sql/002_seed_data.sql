@@ -5,10 +5,10 @@
 USE story_weaver;
 
 -- 插入默认管理员用户 (密码: Admin@123456)
-INSERT INTO user (username, password, email, nickname, status) VALUES
-('admin', '$2a$10$228wUNRq6YP2luC0OdgRiODuZFBAglkp8o1lX5Gru.aFRCQ4ZjmB2', 'admin@storyweaver.com', '系统管理员', 1),
-('author', '$2a$10$228wUNRq6YP2luC0OdgRiODuZFBAglkp8o1lX5Gru.aFRCQ4ZjmB2', 'author@storyweaver.com', '创作作者', 1),
-('testuser', '$2a$10$228wUNRq6YP2luC0OdgRiODuZFBAglkp8o1lX5Gru.aFRCQ4ZjmB2', 'test@storyweaver.com', '测试用户', 1);
+INSERT INTO user (username, password, email, nickname, role_code, status, password_changed_at) VALUES
+('admin', '$2a$10$228wUNRq6YP2luC0OdgRiODuZFBAglkp8o1lX5Gru.aFRCQ4ZjmB2', 'admin@storyweaver.com', '系统管理员', 'admin', 1, NOW()),
+('author', '$2a$10$228wUNRq6YP2luC0OdgRiODuZFBAglkp8o1lX5Gru.aFRCQ4ZjmB2', 'author@storyweaver.com', '创作作者', 'user', 1, NOW()),
+('testuser', '$2a$10$228wUNRq6YP2luC0OdgRiODuZFBAglkp8o1lX5Gru.aFRCQ4ZjmB2', 'test@storyweaver.com', '测试用户', 'user', 1, NOW());
 
 -- 插入示例项目
 INSERT INTO project (name, description, user_id, status, genre, tags) VALUES
@@ -64,7 +64,9 @@ INSERT INTO system_config (config_key, config_value, description) VALUES
 ('rag_enabled', 'true', '知识检索功能是否启用'),
 ('auto_save_interval', '300', '自动保存间隔（秒）'),
 ('default_theme', 'light', '默认主题'),
-('registration_enabled', 'true', '是否允许注册'),
+('registration_enabled', 'false', '是否允许注册'),
+('auth.max_failed_attempts', '5', '登录失败最大尝试次数'),
+('auth.lock_minutes', '30', '登录失败后的锁定时长（分钟）'),
 ('prompt.draft', '先根据章节标题和补充要求拟生成一段可继续扩写的小说正文初稿，优先搭好场景、人物状态和冲突起点。', '初稿拟生成提示词模板'),
 ('prompt.continue', '延续当前章节的叙事节奏，保持人物口吻与设定一致，优先推进当前冲突。', '续写提示词模板'),
 ('prompt.expand', '在不偏离原意的前提下补足细节、动作、环境与情绪描写，让场景更饱满。', '扩写提示词模板'),

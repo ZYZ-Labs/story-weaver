@@ -16,12 +16,19 @@ CREATE TABLE IF NOT EXISTS user (
     email VARCHAR(100) COMMENT '邮箱',
     nickname VARCHAR(50) COMMENT '昵称',
     avatar VARCHAR(500) COMMENT '头像',
+    role_code VARCHAR(20) NOT NULL DEFAULT 'user' COMMENT '角色: admin/user',
     status INT DEFAULT 1 COMMENT '状态: 0-禁用, 1-正常',
+    failed_login_attempts INT DEFAULT 0 COMMENT '登录失败次数',
+    locked_until DATETIME NULL COMMENT '锁定截止时间',
+    last_login_at DATETIME NULL COMMENT '最近登录时间',
+    password_changed_at DATETIME NULL COMMENT '最近修改密码时间',
     create_time DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     update_time DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
     deleted INT DEFAULT 0 COMMENT '删除标记: 0-未删除, 1-已删除',
     INDEX idx_username (username),
-    INDEX idx_status (status)
+    INDEX idx_role_code (role_code),
+    INDEX idx_status (status),
+    INDEX idx_locked_until (locked_until)
 ) COMMENT='用户表';
 
 -- 项目表

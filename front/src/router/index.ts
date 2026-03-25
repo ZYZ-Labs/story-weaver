@@ -80,19 +80,25 @@ const router = createRouter({
           path: 'providers',
           name: 'providers',
           component: () => import('@/views/provider/ProviderView.vue'),
-          meta: { title: '模型服务' },
+          meta: { title: '模型服务', requiresAdmin: true },
+        },
+        {
+          path: 'accounts',
+          name: 'accounts',
+          component: () => import('@/views/account/AccountManagementView.vue'),
+          meta: { title: '账号管理', requiresAdmin: true },
         },
         {
           path: 'settings',
           name: 'settings',
           component: () => import('@/views/settings/SettingsView.vue'),
-          meta: { title: '系统设置' },
+          meta: { title: '系统设置', requiresAdmin: true },
         },
         {
           path: 'system',
           name: 'system',
           component: () => import('@/views/system/SystemView.vue'),
-          meta: { title: '系统状态' },
+          meta: { title: '系统状态', requiresAdmin: true },
         },
       ],
     },
@@ -110,6 +116,10 @@ router.beforeEach((to) => {
 
   if (!to.meta.public && !authStore.isAuthenticated) {
     return { name: 'login', query: { redirect: to.fullPath } }
+  }
+
+  if (to.meta.requiresAdmin && !authStore.isAdmin) {
+    return { name: 'dashboard' }
   }
 
   if (to.name === 'login' && authStore.isAuthenticated) {

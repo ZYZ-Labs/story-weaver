@@ -1,12 +1,13 @@
 <script setup lang="ts">
-import { onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 
 import PageContainer from '@/components/PageContainer.vue'
 import { useProviderStore } from '@/stores/provider'
 import { useSettingsStore } from '@/stores/settings'
-import type { SystemConfig } from '@/types'
+import type { AIProvider, SystemConfig } from '@/types'
 
 type PromptFormKey =
+  | 'draft'
   | 'continue'
   | 'expand'
   | 'rewrite'
@@ -17,6 +18,9 @@ type PromptFormKey =
   | 'knowledgeExtract'
   | 'namingChapter'
   | 'namingCharacter'
+  | 'characterAttributes'
+
+type ModelTarget = 'default' | 'naming'
 
 const settingsStore = useSettingsStore()
 const providerStore = useProviderStore()
@@ -24,16 +28,16 @@ const providerStore = useProviderStore()
 const saving = ref(false)
 const saveMessage = ref('')
 const errorMessage = ref('')
+const defaultModelOptions = ref<string[]>([])
+const namingModelOptions = ref<string[]>([])
+const refreshingDefaultModels = ref(false)
+const refreshingNamingModels = ref(false)
 
-const lightweightModelOptions = [
-  'qwen2.5:0.5b',
-  'qwen2.5:1.5b',
-  'qwen2.5:3b',
-  'qwen2.5:7b',
-  'llama3.2:3b',
-  'gemma2:2b',
-  'phi3:mini',
-]
+const providerModelLibrary: Record<string, string[]> = {
+  ollama: ['qwen3.5:9b', 'qwen2.5:14b', 'qwen2.5:7b', 'qwen2.5:3b', 'llama3.1:8b', 'deepseek-r1:14b'],
+  'openai-compatible': ['gpt-4.1', 'gpt-4o-mini', 'gpt-4.1-mini'],
+  deepseek: ['deepseek-chat', 'deepseek-reasoner'],
+}
 
 const generalForm = reactive({
   siteName: '',
@@ -46,11 +50,14 @@ const generalForm = reactive({
   maxChapterLength: 5000,
   autoSaveInterval: 300,
   ragEnabled: true,
-  registrationEnabled: true,
+  registrationEnabled: false,
+  maxFailedAttempts: 5,
+  lockMinutes: 30,
   defaultTheme: 'light',
 })
 
 const promptForm = reactive<Record<PromptFormKey, string>>({
+  draft: '',
   continue: '',
   expand: '',
   rewrite: '',
@@ -61,6 +68,7 @@ const promptForm = reactive<Record<PromptFormKey, string>>({
   knowledgeExtract: '',
   namingChapter: '',
   namingCharacter: '',
+  characterAttributes: '',
 })
 
 const promptTemplateMeta: Array<{
@@ -69,6 +77,7 @@ const promptTemplateMeta: Array<{
   title: string
   hint: string
 }> = [
+  { key: 'draft', configKey: 'prompt.draft', title: '初稿提示词', hint: '章节正文为空时，用它先拟生成一个可继续扩写的开场。' },
   { key: 'continue', configKey: 'prompt.continue', title: '续写提示词', hint: '写作中心执行续写时使用。' },
   { key: 'expand', configKey: 'prompt.expand', title: '扩写提示词', hint: '写作中心执行扩写时使用。' },
   { key: 'rewrite', configKey: 'prompt.rewrite', title: '改写提示词', hint: '写作中心执行改写时使用。' },
@@ -76,30 +85,43 @@ const promptTemplateMeta: Array<{
   { key: 'plot', configKey: 'prompt.plot', title: '剧情提示词', hint: '剧情推进、节点整理时使用。' },
   { key: 'causality', configKey: 'prompt.causality', title: '因果提示词', hint: '因果关系分析时使用。' },
   { key: 'ragQuery', configKey: 'prompt.rag_query', title: '知识检索提示词', hint: '发起 RAG 检索前组织检索意图时使用。' },
+  { key: 'knowledgeExtract', configKey: 'prompt.knowledge_extract', title: '知识抽取提示词', hint: '把正文、剧情或 AI 草稿整理成知识条目时使用。' },
+  { key: 'namingChapter', configKey: 'prompt.naming.chapter', title: '章节命名提示词', hint: '为章节生成标题候选时使用。' },
+  { key: 'namingCharacter', configKey: 'prompt.naming.character', title: '人物命名提示词', hint: '为人物生成名称候选时使用。' },
   {
-    key: 'knowledgeExtract',
-    configKey: 'prompt.knowledge_extract',
-    title: '知识抽取提示词',
-    hint: '把章节、剧情或 AI 草稿整理成知识条目时使用。',
-  },
-  {
-    key: 'namingChapter',
-    configKey: 'prompt.naming.chapter',
-    title: '章节命名提示词',
-    hint: '用于生成章节标题候选，建议强调简洁、辨识度和章节氛围。',
-  },
-  {
-    key: 'namingCharacter',
-    configKey: 'prompt.naming.character',
-    title: '人物命名提示词',
-    hint: '用于生成人物名称候选，建议强调风格、阵营感和记忆点。',
+    key: 'characterAttributes',
+    configKey: 'prompt.character_attributes',
+    title: '人物属性生成提示词',
+    hint: '根据人物描述补齐阵营、目标、技能、特性、天赋和弱点时使用。',
   },
 ]
+
+const selectedDefaultProvider = computed(() =>
+  providerStore.providers.find((item) => item.id === generalForm.defaultAiProviderId) || null,
+)
+const selectedNamingProvider = computed(() =>
+  providerStore.providers.find((item) => item.id === generalForm.namingAiProviderId) || null,
+)
 
 onMounted(async () => {
   await Promise.allSettled([settingsStore.fetchAll(), providerStore.fetchAll()])
   hydrateForms()
+  await Promise.allSettled([refreshModelOptions('default', true), refreshModelOptions('naming', true)])
 })
+
+watch(
+  () => generalForm.defaultAiProviderId,
+  () => {
+    refreshModelOptions('default', true).catch(() => undefined)
+  },
+)
+
+watch(
+  () => generalForm.namingAiProviderId,
+  () => {
+    refreshModelOptions('naming', true).catch(() => undefined)
+  },
+)
 
 function getPreferredProviderId() {
   const defaultProvider = providerStore.providers.find((item) => item.isDefault === 1)
@@ -120,9 +142,12 @@ function hydrateForms() {
   generalForm.maxChapterLength = settingsStore.getNumberValue('max_chapter_length', 5000) ?? 5000
   generalForm.autoSaveInterval = settingsStore.getNumberValue('auto_save_interval', 300) ?? 300
   generalForm.ragEnabled = settingsStore.getBooleanValue('rag_enabled', true)
-  generalForm.registrationEnabled = settingsStore.getBooleanValue('registration_enabled', true)
+  generalForm.registrationEnabled = settingsStore.getBooleanValue('registration_enabled', false)
+  generalForm.maxFailedAttempts = settingsStore.getNumberValue('auth.max_failed_attempts', 5) ?? 5
+  generalForm.lockMinutes = settingsStore.getNumberValue('auth.lock_minutes', 30) ?? 30
   generalForm.defaultTheme = settingsStore.getConfigValue('default_theme', 'light')
 
+  promptForm.draft = settingsStore.getConfigValue('prompt.draft')
   promptForm.continue = settingsStore.getConfigValue('prompt.continue')
   promptForm.expand = settingsStore.getConfigValue('prompt.expand')
   promptForm.rewrite = settingsStore.getConfigValue('prompt.rewrite')
@@ -133,6 +158,7 @@ function hydrateForms() {
   promptForm.knowledgeExtract = settingsStore.getConfigValue('prompt.knowledge_extract')
   promptForm.namingChapter = settingsStore.getConfigValue('prompt.naming.chapter')
   promptForm.namingCharacter = settingsStore.getConfigValue('prompt.naming.character')
+  promptForm.characterAttributes = settingsStore.getConfigValue('prompt.character_attributes')
 }
 
 function buildPayload(): SystemConfig[] {
@@ -156,7 +182,10 @@ function buildPayload(): SystemConfig[] {
     { configKey: 'auto_save_interval', configValue: String(generalForm.autoSaveInterval), description: '自动保存间隔（秒）' },
     { configKey: 'rag_enabled', configValue: String(generalForm.ragEnabled), description: '是否启用知识检索' },
     { configKey: 'registration_enabled', configValue: String(generalForm.registrationEnabled), description: '是否允许注册' },
+    { configKey: 'auth.max_failed_attempts', configValue: String(generalForm.maxFailedAttempts), description: '登录失败最大尝试次数' },
+    { configKey: 'auth.lock_minutes', configValue: String(generalForm.lockMinutes), description: '登录失败锁定分钟数' },
     { configKey: 'default_theme', configValue: generalForm.defaultTheme, description: '默认主题' },
+    { configKey: 'prompt.draft', configValue: promptForm.draft, description: '初稿提示词模板' },
     { configKey: 'prompt.continue', configValue: promptForm.continue, description: '续写提示词模板' },
     { configKey: 'prompt.expand', configValue: promptForm.expand, description: '扩写提示词模板' },
     { configKey: 'prompt.rewrite', configValue: promptForm.rewrite, description: '改写提示词模板' },
@@ -164,22 +193,77 @@ function buildPayload(): SystemConfig[] {
     { configKey: 'prompt.plot', configValue: promptForm.plot, description: '剧情提示词模板' },
     { configKey: 'prompt.causality', configValue: promptForm.causality, description: '因果提示词模板' },
     { configKey: 'prompt.rag_query', configValue: promptForm.ragQuery, description: '知识检索提示词模板' },
+    { configKey: 'prompt.knowledge_extract', configValue: promptForm.knowledgeExtract, description: '知识抽取提示词模板' },
+    { configKey: 'prompt.naming.chapter', configValue: promptForm.namingChapter, description: '章节命名提示词模板' },
+    { configKey: 'prompt.naming.character', configValue: promptForm.namingCharacter, description: '人物命名提示词模板' },
     {
-      configKey: 'prompt.knowledge_extract',
-      configValue: promptForm.knowledgeExtract,
-      description: '知识抽取提示词模板',
-    },
-    {
-      configKey: 'prompt.naming.chapter',
-      configValue: promptForm.namingChapter,
-      description: '章节命名提示词模板',
-    },
-    {
-      configKey: 'prompt.naming.character',
-      configValue: promptForm.namingCharacter,
-      description: '人物命名提示词模板',
+      configKey: 'prompt.character_attributes',
+      configValue: promptForm.characterAttributes,
+      description: '人物属性生成提示词模板',
     },
   ]
+}
+
+function buildModelOptions(provider: AIProvider | null, currentValue: string) {
+  const values = new Set<string>()
+  if (provider?.providerType && providerModelLibrary[provider.providerType]) {
+    for (const item of providerModelLibrary[provider.providerType]) {
+      values.add(item)
+    }
+  }
+  if (provider?.modelName) {
+    values.add(provider.modelName)
+  }
+  if (currentValue) {
+    values.add(currentValue)
+  }
+  return Array.from(values)
+}
+
+async function refreshModelOptions(target: ModelTarget, silent = false) {
+  const provider = target === 'default' ? selectedDefaultProvider.value : selectedNamingProvider.value
+  const modelValue = target === 'default' ? generalForm.defaultAiModel : generalForm.namingAiModel
+  const loadingRef = target === 'default' ? refreshingDefaultModels : refreshingNamingModels
+  const optionsRef = target === 'default' ? defaultModelOptions : namingModelOptions
+
+  optionsRef.value = buildModelOptions(provider, modelValue)
+  if (!provider?.baseUrl) {
+    return
+  }
+
+  loadingRef.value = true
+  try {
+    const result = await providerStore.discover({
+      providerType: provider.providerType,
+      baseUrl: provider.baseUrl,
+      apiKey: provider.apiKey,
+      timeoutSeconds: provider.timeoutSeconds,
+    })
+
+    if (result.success) {
+      optionsRef.value = Array.from(new Set([...optionsRef.value, ...(result.models || [])]))
+      if (target === 'default') {
+        if (!optionsRef.value.includes(generalForm.defaultAiModel)) {
+          generalForm.defaultAiModel = provider.modelName || optionsRef.value[0] || generalForm.defaultAiModel
+        }
+      } else if (!optionsRef.value.includes(generalForm.namingAiModel)) {
+        generalForm.namingAiModel = provider.modelName || optionsRef.value[0] || generalForm.namingAiModel
+      }
+
+      if (!silent) {
+        saveMessage.value = `已刷新${target === 'default' ? '默认模型' : '命名模型'}候选列表`
+        errorMessage.value = ''
+      }
+    } else if (!silent) {
+      errorMessage.value = result.message || '刷新模型列表失败'
+    }
+  } catch (error) {
+    if (!silent) {
+      errorMessage.value = error instanceof Error ? error.message : '刷新模型列表失败'
+    }
+  } finally {
+    loadingRef.value = false
+  }
 }
 
 async function saveSettings() {
@@ -190,9 +274,9 @@ async function saveSettings() {
   try {
     await settingsStore.saveAll(buildPayload())
     hydrateForms()
-    saveMessage.value = '设置已保存。'
+    saveMessage.value = '设置已保存'
   } catch (error) {
-    errorMessage.value = error instanceof Error ? error.message : '保存设置失败。'
+    errorMessage.value = error instanceof Error ? error.message : '保存设置失败'
   } finally {
     saving.value = false
   }
@@ -202,7 +286,7 @@ async function saveSettings() {
 <template>
   <PageContainer
     title="系统设置"
-    description="统一管理默认模型、命名专用模型和提示词模板。命名模型可以单独指定为更轻量的模型，减少起名时的资源占用。"
+    description="统一管理默认模型、命名模型、注册开关、登录安全策略和 Prompt 模板。选中模型服务后会自动刷新模型候选。"
   >
     <template #actions>
       <v-btn color="primary" :loading="saving" @click="saveSettings">保存设置</v-btn>
@@ -224,10 +308,42 @@ async function saveSettings() {
                 <v-text-field v-model="generalForm.siteDescription" label="站点描述" />
               </v-col>
               <v-col cols="12" md="6">
-                <v-combobox
-                  v-model="generalForm.defaultAiModel"
-                  label="默认对话模型"
-                  :items="['qwen2.5:14b', 'qwen2.5:7b', 'llama3.1:8b', 'deepseek-r1:14b', 'gpt-4.1']"
+                <v-select
+                  v-model="generalForm.defaultAiProviderId"
+                  label="默认模型服务"
+                  :items="providerStore.providers"
+                  item-title="name"
+                  item-value="id"
+                  clearable
+                />
+              </v-col>
+              <v-col cols="12" md="6">
+                <div class="d-flex ga-2 align-start">
+                  <v-combobox
+                    v-model="generalForm.defaultAiModel"
+                    class="flex-grow-1"
+                    label="默认对话模型"
+                    :items="defaultModelOptions"
+                    clearable
+                  />
+                  <v-btn
+                    class="mt-2"
+                    variant="outlined"
+                    :loading="refreshingDefaultModels"
+                    @click="refreshModelOptions('default')"
+                  >
+                    刷新
+                  </v-btn>
+                </div>
+              </v-col>
+              <v-col cols="12" md="6">
+                <v-select
+                  v-model="generalForm.defaultEmbeddingProviderId"
+                  label="默认向量服务"
+                  :items="providerStore.providers"
+                  item-title="name"
+                  item-value="id"
+                  clearable
                 />
               </v-col>
               <v-col cols="12" md="6">
@@ -243,26 +359,6 @@ async function saveSettings() {
                 />
               </v-col>
               <v-col cols="12" md="6">
-                <v-select
-                  v-model="generalForm.defaultAiProviderId"
-                  label="默认模型服务"
-                  :items="providerStore.providers"
-                  item-title="name"
-                  item-value="id"
-                  clearable
-                />
-              </v-col>
-              <v-col cols="12" md="6">
-                <v-select
-                  v-model="generalForm.defaultEmbeddingProviderId"
-                  label="默认向量服务"
-                  :items="providerStore.providers"
-                  item-title="name"
-                  item-value="id"
-                  clearable
-                />
-              </v-col>
-              <v-col cols="12" md="6">
                 <v-text-field v-model="generalForm.maxChapterLength" label="章节最大字数" type="number" />
               </v-col>
               <v-col cols="12" md="6">
@@ -272,17 +368,42 @@ async function saveSettings() {
                 <v-switch v-model="generalForm.ragEnabled" color="primary" label="启用知识检索" inset />
               </v-col>
               <v-col cols="12" md="6">
-                <v-switch v-model="generalForm.registrationEnabled" color="primary" label="允许注册" inset />
+                <v-switch v-model="generalForm.registrationEnabled" color="primary" label="允许公开注册" inset />
+              </v-col>
+              <v-col cols="12">
+                <v-alert type="warning" variant="tonal">
+                  如果准备开放到外网，建议关闭公开注册，并通过“账号管理”创建新账号。
+                </v-alert>
               </v-col>
             </v-row>
           </v-card-text>
         </v-card>
 
         <v-card class="soft-panel">
+          <v-card-title>登录安全</v-card-title>
+          <v-card-subtitle>连续输错密码达到上限后，账号会被临时锁定，需等待到期或由管理员手动解锁。</v-card-subtitle>
+          <v-card-text class="pt-4">
+            <v-row>
+              <v-col cols="12" md="6">
+                <v-text-field v-model="generalForm.maxFailedAttempts" label="最大错误次数" type="number" />
+              </v-col>
+              <v-col cols="12" md="6">
+                <v-text-field v-model="generalForm.lockMinutes" label="锁定分钟数" type="number" />
+              </v-col>
+              <v-col cols="12">
+                <v-alert type="info" variant="tonal">
+                  当前策略：连续输错 {{ generalForm.maxFailedAttempts }} 次后，锁定 {{ generalForm.lockMinutes }} 分钟。
+                </v-alert>
+              </v-col>
+            </v-row>
+          </v-card-text>
+        </v-card>
+      </div>
+
+      <div class="content-grid two-column">
+        <v-card class="soft-panel">
           <v-card-title>命名模型</v-card-title>
-          <v-card-subtitle>
-            这里专门给章节名、人物名生成配置一套更轻量的模型，不影响正文写作使用的大模型。
-          </v-card-subtitle>
+          <v-card-subtitle>用于章节命名、人物命名和人物属性补全，建议单独配置更轻量的模型。</v-card-subtitle>
           <v-card-text class="pt-4">
             <v-row>
               <v-col cols="12">
@@ -296,18 +417,25 @@ async function saveSettings() {
                 />
               </v-col>
               <v-col cols="12">
-                <v-combobox
-                  v-model="generalForm.namingAiModel"
-                  label="命名模型"
-                  :items="lightweightModelOptions"
-                  hint="推荐用 0.5b / 1.5b / 3b 这类小模型，生成标题和名字更省资源。"
-                  persistent-hint
-                />
-              </v-col>
-              <v-col cols="12">
-                <v-alert type="info" variant="tonal">
-                  当前会把章节命名和人物命名统一走这套配置。如果留空，会自动回退到默认模型服务。
-                </v-alert>
+                <div class="d-flex ga-2 align-start">
+                  <v-combobox
+                    v-model="generalForm.namingAiModel"
+                    class="flex-grow-1"
+                    label="命名模型"
+                    :items="namingModelOptions"
+                    hint="切换命名模型服务后，会自动刷新候选；也可以手动点右侧刷新。"
+                    persistent-hint
+                    clearable
+                  />
+                  <v-btn
+                    class="mt-2"
+                    variant="outlined"
+                    :loading="refreshingNamingModels"
+                    @click="refreshModelOptions('naming')"
+                  >
+                    刷新
+                  </v-btn>
+                </div>
               </v-col>
             </v-row>
           </v-card-text>
@@ -315,8 +443,8 @@ async function saveSettings() {
       </div>
 
       <v-card class="soft-panel">
-        <v-card-title>提示词模板</v-card-title>
-        <v-card-subtitle>除了写作模板，这里还包含知识检索、知识抽取和命名模板。</v-card-subtitle>
+        <v-card-title>Prompt 模板</v-card-title>
+        <v-card-subtitle>统一维护正文写作、知识检索、命名和人物属性补全所使用的提示词模板。</v-card-subtitle>
         <v-card-text class="pt-4">
           <v-row>
             <v-col

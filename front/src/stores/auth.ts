@@ -12,6 +12,12 @@ export const useAuthStore = defineStore('auth', () => {
   const token = computed(() => tokenState.value)
   const user = computed(() => userState.value)
   const isAuthenticated = computed(() => Boolean(tokenState.value))
+  const isAdmin = computed(() => {
+    if (!userState.value) {
+      return false
+    }
+    return userState.value.roleCode === 'admin' || userState.value.username === 'admin'
+  })
 
   function persist(tokenValue: string | null, userValue: UserProfile | null) {
     tokenState.value = tokenValue
@@ -50,6 +56,7 @@ export const useAuthStore = defineStore('auth', () => {
     token,
     user,
     isAuthenticated,
+    isAdmin,
     signIn,
     signUp,
     signOut,

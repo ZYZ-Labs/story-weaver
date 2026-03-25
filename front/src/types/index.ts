@@ -4,6 +4,31 @@ export interface UserProfile {
   nickname: string
   email: string
   avatar?: string
+  roleCode?: string
+  status?: number
+}
+
+export interface AuthPublicConfig {
+  registrationEnabled: boolean
+  maxFailedAttempts: number
+  lockMinutes: number
+}
+
+export interface ManagedUser {
+  id: number
+  username: string
+  nickname: string
+  email?: string
+  avatar?: string
+  status: number
+  roleCode: string
+  failedLoginAttempts: number
+  locked: boolean
+  lockedUntil?: string
+  lastLoginAt?: string
+  passwordChangedAt?: string
+  createTime?: string
+  updateTime?: string
 }
 
 export interface Project {
@@ -29,6 +54,8 @@ export interface Chapter {
   orderNum?: number
   status?: number
   wordCount?: number
+  requiredCharacterIds?: number[]
+  requiredCharacterNames?: string[]
   createTime?: string
   updateTime?: string
 }
@@ -36,9 +63,13 @@ export interface Chapter {
 export interface Character {
   id: number
   projectId: number
+  ownerUserId?: number
   name: string
   description?: string
   attributes?: string
+  projectRole?: string
+  projectIds?: number[]
+  projectNames?: string[]
   createTime?: string
   updateTime?: string
 }
@@ -80,6 +111,18 @@ export interface AIWritingStreamEvent {
   record?: AIWritingRecord
 }
 
+export interface AIWritingStreamState {
+  requestId?: string
+  generating: boolean
+  content: string
+  error: string
+  lastRecord: AIWritingRecord | null
+  writingType?: string
+  selectedProviderId?: number | null
+  selectedModel?: string
+  maxTokens?: number | null
+}
+
 export interface AIWritingRecord {
   id: number
   chapterId: number
@@ -99,6 +142,7 @@ export interface MenuItem {
   icon: string
   to: string
   subtitle?: string
+  adminOnly?: boolean
 }
 
 export interface Plot {

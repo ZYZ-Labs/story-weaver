@@ -1,12 +1,21 @@
 package com.storyweaver.controller;
 
+import com.storyweaver.domain.dto.ChapterRequestDTO;
 import com.storyweaver.domain.entity.Chapter;
 import com.storyweaver.security.SecurityUtils;
 import com.storyweaver.service.ChapterService;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.util.StringUtils;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
 
 import java.util.HashMap;
 import java.util.List;
@@ -15,8 +24,12 @@ import java.util.Map;
 @RestController
 @RequestMapping("/api/projects/{projectId}/chapters")
 public class ChapterController {
-    @Autowired
-    private ChapterService chapterService;
+
+    private final ChapterService chapterService;
+
+    public ChapterController(ChapterService chapterService) {
+        this.chapterService = chapterService;
+    }
 
     @GetMapping
     public ResponseEntity<Map<String, Object>> getProjectChapters(
@@ -29,19 +42,17 @@ public class ChapterController {
         Long userId = SecurityUtils.getCurrentUserId(authentication);
 
         List<Chapter> chapters = chapterService.getProjectChapters(projectId, userId);
-
         Map<String, Object> result = new HashMap<>();
         result.put("code", 200);
         result.put("message", "获取成功");
         result.put("data", chapters);
-
         return ResponseEntity.ok(result);
     }
 
     @PostMapping
     public ResponseEntity<Map<String, Object>> createChapter(
             @PathVariable Long projectId,
-            @RequestBody Map<String, String> requestBody,
+            @RequestBody ChapterRequestDTO requestDTO,
             @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
             Authentication authentication) {
         if (!AuthHeaderSupport.hasValidBearerToken(authorizationHeader)) {
@@ -49,39 +60,33 @@ public class ChapterController {
         }
         Long userId = SecurityUtils.getCurrentUserId(authentication);
 
-        String title = requestBody.get("title");
-        String content = requestBody.get("content");
-        Integer orderNum = requestBody.get("orderNum") != null ?
-                          Integer.parseInt(requestBody.get("orderNum")) : null;
-
-        if (title == null || title.trim().isEmpty()) {
+        if (!StringUtils.hasText(requestDTO.getTitle())) {
             return ResponseEntity.badRequest().body(Map.of(
-                "code", 400,
-                "message", "章节标题不能为空"
+                    "code", 400,
+                    "message", "章节标题不能为空"
             ));
         }
 
-        Chapter chapter = chapterService.createChapter(projectId, userId, title, content, orderNum);
+        Chapter chapter = chapterService.createChapter(projectId, userId, requestDTO);
         if (chapter == null) {
             return ResponseEntity.status(404).body(Map.of(
-                "code", 404,
-                "message", "项目不存在或无权访问"
+                    "code", 404,
+                    "message", "项目不存在或无权访问"
             ));
         }
 
-        Map<String, Object> result = new HashMap<>();
-        result.put("code", 200);
-        result.put("message", "创建成功");
-        result.put("data", chapter);
-
-        return ResponseEntity.ok(result);
+        return ResponseEntity.ok(Map.of(
+                "code", 200,
+                "message", "创建成功",
+                "data", chapter
+        ));
     }
 
     @PutMapping("/{chapterId}")
     public ResponseEntity<Map<String, Object>> updateChapter(
             @PathVariable Long projectId,
             @PathVariable Long chapterId,
-            @RequestBody Chapter chapter,
+            @RequestBody ChapterRequestDTO requestDTO,
             @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
             Authentication authentication) {
         if (!AuthHeaderSupport.hasValidBearerToken(authorizationHeader)) {
@@ -89,19 +94,18 @@ public class ChapterController {
         }
         Long userId = SecurityUtils.getCurrentUserId(authentication);
 
-        boolean success = chapterService.updateChapter(chapterId, userId, chapter);
+        boolean success = chapterService.updateChapter(projectId, chapterId, userId, requestDTO);
         if (!success) {
             return ResponseEntity.status(404).body(Map.of(
-                "code", 404,
-                "message", "章节不存在或无权访问"
+                    "code", 404,
+                    "message", "章节不存在、未关联当前项目或无权访问"
             ));
         }
 
-        Map<String, Object> result = new HashMap<>();
-        result.put("code", 200);
-        result.put("message", "更新成功");
-
-        return ResponseEntity.ok(result);
+        return ResponseEntity.ok(Map.of(
+                "code", 200,
+                "message", "更新成功"
+        ));
     }
 
     @DeleteMapping("/{chapterId}")
@@ -118,16 +122,15 @@ public class ChapterController {
         boolean success = chapterService.deleteChapter(chapterId, userId);
         if (!success) {
             return ResponseEntity.status(404).body(Map.of(
-                "code", 404,
-                "message", "章节不存在或无权访问"
+                    "code", 404,
+                    "message", "章节不存在或无权访问"
             ));
         }
 
-        Map<String, Object> result = new HashMap<>();
-        result.put("code", 200);
-        result.put("message", "删除成功");
-
-        return ResponseEntity.ok(result);
+        return ResponseEntity.ok(Map.of(
+                "code", 200,
+                "message", "删除成功"
+        ));
     }
 
     @GetMapping("/{chapterId}")
@@ -142,18 +145,17 @@ public class ChapterController {
         Long userId = SecurityUtils.getCurrentUserId(authentication);
 
         Chapter chapter = chapterService.getChapterWithAuth(chapterId, userId);
-        if (chapter == null) {
+        if (chapter == null || !projectId.equals(chapter.getProjectId())) {
             return ResponseEntity.status(404).body(Map.of(
-                "code", 404,
-                "message", "章节不存在或无权访问"
+                    "code", 404,
+                    "message", "章节不存在或无权访问"
             ));
         }
 
-        Map<String, Object> result = new HashMap<>();
-        result.put("code", 200);
-        result.put("message", "获取成功");
-        result.put("data", chapter);
-
-        return ResponseEntity.ok(result);
+        return ResponseEntity.ok(Map.of(
+                "code", 200,
+                "message", "获取成功",
+                "data", chapter
+        ));
     }
 }

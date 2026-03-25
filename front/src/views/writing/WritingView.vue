@@ -41,9 +41,10 @@ const draftForm = reactive({
 const projectId = computed(() => projectStore.selectedProjectId)
 const chapterId = computed(() => chapterStore.currentChapter?.id || null)
 const isCurrentChapterEmpty = computed(() => !chapterStore.currentChapter?.content?.trim())
+const currentRequiredCharacters = computed(() => chapterStore.currentChapter?.requiredCharacterNames || [])
 const enabledProviders = computed(() => providerStore.providers.filter((item) => item.enabled === 1))
-const selectedProvider = computed(() =>
-  enabledProviders.value.find((item) => item.id === draftForm.selectedProviderId) || null,
+const selectedProvider = computed(
+  () => enabledProviders.value.find((item) => item.id === draftForm.selectedProviderId) || null,
 )
 const resolvedWritingType = computed(() => {
   if (draftForm.writingType === 'draft') {
@@ -54,7 +55,9 @@ const resolvedWritingType = computed(() => {
   }
   return draftForm.writingType
 })
-const currentPromptTemplate = computed(() => settingsStore.getPromptTemplateByWritingType(resolvedWritingType.value))
+const currentPromptTemplate = computed(() =>
+  settingsStore.getPromptTemplateByWritingType(resolvedWritingType.value),
+)
 const providerModelOptions = computed(() => {
   const values = new Set<string>()
   const provider = selectedProvider.value
@@ -76,7 +79,10 @@ const providerModelOptions = computed(() => {
   return Array.from(values)
 })
 const outputProfile = computed(() =>
-  resolveOutputLengthProfile(selectedProvider.value, draftForm.selectedModel || selectedProvider.value?.modelName),
+  resolveOutputLengthProfile(
+    selectedProvider.value,
+    draftForm.selectedModel || selectedProvider.value?.modelName,
+  ),
 )
 const generateButtonLabel = computed(() => {
   const mapping: Record<string, string> = {
@@ -92,6 +98,13 @@ const currentWordCount = computed(
   () => chapterStore.currentChapter?.wordCount || chapterStore.currentChapter?.content?.length || 0,
 )
 const isOllamaSelected = computed(() => selectedProvider.value?.providerType === 'ollama')
+const sharedStreamState = computed(() => writingStore.getStreamState(chapterId.value))
+const displayGenerating = computed(() => sharedStreamState.value.generating || generating.value)
+const displayErrorMessage = computed(() => sharedStreamState.value.error || errorMessage.value)
+const displayStreamingContent = computed(() => sharedStreamState.value.content || streamingContent.value)
+const displayLastGeneratedRecord = computed<AIWritingRecord | null>(
+  () => sharedStreamState.value.lastRecord || lastGeneratedRecord.value || writingStore.records[0] || null,
+)
 
 watch(
   projectId,
@@ -135,7 +148,8 @@ watch(
   () => draftForm.selectedProviderId,
   () => {
     const provider = selectedProvider.value
-    const fallbackModel = provider?.modelName || settingsStore.getConfigValue('default_ai_model', 'qwen3.5:9b')
+    const fallbackModel =
+      provider?.modelName || settingsStore.getConfigValue('default_ai_model', 'qwen3.5:9b')
     if (!draftForm.selectedModel || !providerModelOptions.value.includes(draftForm.selectedModel)) {
       draftForm.selectedModel = fallbackModel
     }
@@ -170,13 +184,17 @@ function applyProviderDefaults() {
     return
   }
 
-  if (!draftForm.selectedProviderId || !enabledProviders.value.some((item) => item.id === draftForm.selectedProviderId)) {
+  if (
+    !draftForm.selectedProviderId ||
+    !enabledProviders.value.some((item) => item.id === draftForm.selectedProviderId)
+  ) {
     draftForm.selectedProviderId = getPreferredProviderId()
   }
 
   const provider = selectedProvider.value
   if (!draftForm.selectedModel) {
-    draftForm.selectedModel = provider?.modelName || settingsStore.getConfigValue('default_ai_model', 'qwen3.5:9b')
+    draftForm.selectedModel =
+      provider?.modelName || settingsStore.getConfigValue('default_ai_model', 'qwen3.5:9b')
   }
 }
 
@@ -198,10 +216,13 @@ function buildPromptSnapshot() {
 function buildInstruction() {
   const template = buildPromptSnapshot()
   const manual = draftForm.userInstruction.trim()
-  if (template && manual) {
-    return `${template}\n\n附加要求：${manual}`
-  }
-  return template || manual
+  const chapterContext = currentRequiredCharacters.value.length
+    ? `本章必须出现人物：${currentRequiredCharacters.value.join('、')}`
+    : ''
+
+  return [template, chapterContext, manual ? `附加要求：${manual}` : '']
+    .filter(Boolean)
+    .join('\n\n')
 }
 
 function getWritingTypeLabel(value: string) {
@@ -275,6 +296,7 @@ async function saveCurrentChapter() {
     content: chapterStore.currentChapter.content,
     title: chapterStore.currentChapter.title,
     orderNum: chapterStore.currentChapter.orderNum,
+    requiredCharacterIds: chapterStore.currentChapter.requiredCharacterIds || [],
   })
 }
 
@@ -293,12 +315,12 @@ async function rejectRecord(record: AIWritingRecord) {
 <template>
   <PageContainer
     title="写作中心"
-    description="这里会优先使用可用的默认模型服务。现在正文生成支持流式返回，你可以边看边等，不必一直担心超时。"
+    description="这里会优先使用可用的默认模型服务。正文生成支持流式返回，切换页面再回来时，也会继续显示当前章节进行中的内容。"
   >
     <EmptyState
       v-if="!projectId"
       title="需要先选择项目"
-      description="写作中心依赖当前项目和章节上下文，请先在左侧项目选择器中选中一个项目。"
+      description="写作中心依赖当前项目和章节上下文，请先在左侧项目切换器中选中一个项目。"
     />
 
     <div v-else class="content-grid two-column">
@@ -319,6 +341,18 @@ async function rejectRecord(record: AIWritingRecord) {
             "
           />
 
+          <div v-if="currentRequiredCharacters.length" class="d-flex flex-wrap ga-2 mt-4">
+            <v-chip
+              v-for="name in currentRequiredCharacters"
+              :key="name"
+              size="small"
+              color="secondary"
+              variant="tonal"
+            >
+              必出人物：{{ name }}
+            </v-chip>
+          </div>
+
           <v-textarea
             :model-value="chapterStore.currentChapter?.content || ''"
             label="章节正文"
@@ -335,9 +369,7 @@ async function rejectRecord(record: AIWritingRecord) {
           />
 
           <div class="d-flex justify-space-between align-center mt-4">
-            <div class="text-body-2 text-medium-emphasis">
-              当前字数：{{ currentWordCount }}
-            </div>
+            <div class="text-body-2 text-medium-emphasis">当前字数：{{ currentWordCount }}</div>
             <v-btn
               color="primary"
               variant="outlined"
@@ -424,8 +456,12 @@ async function rejectRecord(record: AIWritingRecord) {
               当前章节正文还是空的。现在发起生成时会自动按“拟生成初稿”处理，先帮你搭出一版可继续扩写的正文。
             </v-alert>
 
+            <v-alert v-if="currentRequiredCharacters.length" type="info" variant="tonal" class="mt-4">
+              本次生成会自动附带本章必出人物约束：{{ currentRequiredCharacters.join('、') }}
+            </v-alert>
+
             <v-alert v-if="isOllamaSelected" type="success" variant="tonal" class="mt-4">
-              当前使用 Ollama。正文会以流式方式返回，生成过程里就能实时看到新内容。
+              当前使用 Ollama。正文会以流式方式返回，生成过程中就能实时看到新内容。
             </v-alert>
 
             <v-textarea
@@ -444,8 +480,8 @@ async function rejectRecord(record: AIWritingRecord) {
               placeholder="例如：保持第一人称口吻，把冲突推进到新的反转点。"
             />
 
-            <v-alert v-if="errorMessage" type="error" variant="tonal" class="mt-4">
-              {{ errorMessage }}
+            <v-alert v-if="displayErrorMessage" type="error" variant="tonal" class="mt-4">
+              {{ displayErrorMessage }}
             </v-alert>
 
             <v-btn
@@ -453,7 +489,7 @@ async function rejectRecord(record: AIWritingRecord) {
               size="large"
               color="primary"
               class="mt-4"
-              :loading="generating"
+              :loading="displayGenerating"
               :disabled="!chapterStore.currentChapter?.id || !draftForm.selectedProviderId"
               @click="generate"
             >
@@ -466,21 +502,21 @@ async function rejectRecord(record: AIWritingRecord) {
           <v-card-title>流式预览</v-card-title>
           <v-card-text>
             <v-progress-linear
-              v-if="generating"
+              v-if="displayGenerating"
               indeterminate
               color="primary"
               class="mb-4"
             />
 
-            <div v-if="streamingContent" class="stream-preview">
-              {{ streamingContent }}
+            <div v-if="displayStreamingContent" class="stream-preview">
+              {{ displayStreamingContent }}
             </div>
             <div v-else class="text-medium-emphasis">
-              这里会实时显示生成中的正文片段。生成完成后，结果也会保留在下方记录列表里。
+              这里会实时显示生成中的正文片段。切换到章节页后再回来，也会继续显示当前章节的进行中内容。
             </div>
 
-            <div v-if="lastGeneratedRecord" class="text-caption text-medium-emphasis mt-3">
-              最近一次生成：{{ formatDateTime(lastGeneratedRecord.createTime) }}
+            <div v-if="displayLastGeneratedRecord" class="text-caption text-medium-emphasis mt-3">
+              最近一次生成：{{ formatDateTime(displayLastGeneratedRecord.createTime) }}
             </div>
           </v-card-text>
         </v-card>
@@ -502,7 +538,9 @@ async function rejectRecord(record: AIWritingRecord) {
                       {{ record.selectedModel || '未指定模型' }}
                     </v-chip>
                   </div>
-                  <span class="text-caption text-medium-emphasis">{{ formatDateTime(record.createTime) }}</span>
+                  <span class="text-caption text-medium-emphasis">
+                    {{ formatDateTime(record.createTime) }}
+                  </span>
                   <div class="d-flex ga-2">
                     <v-btn size="small" color="primary" variant="text" @click="acceptRecord(record)">
                       采纳

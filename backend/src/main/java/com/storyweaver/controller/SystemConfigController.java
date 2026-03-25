@@ -29,10 +29,7 @@ public class SystemConfigController {
     public ResponseEntity<Map<String, Object>> listConfigs(
             @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
             Authentication authentication) {
-        if (!AuthHeaderSupport.hasValidBearerToken(authorizationHeader)) {
-            return AuthHeaderSupport.unauthorizedResponse();
-        }
-        SecurityUtils.getCurrentUserId(authentication);
+        requireAdmin(authorizationHeader, authentication);
         return ResponseEntity.ok(Map.of("code", 200, "message", "获取成功", "data", systemConfigService.listMergedConfigs()));
     }
 
@@ -41,10 +38,14 @@ public class SystemConfigController {
             @RequestBody List<SystemConfig> configs,
             @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
             Authentication authentication) {
-        if (!AuthHeaderSupport.hasValidBearerToken(authorizationHeader)) {
-            return AuthHeaderSupport.unauthorizedResponse();
-        }
-        SecurityUtils.getCurrentUserId(authentication);
+        requireAdmin(authorizationHeader, authentication);
         return ResponseEntity.ok(Map.of("code", 200, "message", "保存成功", "data", systemConfigService.saveConfigs(configs)));
+    }
+
+    private void requireAdmin(String authorizationHeader, Authentication authentication) {
+        if (!AuthHeaderSupport.hasValidBearerToken(authorizationHeader)) {
+            throw new org.springframework.security.authentication.InsufficientAuthenticationException("未认证或 token 无效");
+        }
+        SecurityUtils.requireAdmin(authentication);
     }
 }

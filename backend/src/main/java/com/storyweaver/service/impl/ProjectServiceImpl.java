@@ -7,9 +7,11 @@ import com.storyweaver.domain.dto.ProjectRequestDTO;
 import com.storyweaver.domain.entity.AIWritingRecord;
 import com.storyweaver.domain.entity.Causality;
 import com.storyweaver.domain.entity.Chapter;
+import com.storyweaver.domain.entity.ChapterCharacterLink;
 import com.storyweaver.domain.entity.KnowledgeDocument;
 import com.storyweaver.domain.entity.Plot;
 import com.storyweaver.domain.entity.Project;
+import com.storyweaver.domain.entity.ProjectCharacterLink;
 import com.storyweaver.domain.entity.ProjectWorldSettingLink;
 import com.storyweaver.repository.AIWritingRecordMapper;
 import com.storyweaver.repository.CausalityMapper;
@@ -17,7 +19,9 @@ import com.storyweaver.repository.ChapterMapper;
 import com.storyweaver.repository.KnowledgeDocumentMapper;
 import com.storyweaver.repository.PlotMapper;
 import com.storyweaver.domain.vo.WorldSettingVO;
+import com.storyweaver.repository.ChapterCharacterMapper;
 import com.storyweaver.repository.ProjectMapper;
+import com.storyweaver.repository.ProjectCharacterMapper;
 import com.storyweaver.repository.ProjectWorldSettingMapper;
 import com.storyweaver.service.ProjectService;
 import com.storyweaver.service.WorldSettingService;
@@ -38,6 +42,8 @@ public class ProjectServiceImpl extends ServiceImpl<ProjectMapper, Project> impl
     private final KnowledgeDocumentMapper knowledgeDocumentMapper;
     private final AIWritingRecordMapper aiWritingRecordMapper;
     private final ProjectWorldSettingMapper projectWorldSettingMapper;
+    private final ProjectCharacterMapper projectCharacterMapper;
+    private final ChapterCharacterMapper chapterCharacterMapper;
 
     public ProjectServiceImpl(
             WorldSettingService worldSettingService,
@@ -46,7 +52,9 @@ public class ProjectServiceImpl extends ServiceImpl<ProjectMapper, Project> impl
             CausalityMapper causalityMapper,
             KnowledgeDocumentMapper knowledgeDocumentMapper,
             AIWritingRecordMapper aiWritingRecordMapper,
-            ProjectWorldSettingMapper projectWorldSettingMapper) {
+            ProjectWorldSettingMapper projectWorldSettingMapper,
+            ProjectCharacterMapper projectCharacterMapper,
+            ChapterCharacterMapper chapterCharacterMapper) {
         this.worldSettingService = worldSettingService;
         this.chapterMapper = chapterMapper;
         this.plotMapper = plotMapper;
@@ -54,6 +62,8 @@ public class ProjectServiceImpl extends ServiceImpl<ProjectMapper, Project> impl
         this.knowledgeDocumentMapper = knowledgeDocumentMapper;
         this.aiWritingRecordMapper = aiWritingRecordMapper;
         this.projectWorldSettingMapper = projectWorldSettingMapper;
+        this.projectCharacterMapper = projectCharacterMapper;
+        this.chapterCharacterMapper = chapterCharacterMapper;
     }
 
     @Override
@@ -135,6 +145,9 @@ public class ProjectServiceImpl extends ServiceImpl<ProjectMapper, Project> impl
             aiWritingRecordMapper.delete(new LambdaQueryWrapper<AIWritingRecord>()
                     .in(AIWritingRecord::getChapterId, chapterIds)
                     .eq(AIWritingRecord::getDeleted, 0));
+
+            chapterCharacterMapper.delete(new LambdaQueryWrapper<ChapterCharacterLink>()
+                    .in(ChapterCharacterLink::getChapterId, chapterIds));
         }
 
         chapterMapper.delete(new LambdaQueryWrapper<Chapter>()
@@ -155,6 +168,10 @@ public class ProjectServiceImpl extends ServiceImpl<ProjectMapper, Project> impl
 
         // Keep reusable world-setting models themselves, only remove the project associations.
         projectWorldSettingMapper.delete(new QueryWrapper<ProjectWorldSettingLink>()
+                .eq("project_id", projectId));
+
+        // Characters remain reusable in the library, but the project bindings should be removed.
+        projectCharacterMapper.delete(new QueryWrapper<ProjectCharacterLink>()
                 .eq("project_id", projectId));
 
         // Characters are intentionally retained for future reuse, so they are not cascade deleted here.

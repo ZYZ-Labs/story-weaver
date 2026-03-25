@@ -39,13 +39,7 @@ const currentProject = computed(() =>
   projectStore.projects.find((item) => item.id === currentProjectId.value) || null,
 )
 
-const form = reactive({
-  name: '',
-  description: '',
-})
-
-const attributeForm = reactive(createEmptyCharacterAttributeForm())
-
+const projectRoleOptions = ['主角', '群像主角', '配角', '反派', '导师', '重要 NPC', '线索人物', '客串']
 const campOptions = ['主角阵营', '伙伴阵营', '中立阵营', '反派阵营', '组织成员', '家族势力']
 const traitOptions = ['冷静', '冲动', '理性', '敏感', '果断', '顽强', '温柔', '多疑', '幽默', '骄傲']
 const talentOptions = ['战斗天赋', '感知天赋', '谋略天赋', '领导天赋', '潜行天赋', '学习天赋', '交涉天赋']
@@ -66,7 +60,7 @@ type CharacterArrayField =
 const characterTemplates = [
   {
     name: '成长主角',
-    description: '适合从弱到强、目标明确、带成长弧线的主角',
+    description: '适合从弱到强、目标明确、带成长弧线的主角。',
     values: {
       camp: '主角阵营',
       goal: '完成一件必须亲手做到的大事',
@@ -79,7 +73,7 @@ const characterTemplates = [
   },
   {
     name: '冷面军师',
-    description: '适合谋略型角色、参谋、策士或组织二把手',
+    description: '适合谋略型角色、参谋、策士或组织二把手。',
     values: {
       camp: '伙伴阵营',
       identity: '军师 / 参谋',
@@ -92,7 +86,7 @@ const characterTemplates = [
   },
   {
     name: '天才学者',
-    description: '适合研究者、学院派、炼金师、工程师',
+    description: '适合研究者、学院派、炼金师、工程师。',
     values: {
       identity: '学者 / 研究者',
       traits: ['理性', '敏感'],
@@ -104,7 +98,7 @@ const characterTemplates = [
   },
   {
     name: '危险反派',
-    description: '适合有压迫感、控制欲或宿命感的关键反派',
+    description: '适合有压迫感、控制欲或宿命感的关键反派。',
     values: {
       camp: '反派阵营',
       goal: '掌控局势并迫使主角做出选择',
@@ -117,6 +111,16 @@ const characterTemplates = [
   },
 ]
 
+const form = reactive({
+  mode: 'create' as 'create' | 'attach',
+  existingCharacterId: null as number | null,
+  name: '',
+  description: '',
+  projectRole: '配角',
+})
+
+const attributeForm = reactive(createEmptyCharacterAttributeForm())
+
 const charactersWithProfiles = computed(() =>
   characterStore.characters.map((character) => ({
     ...character,
@@ -124,14 +128,24 @@ const charactersWithProfiles = computed(() =>
   })),
 )
 
+const reusableCharacters = computed(() => {
+  const currentIds = new Set(characterStore.characters.map((item) => item.id))
+  return characterStore.library.filter((item) => !currentIds.has(item.id))
+})
+
+const selectedReusableCharacter = computed(() =>
+  reusableCharacters.value.find((item) => item.id === form.existingCharacterId) || null,
+)
+
 const attributePreview = computed(() => buildCharacterAttributesJson(cloneCharacterAttributeForm(attributeForm)))
 
 watch(
   currentProjectId,
   async (projectId) => {
-    if (projectId) {
-      await characterStore.fetchByProject(projectId).catch(() => undefined)
+    if (!projectId) {
+      return
     }
+    await Promise.allSettled([characterStore.fetchByProject(projectId), characterStore.fetchLibrary()])
   },
   { immediate: true },
 )
@@ -151,8 +165,11 @@ function fillAttributeForm(character?: Character | null) {
 
 function fillForm(character?: Character | null) {
   Object.assign(form, {
+    mode: 'create',
+    existingCharacterId: null,
     name: character?.name || '',
     description: character?.description || '',
+    projectRole: character?.projectRole || '配角',
   })
   fillAttributeForm(character)
   attributeSuggestionSourceLabel.value = ''
@@ -161,6 +178,19 @@ function fillForm(character?: Character | null) {
 function openCreate() {
   editingId.value = null
   fillForm(null)
+  dialog.value = true
+}
+
+function openAttach() {
+  editingId.value = null
+  Object.assign(form, {
+    mode: 'attach',
+    existingCharacterId: reusableCharacters.value[0]?.id || null,
+    name: '',
+    description: '',
+    projectRole: '配角',
+  })
+  fillAttributeForm(selectedReusableCharacter.value)
   dialog.value = true
 }
 
@@ -175,6 +205,15 @@ function requestDelete(character: Character) {
   confirmVisible.value = true
 }
 
+watch(
+  () => form.existingCharacterId,
+  () => {
+    if (form.mode === 'attach') {
+      fillAttributeForm(selectedReusableCharacter.value)
+    }
+  },
+)
+
 async function submit() {
   if (!currentProjectId.value) {
     return
@@ -182,16 +221,24 @@ async function submit() {
 
   submitLoading.value = true
   try {
-    const payload = {
-      name: form.name.trim(),
-      description: form.description.trim(),
-      attributes: attributePreview.value,
-    }
-
-    if (editingId.value) {
-      await characterStore.update(currentProjectId.value, editingId.value, payload)
+    if (form.mode === 'attach' && !editingId.value) {
+      await characterStore.create(currentProjectId.value, {
+        existingCharacterId: form.existingCharacterId || undefined,
+        projectRole: form.projectRole,
+      })
     } else {
-      await characterStore.create(currentProjectId.value, payload)
+      const payload = {
+        name: form.name.trim(),
+        description: form.description.trim(),
+        attributes: attributePreview.value,
+        projectRole: form.projectRole,
+      }
+
+      if (editingId.value) {
+        await characterStore.update(currentProjectId.value, editingId.value, payload)
+      } else {
+        await characterStore.create(currentProjectId.value, payload)
+      }
     }
 
     dialog.value = false
@@ -214,8 +261,8 @@ async function generateCharacterNames() {
       brief:
         [form.description.trim(), attributePreview.value !== '{}' ? attributePreview.value : '']
           .filter(Boolean)
-          .join('\n\n') || '请根据当前项目风格生成人物名称',
-      extraRequirements: '名称要适合中文小说人物，尽量有辨识度，并与角色气质一致。',
+          .join('\n\n') || '请根据当前项目风格生成角色名称。',
+      extraRequirements: '名称要适合中文小说人物，并与角色气质一致。',
       count: 6,
     })
     nameSuggestions.value = result.suggestions || []
@@ -331,12 +378,17 @@ async function confirmDelete() {
 <template>
   <PageContainer
     title="人物管理"
-    description="维护角色卡、描述和结构化属性。现在可以直接通过描述生成技能、特性、天赋等字段，不需要手写 JSON。"
+    description="人物现在以可复用的角色库来管理。一个人物可以关联到多个项目，而当前项目里再单独标注主角、配角、反派等定位。"
   >
     <template #actions>
-      <v-btn color="primary" prepend-icon="mdi-account-plus-outline" :disabled="!currentProjectId" @click="openCreate">
-        添加人物
-      </v-btn>
+      <div class="d-flex ga-2">
+        <v-btn color="primary" prepend-icon="mdi-account-plus-outline" :disabled="!currentProjectId" @click="openCreate">
+          新增人物
+        </v-btn>
+        <v-btn variant="outlined" prepend-icon="mdi-link-variant" :disabled="!currentProjectId" @click="openAttach">
+          关联已有
+        </v-btn>
+      </div>
     </template>
 
     <EmptyState
@@ -347,36 +399,49 @@ async function confirmDelete() {
 
     <EmptyState
       v-else-if="!characterStore.characters.length"
-      title="还没有人物"
-      description="先创建一个角色，后续剧情、因果和写作中心都可以直接关联它。"
+      title="当前项目还没有人物"
+      description="可以新建人物，也可以把角色库里已有的人物直接关联到当前项目。"
     >
-      <v-btn color="primary" prepend-icon="mdi-account-plus-outline" @click="openCreate">创建人物</v-btn>
+      <div class="d-flex ga-2">
+        <v-btn color="primary" prepend-icon="mdi-account-plus-outline" @click="openCreate">创建人物</v-btn>
+        <v-btn variant="outlined" prepend-icon="mdi-link-variant" @click="openAttach">关联已有</v-btn>
+      </div>
     </EmptyState>
 
     <v-row v-else>
       <v-col v-for="item in charactersWithProfiles" :key="item.id" cols="12" md="6" xl="4">
         <v-card class="soft-panel h-100">
           <v-card-text class="d-flex flex-column h-100">
-            <div class="d-flex align-center justify-space-between">
-              <div class="text-h6">{{ item.name }}</div>
-              <v-icon icon="mdi-account-star-outline" color="secondary" />
+            <div class="d-flex align-center justify-space-between ga-3">
+              <div>
+                <div class="text-h6">{{ item.name }}</div>
+                <div class="text-caption text-medium-emphasis mt-1">{{ item.projectRole || '配角' }}</div>
+              </div>
+              <v-chip color="secondary" variant="tonal" size="small">
+                关联项目 {{ item.projectNames?.length || 1 }}
+              </v-chip>
             </div>
 
             <div class="text-body-2 text-medium-emphasis mt-3">
-              {{ item.description || '暂无角色简介' }}
+              {{ item.description || '暂无角色简介。' }}
+            </div>
+
+            <div v-if="item.projectNames?.length" class="d-flex flex-wrap ga-2 mt-4">
+              <v-chip
+                v-for="projectName in item.projectNames"
+                :key="projectName"
+                size="small"
+                variant="outlined"
+              >
+                {{ projectName }}
+              </v-chip>
             </div>
 
             <v-divider class="my-4" />
 
-            <div class="text-caption text-medium-emphasis">
-              身份：{{ item.profile.identity || '未填写' }}
-            </div>
-            <div class="text-caption text-medium-emphasis mt-1">
-              阵营：{{ item.profile.camp || '未填写' }}
-            </div>
-            <div class="text-caption text-medium-emphasis mt-1">
-              目标：{{ item.profile.goal || '未填写' }}
-            </div>
+            <div class="text-caption text-medium-emphasis">身份：{{ item.profile.identity || '未填写' }}</div>
+            <div class="text-caption text-medium-emphasis mt-1">阵营：{{ item.profile.camp || '未填写' }}</div>
+            <div class="text-caption text-medium-emphasis mt-1">目标：{{ item.profile.goal || '未填写' }}</div>
 
             <div class="mt-4">
               <div class="text-caption text-medium-emphasis mb-2">技能</div>
@@ -417,7 +482,7 @@ async function confirmDelete() {
 
             <div class="d-flex ga-2 mt-auto pt-4">
               <v-btn variant="outlined" @click="openEdit(item)">编辑</v-btn>
-              <v-btn color="error" variant="text" @click="requestDelete(item)">删除</v-btn>
+              <v-btn color="error" variant="text" @click="requestDelete(item)">移出项目</v-btn>
             </div>
           </v-card-text>
         </v-card>
@@ -426,289 +491,324 @@ async function confirmDelete() {
 
     <v-dialog v-model="dialog" max-width="960">
       <v-card>
-        <v-card-title>{{ editingId ? '编辑人物' : '新增人物' }}</v-card-title>
+        <v-card-title>{{ editingId ? '编辑人物' : form.mode === 'attach' ? '关联已有角色' : '新增人物' }}</v-card-title>
         <v-card-text class="pt-4">
           <v-row>
-            <v-col cols="12" md="8">
-              <div class="d-flex ga-2 align-start">
-                <v-text-field v-model="form.name" class="flex-grow-1" label="角色名称" />
-                <v-btn class="mt-2" variant="outlined" @click="generateCharacterNames">AI 生成人名</v-btn>
-              </div>
-            </v-col>
-            <v-col cols="12" md="4">
-              <v-select
-                v-model="attributeForm.gender"
-                label="性别"
-                :items="['男', '女', '其他', '未知']"
-                clearable
-              />
-            </v-col>
-            <v-col cols="12">
-              <v-textarea
-                v-model="form.description"
-                rows="4"
-                label="角色描述"
-                hint="尽量描述身份、气质、经历或当前定位，下面的属性生成会优先参考这里。"
-                persistent-hint
-              />
-            </v-col>
-            <v-col cols="12" class="pt-0">
-              <div class="text-subtitle-2 font-weight-medium">快速模板</div>
-              <div class="d-flex flex-wrap ga-2 mt-3">
-                <v-chip
-                  v-for="template in characterTemplates"
-                  :key="template.name"
-                  color="secondary"
-                  variant="outlined"
-                  @click="applyTemplate(template)"
-                >
-                  {{ template.name }}
-                </v-chip>
-              </div>
-              <div class="text-caption text-medium-emphasis mt-3">
-                先点一个模板快速起步，再用下面的选项微调，会比直接手填 JSON 轻松很多。
-              </div>
-            </v-col>
-            <v-col cols="12" class="pt-0">
-              <div class="d-flex flex-wrap ga-3 align-center">
-                <v-btn color="primary" variant="tonal" :loading="attributeSuggestionLoading" @click="generateAttributeSuggestions">
-                  根据描述生成属性
-                </v-btn>
-                <span class="text-caption text-medium-emphasis">
-                  生成后会自动填充年龄、身份、阵营、技能、特性、天赋等字段。
-                </span>
-              </div>
-              <v-alert v-if="attributeSuggestionSourceLabel" type="info" variant="tonal" class="mt-3">
-                {{ attributeSuggestionSourceLabel }}
-              </v-alert>
+            <v-col v-if="!editingId" cols="12">
+              <v-segmented-button v-model="form.mode" color="primary" mandatory>
+                <v-btn value="create">新建人物</v-btn>
+                <v-btn value="attach">关联已有</v-btn>
+              </v-segmented-button>
             </v-col>
 
-            <v-col cols="12" md="4">
-              <v-text-field v-model="attributeForm.age" label="年龄" />
-            </v-col>
-            <v-col cols="12" md="4">
-              <v-text-field v-model="attributeForm.identity" label="身份 / 职业" />
-            </v-col>
-            <v-col cols="12" md="4">
-              <v-combobox v-model="attributeForm.camp" label="阵营" :items="campOptions" />
-              <div class="d-flex flex-wrap ga-2 mt-3">
-                <v-chip
-                  v-for="option in campOptions"
-                  :key="option"
-                  :color="attributeForm.camp === option ? 'secondary' : undefined"
-                  :variant="attributeForm.camp === option ? 'tonal' : 'outlined'"
-                  size="small"
-                  @click="attributeForm.camp = option"
-                >
-                  {{ option }}
-                </v-chip>
-              </div>
-            </v-col>
-            <v-col cols="12">
-              <v-text-field v-model="attributeForm.goal" label="核心目标" />
-            </v-col>
-            <v-col cols="12" md="6">
-              <v-textarea v-model="attributeForm.background" rows="4" label="背景" />
-            </v-col>
-            <v-col cols="12" md="6">
-              <v-textarea v-model="attributeForm.appearance" rows="4" label="外貌" />
-            </v-col>
-            <v-col cols="12" md="6">
-              <div class="d-flex justify-space-between align-center mb-2">
-                <div class="text-subtitle-2">技能</div>
-                <v-btn size="small" variant="text" @click="clearListOption('skills')">清空</v-btn>
-              </div>
-              <div class="d-flex flex-wrap ga-2 mb-3">
-                <v-chip
-                  v-for="option in skillOptions"
-                  :key="option"
-                  :color="attributeForm.skills.includes(option) ? 'primary' : undefined"
-                  :variant="attributeForm.skills.includes(option) ? 'tonal' : 'outlined'"
-                  size="small"
-                  @click="toggleListOption('skills', option)"
-                >
-                  {{ option }}
-                </v-chip>
-              </div>
-              <v-combobox
-                v-model="attributeForm.skills"
-                label="技能"
-                :items="skillOptions"
-                multiple
-                chips
-                closable-chips
-                clearable
-                hint="也可以继续输入自定义技能。"
-                persistent-hint
-              />
-            </v-col>
-            <v-col cols="12" md="6">
-              <div class="d-flex justify-space-between align-center mb-2">
-                <div class="text-subtitle-2">特性</div>
-                <v-btn size="small" variant="text" @click="clearListOption('traits')">清空</v-btn>
-              </div>
-              <div class="d-flex flex-wrap ga-2 mb-3">
-                <v-chip
-                  v-for="option in traitOptions"
-                  :key="option"
-                  :color="attributeForm.traits.includes(option) ? 'secondary' : undefined"
-                  :variant="attributeForm.traits.includes(option) ? 'tonal' : 'outlined'"
-                  size="small"
-                  @click="toggleListOption('traits', option)"
-                >
-                  {{ option }}
-                </v-chip>
-              </div>
-              <v-combobox
-                v-model="attributeForm.traits"
-                label="特性"
-                :items="traitOptions"
-                multiple
-                chips
-                closable-chips
-                clearable
-                hint="可继续补充更多性格特征。"
-                persistent-hint
-              />
-            </v-col>
-            <v-col cols="12" md="6">
-              <div class="d-flex justify-space-between align-center mb-2">
-                <div class="text-subtitle-2">天赋</div>
-                <v-btn size="small" variant="text" @click="clearListOption('talents')">清空</v-btn>
-              </div>
-              <div class="d-flex flex-wrap ga-2 mb-3">
-                <v-chip
-                  v-for="option in talentOptions"
-                  :key="option"
-                  :color="attributeForm.talents.includes(option) ? 'secondary' : undefined"
-                  :variant="attributeForm.talents.includes(option) ? 'tonal' : 'outlined'"
-                  size="small"
-                  @click="toggleListOption('talents', option)"
-                >
-                  {{ option }}
-                </v-chip>
-              </div>
-              <v-combobox
-                v-model="attributeForm.talents"
-                label="天赋"
-                :items="talentOptions"
-                multiple
-                chips
-                closable-chips
-                clearable
-                hint="适合写天生优势、感知能力或成长潜力。"
-                persistent-hint
-              />
-            </v-col>
-            <v-col cols="12" md="6">
-              <div class="d-flex justify-space-between align-center mb-2">
-                <div class="text-subtitle-2">弱点</div>
-                <v-btn size="small" variant="text" @click="clearListOption('weaknesses')">清空</v-btn>
-              </div>
-              <div class="d-flex flex-wrap ga-2 mb-3">
-                <v-chip
-                  v-for="option in weaknessOptions"
-                  :key="option"
-                  :color="attributeForm.weaknesses.includes(option) ? 'error' : undefined"
-                  :variant="attributeForm.weaknesses.includes(option) ? 'tonal' : 'outlined'"
-                  size="small"
-                  @click="toggleListOption('weaknesses', option)"
-                >
-                  {{ option }}
-                </v-chip>
-              </div>
-              <v-combobox
-                v-model="attributeForm.weaknesses"
-                label="弱点"
-                :items="weaknessOptions"
-                multiple
-                chips
-                closable-chips
-                clearable
-                hint="弱点写得越具体，后续剧情推进越好用。"
-                persistent-hint
-              />
-            </v-col>
-            <v-col cols="12" md="6">
-              <v-combobox
-                v-model="attributeForm.equipment"
-                label="装备"
-                multiple
-                chips
-                closable-chips
-                clearable
-              />
-            </v-col>
-            <v-col cols="12" md="6">
-              <div class="d-flex justify-space-between align-center mb-2">
-                <div class="text-subtitle-2">标签</div>
-                <v-btn size="small" variant="text" @click="clearListOption('tags')">清空</v-btn>
-              </div>
-              <div class="d-flex flex-wrap ga-2 mb-3">
-                <v-chip
-                  v-for="option in tagOptions"
-                  :key="option"
-                  :color="attributeForm.tags.includes(option) ? 'secondary' : undefined"
-                  :variant="attributeForm.tags.includes(option) ? 'tonal' : 'outlined'"
-                  size="small"
-                  @click="toggleListOption('tags', option)"
-                >
-                  {{ option }}
-                </v-chip>
-              </div>
-              <v-combobox
-                v-model="attributeForm.tags"
-                label="标签"
-                :items="tagOptions"
-                multiple
-                chips
-                closable-chips
-                clearable
-                hint="用于概括角色给读者的直观印象。"
-                persistent-hint
-              />
-            </v-col>
-            <v-col cols="12">
-              <div class="d-flex justify-space-between align-center mb-2">
-                <div class="text-subtitle-2">关系线索</div>
-                <v-btn size="small" variant="text" @click="clearListOption('relations')">清空</v-btn>
-              </div>
-              <div class="d-flex flex-wrap ga-2 mb-3">
-                <v-chip
-                  v-for="option in relationHintOptions"
-                  :key="option"
-                  :color="attributeForm.relations.includes(option) ? 'secondary' : undefined"
-                  :variant="attributeForm.relations.includes(option) ? 'tonal' : 'outlined'"
-                  size="small"
-                  @click="toggleListOption('relations', option)"
-                >
-                  {{ option }}
-                </v-chip>
-              </div>
-              <v-combobox
-                v-model="attributeForm.relations"
-                label="关系线索"
-                :items="relationHintOptions"
-                multiple
-                chips
-                closable-chips
-                clearable
-                hint="可填写“导师”“宿敌”“青梅竹马”“上级”等角色关系关键词。"
-                persistent-hint
-              />
-            </v-col>
-            <v-col cols="12">
-              <v-textarea v-model="attributeForm.notes" rows="3" label="备注 / 秘密" />
-            </v-col>
-            <v-col cols="12">
-              <v-textarea
-                :model-value="attributePreview"
-                rows="8"
-                label="自动组装后的属性 JSON"
-                readonly
-                auto-grow
-              />
-            </v-col>
+            <template v-if="form.mode === 'attach' && !editingId">
+              <v-col cols="12" md="6">
+                <v-select
+                  v-model="form.existingCharacterId"
+                  label="选择可复用人物"
+                  :items="reusableCharacters"
+                  item-title="name"
+                  item-value="id"
+                  clearable
+                />
+              </v-col>
+              <v-col cols="12" md="6">
+                <v-select
+                  v-model="form.projectRole"
+                  label="当前项目中的角色定位"
+                  :items="projectRoleOptions"
+                  clearable
+                />
+              </v-col>
+              <v-col cols="12">
+                <v-alert type="info" variant="tonal">
+                  关联后只是在当前项目里增加一条绑定，不会覆盖这个人物在其他项目里的设定。
+                </v-alert>
+              </v-col>
+              <v-col v-if="selectedReusableCharacter" cols="12">
+                <div class="text-subtitle-2 font-weight-medium">角色预览</div>
+                <div class="text-body-2 text-medium-emphasis mt-2">
+                  {{ selectedReusableCharacter.description || '暂无简介。' }}
+                </div>
+                <div v-if="selectedReusableCharacter.projectNames?.length" class="d-flex flex-wrap ga-2 mt-3">
+                  <v-chip
+                    v-for="projectName in selectedReusableCharacter.projectNames"
+                    :key="projectName"
+                    size="small"
+                    variant="outlined"
+                  >
+                    {{ projectName }}
+                  </v-chip>
+                </div>
+              </v-col>
+            </template>
+
+            <template v-else>
+              <v-col cols="12" md="4">
+                <v-select
+                  v-model="form.projectRole"
+                  label="当前项目中的角色定位"
+                  :items="projectRoleOptions"
+                  clearable
+                />
+              </v-col>
+              <v-col cols="12" md="8">
+                <div class="d-flex ga-2 align-start">
+                  <v-text-field v-model="form.name" class="flex-grow-1" label="角色名称" />
+                  <v-btn class="mt-2" variant="outlined" @click="generateCharacterNames">AI 生成人名</v-btn>
+                </div>
+              </v-col>
+              <v-col cols="12">
+                <v-textarea
+                  v-model="form.description"
+                  rows="4"
+                  label="角色描述"
+                  hint="尽量描述身份、气质、经历或当前定位，下面的属性生成会优先参考这里。"
+                  persistent-hint
+                />
+              </v-col>
+              <v-col cols="12" class="pt-0">
+                <div class="text-subtitle-2 font-weight-medium">快速模板</div>
+                <div class="d-flex flex-wrap ga-2 mt-3">
+                  <v-chip
+                    v-for="template in characterTemplates"
+                    :key="template.name"
+                    color="secondary"
+                    variant="outlined"
+                    @click="applyTemplate(template)"
+                  >
+                    {{ template.name }}
+                  </v-chip>
+                </div>
+              </v-col>
+              <v-col cols="12" class="pt-0">
+                <div class="d-flex flex-wrap ga-3 align-center">
+                  <v-btn color="primary" variant="tonal" :loading="attributeSuggestionLoading" @click="generateAttributeSuggestions">
+                    根据描述生成属性
+                  </v-btn>
+                  <span class="text-caption text-medium-emphasis">
+                    会自动填充年龄、身份、阵营、技能、特性、天赋、弱点等字段。
+                  </span>
+                </div>
+                <v-alert v-if="attributeSuggestionSourceLabel" type="info" variant="tonal" class="mt-3">
+                  {{ attributeSuggestionSourceLabel }}
+                </v-alert>
+              </v-col>
+
+              <v-col cols="12" md="4">
+                <v-text-field v-model="attributeForm.age" label="年龄" />
+              </v-col>
+              <v-col cols="12" md="4">
+                <v-select v-model="attributeForm.gender" label="性别" :items="['男', '女', '其他', '未知']" clearable />
+              </v-col>
+              <v-col cols="12" md="4">
+                <v-combobox v-model="attributeForm.camp" label="阵营" :items="campOptions" />
+              </v-col>
+              <v-col cols="12" md="6">
+                <v-text-field v-model="attributeForm.identity" label="身份 / 职业" />
+              </v-col>
+              <v-col cols="12" md="6">
+                <v-text-field v-model="attributeForm.goal" label="核心目标" />
+              </v-col>
+              <v-col cols="12" md="6">
+                <v-textarea v-model="attributeForm.background" rows="4" label="背景" />
+              </v-col>
+              <v-col cols="12" md="6">
+                <v-textarea v-model="attributeForm.appearance" rows="4" label="外貌" />
+              </v-col>
+
+              <v-col cols="12" md="6">
+                <div class="d-flex justify-space-between align-center mb-2">
+                  <div class="text-subtitle-2">技能</div>
+                  <v-btn size="small" variant="text" @click="clearListOption('skills')">清空</v-btn>
+                </div>
+                <div class="d-flex flex-wrap ga-2 mb-3">
+                  <v-chip
+                    v-for="option in skillOptions"
+                    :key="option"
+                    :color="attributeForm.skills.includes(option) ? 'primary' : undefined"
+                    :variant="attributeForm.skills.includes(option) ? 'tonal' : 'outlined'"
+                    size="small"
+                    @click="toggleListOption('skills', option)"
+                  >
+                    {{ option }}
+                  </v-chip>
+                </div>
+                <v-combobox
+                  v-model="attributeForm.skills"
+                  label="技能"
+                  :items="skillOptions"
+                  multiple
+                  chips
+                  closable-chips
+                  clearable
+                />
+              </v-col>
+
+              <v-col cols="12" md="6">
+                <div class="d-flex justify-space-between align-center mb-2">
+                  <div class="text-subtitle-2">特性</div>
+                  <v-btn size="small" variant="text" @click="clearListOption('traits')">清空</v-btn>
+                </div>
+                <div class="d-flex flex-wrap ga-2 mb-3">
+                  <v-chip
+                    v-for="option in traitOptions"
+                    :key="option"
+                    :color="attributeForm.traits.includes(option) ? 'secondary' : undefined"
+                    :variant="attributeForm.traits.includes(option) ? 'tonal' : 'outlined'"
+                    size="small"
+                    @click="toggleListOption('traits', option)"
+                  >
+                    {{ option }}
+                  </v-chip>
+                </div>
+                <v-combobox
+                  v-model="attributeForm.traits"
+                  label="特性"
+                  :items="traitOptions"
+                  multiple
+                  chips
+                  closable-chips
+                  clearable
+                />
+              </v-col>
+
+              <v-col cols="12" md="6">
+                <div class="d-flex justify-space-between align-center mb-2">
+                  <div class="text-subtitle-2">天赋</div>
+                  <v-btn size="small" variant="text" @click="clearListOption('talents')">清空</v-btn>
+                </div>
+                <div class="d-flex flex-wrap ga-2 mb-3">
+                  <v-chip
+                    v-for="option in talentOptions"
+                    :key="option"
+                    :color="attributeForm.talents.includes(option) ? 'secondary' : undefined"
+                    :variant="attributeForm.talents.includes(option) ? 'tonal' : 'outlined'"
+                    size="small"
+                    @click="toggleListOption('talents', option)"
+                  >
+                    {{ option }}
+                  </v-chip>
+                </div>
+                <v-combobox
+                  v-model="attributeForm.talents"
+                  label="天赋"
+                  :items="talentOptions"
+                  multiple
+                  chips
+                  closable-chips
+                  clearable
+                />
+              </v-col>
+
+              <v-col cols="12" md="6">
+                <div class="d-flex justify-space-between align-center mb-2">
+                  <div class="text-subtitle-2">弱点</div>
+                  <v-btn size="small" variant="text" @click="clearListOption('weaknesses')">清空</v-btn>
+                </div>
+                <div class="d-flex flex-wrap ga-2 mb-3">
+                  <v-chip
+                    v-for="option in weaknessOptions"
+                    :key="option"
+                    :color="attributeForm.weaknesses.includes(option) ? 'error' : undefined"
+                    :variant="attributeForm.weaknesses.includes(option) ? 'tonal' : 'outlined'"
+                    size="small"
+                    @click="toggleListOption('weaknesses', option)"
+                  >
+                    {{ option }}
+                  </v-chip>
+                </div>
+                <v-combobox
+                  v-model="attributeForm.weaknesses"
+                  label="弱点"
+                  :items="weaknessOptions"
+                  multiple
+                  chips
+                  closable-chips
+                  clearable
+                />
+              </v-col>
+
+              <v-col cols="12" md="6">
+                <v-combobox
+                  v-model="attributeForm.equipment"
+                  label="装备"
+                  multiple
+                  chips
+                  closable-chips
+                  clearable
+                />
+              </v-col>
+
+              <v-col cols="12" md="6">
+                <div class="d-flex justify-space-between align-center mb-2">
+                  <div class="text-subtitle-2">标签</div>
+                  <v-btn size="small" variant="text" @click="clearListOption('tags')">清空</v-btn>
+                </div>
+                <div class="d-flex flex-wrap ga-2 mb-3">
+                  <v-chip
+                    v-for="option in tagOptions"
+                    :key="option"
+                    :color="attributeForm.tags.includes(option) ? 'secondary' : undefined"
+                    :variant="attributeForm.tags.includes(option) ? 'tonal' : 'outlined'"
+                    size="small"
+                    @click="toggleListOption('tags', option)"
+                  >
+                    {{ option }}
+                  </v-chip>
+                </div>
+                <v-combobox
+                  v-model="attributeForm.tags"
+                  label="标签"
+                  :items="tagOptions"
+                  multiple
+                  chips
+                  closable-chips
+                  clearable
+                />
+              </v-col>
+
+              <v-col cols="12">
+                <div class="d-flex justify-space-between align-center mb-2">
+                  <div class="text-subtitle-2">关系线索</div>
+                  <v-btn size="small" variant="text" @click="clearListOption('relations')">清空</v-btn>
+                </div>
+                <div class="d-flex flex-wrap ga-2 mb-3">
+                  <v-chip
+                    v-for="option in relationHintOptions"
+                    :key="option"
+                    :color="attributeForm.relations.includes(option) ? 'secondary' : undefined"
+                    :variant="attributeForm.relations.includes(option) ? 'tonal' : 'outlined'"
+                    size="small"
+                    @click="toggleListOption('relations', option)"
+                  >
+                    {{ option }}
+                  </v-chip>
+                </div>
+                <v-combobox
+                  v-model="attributeForm.relations"
+                  label="关系线索"
+                  :items="relationHintOptions"
+                  multiple
+                  chips
+                  closable-chips
+                  clearable
+                />
+              </v-col>
+
+              <v-col cols="12">
+                <v-textarea v-model="attributeForm.notes" rows="3" label="备注 / 秘密" />
+              </v-col>
+              <v-col cols="12">
+                <v-textarea
+                  :model-value="attributePreview"
+                  rows="8"
+                  label="自动组装后的属性 JSON"
+                  readonly
+                  auto-grow
+                />
+              </v-col>
+            </template>
           </v-row>
         </v-card-text>
         <v-card-actions class="justify-end">
@@ -720,8 +820,8 @@ async function confirmDelete() {
 
     <ConfirmDialog
       v-model="confirmVisible"
-      title="删除人物"
-      text="确认删除这个人物吗？剧情、因果和知识条目里已经引用的文字不会自动改写。"
+      title="移出项目"
+      text="确认把这个人物从当前项目移除吗？人物本体仍会保留在角色库里，供其他项目继续复用。"
       @confirm="confirmDelete"
     />
 

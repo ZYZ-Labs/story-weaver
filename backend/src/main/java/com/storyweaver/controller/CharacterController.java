@@ -1,11 +1,11 @@
 package com.storyweaver.controller;
 
 import com.storyweaver.domain.dto.CharacterAttributeSuggestionRequestDTO;
+import com.storyweaver.domain.dto.CharacterRequestDTO;
 import com.storyweaver.domain.entity.Character;
 import com.storyweaver.security.SecurityUtils;
 import com.storyweaver.service.CharacterAttributeSuggestionService;
 import com.storyweaver.service.CharacterService;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -23,15 +23,36 @@ import java.util.List;
 import java.util.Map;
 
 @RestController
-@RequestMapping("/api/projects/{projectId}/characters")
 public class CharacterController {
-    @Autowired
-    private CharacterService characterService;
 
-    @Autowired
-    private CharacterAttributeSuggestionService characterAttributeSuggestionService;
+    private final CharacterService characterService;
+    private final CharacterAttributeSuggestionService characterAttributeSuggestionService;
 
-    @GetMapping
+    public CharacterController(
+            CharacterService characterService,
+            CharacterAttributeSuggestionService characterAttributeSuggestionService) {
+        this.characterService = characterService;
+        this.characterAttributeSuggestionService = characterAttributeSuggestionService;
+    }
+
+    @GetMapping("/api/characters/library")
+    public ResponseEntity<Map<String, Object>> listCharacterLibrary(
+            @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
+            Authentication authentication) {
+        if (!AuthHeaderSupport.hasValidBearerToken(authorizationHeader)) {
+            return AuthHeaderSupport.unauthorizedResponse();
+        }
+        Long userId = SecurityUtils.getCurrentUserId(authentication);
+
+        List<Character> characters = characterService.listReusableCharacters(userId);
+        Map<String, Object> result = new HashMap<>();
+        result.put("code", 200);
+        result.put("message", "获取成功");
+        result.put("data", characters);
+        return ResponseEntity.ok(result);
+    }
+
+    @GetMapping("/api/projects/{projectId}/characters")
     public ResponseEntity<Map<String, Object>> getProjectCharacters(
             @PathVariable Long projectId,
             @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
@@ -42,19 +63,17 @@ public class CharacterController {
         Long userId = SecurityUtils.getCurrentUserId(authentication);
 
         List<Character> characters = characterService.getProjectCharacters(projectId, userId);
-
         Map<String, Object> result = new HashMap<>();
         result.put("code", 200);
         result.put("message", "获取成功");
         result.put("data", characters);
-
         return ResponseEntity.ok(result);
     }
 
-    @PostMapping
-    public ResponseEntity<Map<String, Object>> createCharacter(
+    @PostMapping("/api/projects/{projectId}/characters")
+    public ResponseEntity<Map<String, Object>> createOrAttachCharacter(
             @PathVariable Long projectId,
-            @RequestBody Map<String, String> requestBody,
+            @RequestBody CharacterRequestDTO requestDTO,
             @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
             Authentication authentication) {
         if (!AuthHeaderSupport.hasValidBearerToken(authorizationHeader)) {
@@ -62,38 +81,29 @@ public class CharacterController {
         }
         Long userId = SecurityUtils.getCurrentUserId(authentication);
 
-        String name = requestBody.get("name");
-        String description = requestBody.get("description");
-        String attributes = requestBody.get("attributes");
+        Character character = requestDTO.getExistingCharacterId() != null
+                ? characterService.attachCharacter(projectId, requestDTO.getExistingCharacterId(), userId, requestDTO.getProjectRole())
+                : characterService.createCharacter(projectId, userId, requestDTO);
 
-        if (name == null || name.trim().isEmpty()) {
-            return ResponseEntity.badRequest().body(Map.of(
-                    "code", 400,
-                    "message", "角色名称不能为空"
-            ));
-        }
-
-        Character character = characterService.createCharacter(projectId, userId, name, description, attributes);
         if (character == null) {
             return ResponseEntity.status(404).body(Map.of(
                     "code", 404,
-                    "message", "项目不存在或无权访问"
+                    "message", "人物不存在、项目不存在或无权访问"
             ));
         }
 
-        Map<String, Object> result = new HashMap<>();
-        result.put("code", 200);
-        result.put("message", "创建成功");
-        result.put("data", character);
-
-        return ResponseEntity.ok(result);
+        return ResponseEntity.ok(Map.of(
+                "code", 200,
+                "message", requestDTO.getExistingCharacterId() != null ? "关联成功" : "创建成功",
+                "data", character
+        ));
     }
 
-    @PutMapping("/{characterId}")
+    @PutMapping("/api/projects/{projectId}/characters/{characterId}")
     public ResponseEntity<Map<String, Object>> updateCharacter(
             @PathVariable Long projectId,
             @PathVariable Long characterId,
-            @RequestBody Character character,
+            @RequestBody CharacterRequestDTO requestDTO,
             @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
             Authentication authentication) {
         if (!AuthHeaderSupport.hasValidBearerToken(authorizationHeader)) {
@@ -101,22 +111,21 @@ public class CharacterController {
         }
         Long userId = SecurityUtils.getCurrentUserId(authentication);
 
-        boolean success = characterService.updateCharacter(characterId, userId, character);
+        boolean success = characterService.updateCharacter(projectId, characterId, userId, requestDTO);
         if (!success) {
             return ResponseEntity.status(404).body(Map.of(
                     "code", 404,
-                    "message", "角色不存在或无权访问"
+                    "message", "人物不存在、未关联当前项目或无权访问"
             ));
         }
 
-        Map<String, Object> result = new HashMap<>();
-        result.put("code", 200);
-        result.put("message", "更新成功");
-
-        return ResponseEntity.ok(result);
+        return ResponseEntity.ok(Map.of(
+                "code", 200,
+                "message", "更新成功"
+        ));
     }
 
-    @DeleteMapping("/{characterId}")
+    @DeleteMapping("/api/projects/{projectId}/characters/{characterId}")
     public ResponseEntity<Map<String, Object>> deleteCharacter(
             @PathVariable Long projectId,
             @PathVariable Long characterId,
@@ -127,22 +136,21 @@ public class CharacterController {
         }
         Long userId = SecurityUtils.getCurrentUserId(authentication);
 
-        boolean success = characterService.deleteCharacter(characterId, userId);
+        boolean success = characterService.deleteCharacter(projectId, characterId, userId);
         if (!success) {
             return ResponseEntity.status(404).body(Map.of(
                     "code", 404,
-                    "message", "角色不存在或无权访问"
+                    "message", "人物不存在、未关联当前项目或无权访问"
             ));
         }
 
-        Map<String, Object> result = new HashMap<>();
-        result.put("code", 200);
-        result.put("message", "删除成功");
-
-        return ResponseEntity.ok(result);
+        return ResponseEntity.ok(Map.of(
+                "code", 200,
+                "message", "已移出当前项目"
+        ));
     }
 
-    @PostMapping("/attribute-suggestions")
+    @PostMapping("/api/projects/{projectId}/characters/attribute-suggestions")
     public ResponseEntity<Map<String, Object>> generateCharacterAttributes(
             @PathVariable Long projectId,
             @RequestBody CharacterAttributeSuggestionRequestDTO requestDTO,
@@ -160,7 +168,7 @@ public class CharacterController {
         return ResponseEntity.ok(result);
     }
 
-    @GetMapping("/{characterId}")
+    @GetMapping("/api/projects/{projectId}/characters/{characterId}")
     public ResponseEntity<Map<String, Object>> getCharacter(
             @PathVariable Long projectId,
             @PathVariable Long characterId,
@@ -171,19 +179,22 @@ public class CharacterController {
         }
         Long userId = SecurityUtils.getCurrentUserId(authentication);
 
-        Character character = characterService.getCharacterWithAuth(characterId, userId);
+        List<Character> projectCharacters = characterService.getProjectCharacters(projectId, userId);
+        Character character = projectCharacters.stream()
+                .filter(item -> characterId.equals(item.getId()))
+                .findFirst()
+                .orElse(null);
         if (character == null) {
             return ResponseEntity.status(404).body(Map.of(
                     "code", 404,
-                    "message", "角色不存在或无权访问"
+                    "message", "人物不存在、未关联当前项目或无权访问"
             ));
         }
 
-        Map<String, Object> result = new HashMap<>();
-        result.put("code", 200);
-        result.put("message", "获取成功");
-        result.put("data", character);
-
-        return ResponseEntity.ok(result);
+        return ResponseEntity.ok(Map.of(
+                "code", 200,
+                "message", "获取成功",
+                "data", character
+        ));
     }
 }

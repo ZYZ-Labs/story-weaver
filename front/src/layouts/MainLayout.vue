@@ -13,6 +13,8 @@ const authStore = useAuthStore()
 const projectStore = useProjectStore()
 
 const currentUserName = computed(() => authStore.user?.nickname || authStore.user?.username || '创作者')
+const currentUserRoleLabel = computed(() => (authStore.isAdmin ? '管理员' : '创作者'))
+const visibleMenu = computed(() => mainMenu.filter((item) => !item.adminOnly || authStore.isAdmin))
 
 async function ensureProjects() {
   if (!projectStore.projects.length && authStore.isAuthenticated) {
@@ -61,7 +63,7 @@ onMounted(() => {
 
       <v-list nav class="px-2">
         <v-list-item
-          v-for="item in mainMenu"
+          v-for="item in visibleMenu"
           :key="item.to"
           :prepend-icon="item.icon"
           :title="item.title"
@@ -78,8 +80,8 @@ onMounted(() => {
         <v-app-bar-nav-icon @click="drawer = !drawer" />
         <div class="text-h6 font-weight-bold">{{ route.meta.title }}</div>
         <v-spacer />
-        <v-chip color="secondary" variant="tonal" prepend-icon="mdi-feather">
-          {{ currentUserName }}
+        <v-chip color="secondary" variant="tonal" prepend-icon="mdi-account-circle-outline">
+          {{ currentUserName }} · {{ currentUserRoleLabel }}
         </v-chip>
         <v-btn icon="mdi-logout" variant="text" @click="logout" />
       </v-app-bar>
