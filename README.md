@@ -144,6 +144,17 @@ mysql -u root -p < sql/005_world_setting_association_and_character_attributes.sq
 - `.deploy/registry.env.example`  
   发布脚本的配置示例文件
 
+当前仓库已经按阿里云 ACR 预设好这些默认值：
+
+- `REGISTRY_PROVIDER=aliyun-acr`
+- `REGISTRY_HOST=crpi-2iicgf8z27uyvaq1.cn-hangzhou.personal.cr.aliyuncs.com`
+- `REGISTRY_NAMESPACE=silvericekey`
+- `LOGIN_USERNAME=your-registry-login-username`
+- `BACKEND_IMAGE_NAME=story-weaver-backend`
+- `FRONTEND_IMAGE_NAME=story-weaver-front`
+
+也就是说，首次发布时你通常只需要确认镜像标签，然后输入 `docker login` 密码即可。
+
 ## 发布与部署概览
 
 1. 本地运行发布脚本
@@ -164,6 +175,18 @@ mysql -u root -p < sql/005_world_setting_association_and_character_attributes.sq
 
 - `volumes` 中所有以 `xxx` 开头的路径，表示需要替换成服务器本地实际目录
 - 输出内容可以直接复制到 Dockge 的 `compose.yaml`
+
+如果你直接用当前这套阿里云仓库，最简单的用法是：
+
+```powershell
+.\scripts\deploy.bat
+```
+
+或：
+
+```bash
+./scripts/deploy.sh
+```
 
 详细步骤见 [DEPLOYMENT.md](./DEPLOYMENT.md)。
 

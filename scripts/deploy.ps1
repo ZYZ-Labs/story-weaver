@@ -12,6 +12,9 @@ $repoRoot = Split-Path -Parent $scriptDir
 $configDir = Join-Path $repoRoot '.deploy'
 $configPath = Join-Path $configDir 'registry.env'
 $legacyConfigPath = Join-Path $configDir 'dockerhub.env'
+$defaultAcrHost = 'crpi-2iicgf8z27uyvaq1.cn-hangzhou.personal.cr.aliyuncs.com'
+$defaultAcrNamespace = 'silvericekey'
+$defaultAcrLoginUsername = 'your-registry-login-username'
 
 function Write-Info([string]$Message) {
     Write-Host "[INFO] $Message" -ForegroundColor Green
@@ -145,7 +148,7 @@ function Load-Config() {
 }
 
 function Select-RegistryProvider([string]$CurrentProvider) {
-    $provider = if ([string]::IsNullOrWhiteSpace($CurrentProvider)) { 'dockerhub' } else { $CurrentProvider.Trim().ToLowerInvariant() }
+    $provider = if ([string]::IsNullOrWhiteSpace($CurrentProvider)) { 'aliyun-acr' } else { $CurrentProvider.Trim().ToLowerInvariant() }
     $defaultChoice = switch ($provider) {
         'dockerhub' { '1' }
         'aliyun-acr' { '2' }
@@ -186,10 +189,10 @@ function Collect-InteractiveConfig([hashtable]$CurrentConfig) {
             $loginUsername = Prompt-Value 'Docker Hub login username' (if ([string]::IsNullOrWhiteSpace($loginUsername)) { $registryNamespace } else { $loginUsername })
         }
         'aliyun-acr' {
-            $registryHost = Normalize-RegistryHost (Prompt-Value 'Alibaba ACR registry host' (Get-ConfigOrDefault $CurrentConfig 'REGISTRY_HOST' 'registry.cn-hangzhou.aliyuncs.com'))
+            $registryHost = Normalize-RegistryHost (Prompt-Value 'Alibaba ACR registry host' (Get-ConfigOrDefault $CurrentConfig 'REGISTRY_HOST' $defaultAcrHost))
             $loginServer = Normalize-RegistryHost (Prompt-Value 'Alibaba ACR login server' (Get-ConfigOrDefault $CurrentConfig 'LOGIN_SERVER' $registryHost))
-            $registryNamespace = Normalize-PathSegment (Prompt-Value 'Alibaba ACR namespace' $registryNamespace)
-            $loginUsername = Prompt-Value 'Alibaba ACR login username' $loginUsername
+            $registryNamespace = Normalize-PathSegment (Prompt-Value 'Alibaba ACR namespace' (Get-ConfigOrDefault $CurrentConfig 'REGISTRY_NAMESPACE' $defaultAcrNamespace))
+            $loginUsername = Prompt-Value 'Alibaba ACR login username' (Get-ConfigOrDefault $CurrentConfig 'LOGIN_USERNAME' $defaultAcrLoginUsername)
         }
         'custom' {
             $registryHost = Normalize-RegistryHost (Prompt-Value 'Custom registry host' (Get-ConfigOrDefault $CurrentConfig 'REGISTRY_HOST' 'registry.example.com'))

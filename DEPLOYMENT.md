@@ -27,6 +27,15 @@
 - 阿里云 ACR
 - 自定义 Docker Registry
 
+当前仓库已经预设为你的阿里云 ACR：
+
+- `REGISTRY_HOST=crpi-2iicgf8z27uyvaq1.cn-hangzhou.personal.cr.aliyuncs.com`
+- `LOGIN_SERVER=crpi-2iicgf8z27uyvaq1.cn-hangzhou.personal.cr.aliyuncs.com`
+- `REGISTRY_NAMESPACE=silvericekey`
+- `LOGIN_USERNAME=your-registry-login-username`
+- `BACKEND_IMAGE_NAME=story-weaver-backend`
+- `FRONTEND_IMAGE_NAME=story-weaver-front`
+
 ## 二、发布前准备
 
 本地机器需要：
@@ -120,6 +129,8 @@ chmod +x scripts/deploy.sh
 .deploy/registry.env.example
 ```
 
+如果你直接沿用当前这套阿里云仓库，通常只需要改镜像标签，不需要再手填 host、namespace 和用户名。
+
 旧版本如果已经存在：
 
 ```text
@@ -149,7 +160,7 @@ chmod +x scripts/deploy.sh
 其中：
 
 - Docker Hub 会生成类似 `namespace/repository:tag` 的镜像地址
-- 阿里云 ACR 会生成类似 `registry.cn-hangzhou.aliyuncs.com/namespace/repository:tag` 的镜像地址
+- 阿里云 ACR 会生成类似 `crpi-2iicgf8z27uyvaq1.cn-hangzhou.personal.cr.aliyuncs.com/namespace/repository:tag` 的镜像地址
 - 自定义 Registry 会根据你输入的 host 和 namespace 生成镜像地址
 
 ### 阿里云 ACR 说明
@@ -157,16 +168,24 @@ chmod +x scripts/deploy.sh
 如果你选择阿里云 ACR，脚本会要求输入：
 
 - ACR registry host  
-  例如：`registry.cn-hangzhou.aliyuncs.com`
+  默认：`crpi-2iicgf8z27uyvaq1.cn-hangzhou.personal.cr.aliyuncs.com`
 
 - ACR login server  
-  通常与 registry host 相同
+  默认与 registry host 相同
 
-- ACR namespace
+- ACR namespace  
+  默认：`silvericekey`
 
-- ACR login username
+- ACR login username  
+  默认：`your-registry-login-username`
 
 脚本不会保存密码，`docker login` 时由 Docker 自己进行交互输入。
+
+你也可以手动先登录一次：
+
+```bash
+docker login --username=your-registry-login-username crpi-2iicgf8z27uyvaq1.cn-hangzhou.personal.cr.aliyuncs.com
+```
 
 ## 五、服务端部署
 

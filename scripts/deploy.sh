@@ -7,6 +7,9 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 CONFIG_DIR="$REPO_ROOT/.deploy"
 CONFIG_PATH="$CONFIG_DIR/registry.env"
 LEGACY_CONFIG_PATH="$CONFIG_DIR/dockerhub.env"
+DEFAULT_ACR_HOST="crpi-2iicgf8z27uyvaq1.cn-hangzhou.personal.cr.aliyuncs.com"
+DEFAULT_ACR_NAMESPACE="silvericekey"
+DEFAULT_ACR_LOGIN_USERNAME="your-registry-login-username"
 
 print_info() { echo "[INFO] $1"; }
 print_warn() { echo "[WARN] $1"; }
@@ -28,10 +31,28 @@ prompt_value() {
     else
         read -r -p "$label: " value
     fi
+    value="${value%$'\r'}"
     if [ -z "$value" ]; then
         value="$default_value"
     fi
     printf '%s' "$value"
+}
+
+prompt_value_into() {
+    local __var_name="$1"
+    local label="$2"
+    local default_value="${3:-}"
+    local value
+    if [ -n "$default_value" ]; then
+        read -r -p "$label [$default_value]: " value
+    else
+        read -r -p "$label: " value
+    fi
+    value="${value%$'\r'}"
+    if [ -z "$value" ]; then
+        value="$default_value"
+    fi
+    printf -v "$__var_name" '%s' "$value"
 }
 
 normalize_registry_host() {
@@ -93,8 +114,9 @@ EOF
 }
 
 choose_registry_provider() {
-    local current_provider="${1:-dockerhub}"
+    local current_provider="${1:-aliyun-acr}"
     local default_choice="1"
+    local choice
 
     case "$current_provider" in
         dockerhub) default_choice="1" ;;
@@ -102,51 +124,64 @@ choose_registry_provider() {
         custom) default_choice="3" ;;
     esac
 
-    echo
-    echo "Select registry provider:"
-    echo "  1. Docker Hub"
-    echo "  2. Alibaba Cloud ACR"
-    echo "  3. Custom registry"
+    echo >&2
+    echo "Select registry provider:" >&2
+    echo "  1. Docker Hub" >&2
+    echo "  2. Alibaba Cloud ACR" >&2
+    echo "  3. Custom registry" >&2
 
     while true; do
-        local choice
-        choice="$(prompt_value 'Choice' "$default_choice")"
+        prompt_value_into choice 'Choice' "$default_choice"
         case "$choice" in
-            1) printf '%s' "dockerhub"; return ;;
-            2) printf '%s' "aliyun-acr"; return ;;
-            3) printf '%s' "custom"; return ;;
-            *) print_warn "Invalid choice. Please enter 1, 2, or 3." ;;
+            1) REGISTRY_PROVIDER="dockerhub"; return ;;
+            2) REGISTRY_PROVIDER="aliyun-acr"; return ;;
+            3) REGISTRY_PROVIDER="custom"; return ;;
+            *) echo "[WARN] Invalid choice. Please enter 1, 2, or 3." >&2 ;;
         esac
     done
 }
 
 collect_interactive_config() {
-    REGISTRY_PROVIDER="$(choose_registry_provider "${REGISTRY_PROVIDER:-dockerhub}")"
+    local prompt_result=""
+    choose_registry_provider "${REGISTRY_PROVIDER:-dockerhub}"
 
     case "$REGISTRY_PROVIDER" in
         dockerhub)
             REGISTRY_HOST="docker.io"
             LOGIN_SERVER="docker.io"
-            REGISTRY_NAMESPACE="$(normalize_path_segment "$(prompt_value 'Docker Hub namespace or org' "$(get_config_or_default "${REGISTRY_NAMESPACE:-}" "")")")"
-            LOGIN_USERNAME="$(prompt_value 'Docker Hub login username' "$(get_config_or_default "${LOGIN_USERNAME:-}" "$REGISTRY_NAMESPACE")")"
+            prompt_value_into prompt_result 'Docker Hub namespace or org' "$(get_config_or_default "${REGISTRY_NAMESPACE:-}" "")"
+            REGISTRY_NAMESPACE="$(normalize_path_segment "$prompt_result")"
+            prompt_value_into prompt_result 'Docker Hub login username' "$(get_config_or_default "${LOGIN_USERNAME:-}" "$REGISTRY_NAMESPACE")"
+            LOGIN_USERNAME="$prompt_result"
             ;;
         aliyun-acr)
-            REGISTRY_HOST="$(normalize_registry_host "$(prompt_value 'Alibaba ACR registry host' "$(get_config_or_default "${REGISTRY_HOST:-}" "registry.cn-hangzhou.aliyuncs.com")")")"
-            LOGIN_SERVER="$(normalize_registry_host "$(prompt_value 'Alibaba ACR login server' "$(get_config_or_default "${LOGIN_SERVER:-}" "$REGISTRY_HOST")")")"
-            REGISTRY_NAMESPACE="$(normalize_path_segment "$(prompt_value 'Alibaba ACR namespace' "$(get_config_or_default "${REGISTRY_NAMESPACE:-}" "")")")"
-            LOGIN_USERNAME="$(prompt_value 'Alibaba ACR login username' "$(get_config_or_default "${LOGIN_USERNAME:-}" "")")"
+            prompt_value_into prompt_result 'Alibaba ACR registry host' "$(get_config_or_default "${REGISTRY_HOST:-}" "$DEFAULT_ACR_HOST")"
+            REGISTRY_HOST="$(normalize_registry_host "$prompt_result")"
+            prompt_value_into prompt_result 'Alibaba ACR login server' "$(get_config_or_default "${LOGIN_SERVER:-}" "$REGISTRY_HOST")"
+            LOGIN_SERVER="$(normalize_registry_host "$prompt_result")"
+            prompt_value_into prompt_result 'Alibaba ACR namespace' "$(get_config_or_default "${REGISTRY_NAMESPACE:-}" "$DEFAULT_ACR_NAMESPACE")"
+            REGISTRY_NAMESPACE="$(normalize_path_segment "$prompt_result")"
+            prompt_value_into prompt_result 'Alibaba ACR login username' "$(get_config_or_default "${LOGIN_USERNAME:-}" "$DEFAULT_ACR_LOGIN_USERNAME")"
+            LOGIN_USERNAME="$prompt_result"
             ;;
         custom)
-            REGISTRY_HOST="$(normalize_registry_host "$(prompt_value 'Custom registry host' "$(get_config_or_default "${REGISTRY_HOST:-}" "registry.example.com")")")"
-            LOGIN_SERVER="$(normalize_registry_host "$(prompt_value 'Custom registry login server' "$(get_config_or_default "${LOGIN_SERVER:-}" "$REGISTRY_HOST")")")"
-            REGISTRY_NAMESPACE="$(normalize_path_segment "$(prompt_value 'Custom registry namespace or path segment' "$(get_config_or_default "${REGISTRY_NAMESPACE:-}" "")")")"
-            LOGIN_USERNAME="$(prompt_value 'Custom registry login username' "$(get_config_or_default "${LOGIN_USERNAME:-}" "")")"
+            prompt_value_into prompt_result 'Custom registry host' "$(get_config_or_default "${REGISTRY_HOST:-}" "registry.example.com")"
+            REGISTRY_HOST="$(normalize_registry_host "$prompt_result")"
+            prompt_value_into prompt_result 'Custom registry login server' "$(get_config_or_default "${LOGIN_SERVER:-}" "$REGISTRY_HOST")"
+            LOGIN_SERVER="$(normalize_registry_host "$prompt_result")"
+            prompt_value_into prompt_result 'Custom registry namespace or path segment' "$(get_config_or_default "${REGISTRY_NAMESPACE:-}" "")"
+            REGISTRY_NAMESPACE="$(normalize_path_segment "$prompt_result")"
+            prompt_value_into prompt_result 'Custom registry login username' "$(get_config_or_default "${LOGIN_USERNAME:-}" "")"
+            LOGIN_USERNAME="$prompt_result"
             ;;
     esac
 
-    BACKEND_IMAGE_NAME="$(normalize_path_segment "$(prompt_value 'Backend repository name' "$(get_config_or_default "${BACKEND_IMAGE_NAME:-}" "story-weaver-backend")")")"
-    FRONTEND_IMAGE_NAME="$(normalize_path_segment "$(prompt_value 'Frontend repository name' "$(get_config_or_default "${FRONTEND_IMAGE_NAME:-}" "story-weaver-front")")")"
-    IMAGE_TAG="$(prompt_value 'Image tag' "$(get_config_or_default "${IMAGE_TAG:-}" "latest")")"
+    prompt_value_into prompt_result 'Backend repository name' "$(get_config_or_default "${BACKEND_IMAGE_NAME:-}" "story-weaver-backend")"
+    BACKEND_IMAGE_NAME="$(normalize_path_segment "$prompt_result")"
+    prompt_value_into prompt_result 'Frontend repository name' "$(get_config_or_default "${FRONTEND_IMAGE_NAME:-}" "story-weaver-front")"
+    FRONTEND_IMAGE_NAME="$(normalize_path_segment "$prompt_result")"
+    prompt_value_into prompt_result 'Image tag' "$(get_config_or_default "${IMAGE_TAG:-}" "latest")"
+    IMAGE_TAG="$prompt_result"
 }
 
 validate_config() {
