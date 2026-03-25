@@ -243,12 +243,12 @@ run_docker_login() {
 }
 
 print_dockge_compose() {
-    cat <<EOF
+    cat <<'EOF' | sed "s|__BACKEND_IMAGE__|$BACKEND_IMAGE|g; s|__FRONTEND_IMAGE__|$FRONTEND_IMAGE|g"
 name: story-weaver
 
 services:
   backend:
-    image: $BACKEND_IMAGE
+    image: __BACKEND_IMAGE__
     container_name: story-weaver-backend
     restart: unless-stopped
     environment:
@@ -260,24 +260,118 @@ services:
       SPRING_DATA_REDIS_PORT: 6379
       SPRING_DATA_REDIS_PASSWORD: your-local-password
       JWT_SECRET: change-this-to-a-long-random-jwt-secret-at-least-32-characters
-      APP_CORS_ALLOWED_ORIGIN_PATTERNS: http://localhost:*,http://127.0.0.1:*,http://192.168.*:*,http://10.*:*
+      APP_CORS_ALLOWED_ORIGIN_PATTERNS: http://localhost:*,http://127.0.0.1:*,http://192.168.*:*,http://10.*:*,https://home.silvericekey.fun,https://home.silvericekey.fun:*
     ports:
-      - "8080:8080"
+      - "${BACKEND_PORT:-8080}:8080"
     volumes:
       - xxx/story-weaver/backend/logs:/app/logs
 
   front:
-    image: $FRONTEND_IMAGE
+    image: __FRONTEND_IMAGE__
     container_name: story-weaver-front
     restart: unless-stopped
+    environment:
+      TZ: Asia/Shanghai
+    expose:
+      - "80"
+    volumes:
+      - xxx/story-weaver/front/nginx-logs:/var/log/nginx
+
+  gateway:
+    image: nginx:1.27-alpine
+    container_name: story-weaver-gateway
+    restart: unless-stopped
     depends_on:
+      - front
       - backend
     environment:
       TZ: Asia/Shanghai
+      SERVER_NAME: ${SERVER_NAME:-home.silvericekey.fun}
+      FRONT_UPSTREAM: http://front:80
+      API_UPSTREAM: http://backend:8080
+      HTTPS_PORT: ${HTTPS_PORT:-443}
+      SSL_CERT_FILE: ${SSL_CERT_FILE:-/etc/nginx/ssl/fullchain.pem}
+      SSL_CERT_KEY_FILE: ${SSL_CERT_KEY_FILE:-/etc/nginx/ssl/privkey.pem}
     ports:
-      - "80:80"
+      - "${HTTP_PORT:-80}:80"
+      - "${HTTPS_PORT:-443}:443"
     volumes:
-      - xxx/story-weaver/front/nginx-logs:/var/log/nginx
+      - "${SSL_CERT_DIR:-/usr/local/project/cer}:/etc/nginx/ssl:ro"
+      - xxx/story-weaver/gateway/nginx-logs:/var/log/nginx
+    command:
+      - /bin/sh
+      - -c
+      - |
+        cat >/tmp/default.conf.template <<'NGINX_TEMPLATE'
+        map $$http_upgrade $$connection_upgrade {
+            default upgrade;
+            '' close;
+        }
+
+        server {
+            listen 80;
+            server_name $$SERVER_NAME;
+
+            location / {
+                return 301 https://$$host$$HTTPS_PORT_SUFFIX$$request_uri;
+            }
+        }
+
+        server {
+            listen 443 ssl http2;
+            server_name $$SERVER_NAME;
+
+            ssl_certificate $$SSL_CERT_FILE;
+            ssl_certificate_key $$SSL_CERT_KEY_FILE;
+            ssl_protocols TLSv1.2 TLSv1.3;
+            ssl_session_cache shared:SSL:10m;
+            ssl_session_timeout 10m;
+
+            client_max_body_size 50m;
+
+            location /api/ {
+                proxy_pass $$API_UPSTREAM;
+                proxy_http_version 1.1;
+                proxy_set_header Host $$host;
+                proxy_set_header X-Real-IP $$remote_addr;
+                proxy_set_header X-Forwarded-For $$proxy_add_x_forwarded_for;
+                proxy_set_header X-Forwarded-Proto https;
+                proxy_set_header X-Forwarded-Host $$host;
+                proxy_set_header X-Forwarded-Port $$HTTPS_PORT;
+                proxy_set_header Upgrade $$http_upgrade;
+                proxy_set_header Connection $$connection_upgrade;
+                proxy_buffering off;
+                proxy_cache off;
+                add_header X-Accel-Buffering "no";
+                chunked_transfer_encoding on;
+                proxy_connect_timeout 60s;
+                proxy_send_timeout 3600s;
+                proxy_read_timeout 3600s;
+            }
+
+            location / {
+                proxy_pass $$FRONT_UPSTREAM;
+                proxy_http_version 1.1;
+                proxy_set_header Host $$host;
+                proxy_set_header X-Real-IP $$remote_addr;
+                proxy_set_header X-Forwarded-For $$proxy_add_x_forwarded_for;
+                proxy_set_header X-Forwarded-Proto https;
+                proxy_set_header X-Forwarded-Host $$host;
+                proxy_set_header X-Forwarded-Port $$HTTPS_PORT;
+                proxy_connect_timeout 60s;
+                proxy_send_timeout 300s;
+                proxy_read_timeout 300s;
+            }
+        }
+        NGINX_TEMPLATE
+        if [ "$$HTTPS_PORT" = "443" ]; then
+          export HTTPS_PORT_SUFFIX=""
+        else
+          export HTTPS_PORT_SUFFIX=":$$HTTPS_PORT"
+        fi
+        envsubst '$$SERVER_NAME $$SSL_CERT_FILE $$SSL_CERT_KEY_FILE $$FRONT_UPSTREAM $$API_UPSTREAM $$HTTPS_PORT $$HTTPS_PORT_SUFFIX' \
+          < /tmp/default.conf.template > /etc/nginx/conf.d/default.conf
+        exec nginx -g 'daemon off;'
 EOF
 }
 
@@ -350,6 +444,8 @@ print_info "Server compose: $REPO_ROOT/docker-compose.server.yml"
 print_info "Server env example: $REPO_ROOT/.env.server.example"
 echo
 print_info "Dockge compose.yaml template:"
-echo 'Replace every leading "xxx" in volumes with your server local path.'
+echo 'Replace every leading "xxx" in log volumes with your server local path.'
+echo 'SSL_CERT_DIR defaults to /usr/local/project/cer and SERVER_NAME defaults to home.silvericekey.fun.'
+echo 'Change HTTP_PORT / HTTPS_PORT if you want non-default host ports.'
 echo
 print_dockge_compose

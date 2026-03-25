@@ -134,7 +134,7 @@ mysql -u root -p < sql/005_world_setting_association_and_character_attributes.sq
   用于本地容器化开发，不建议直接作为生产部署文件使用
 
 - `docker-compose.server.yml`  
-  用于服务端通过镜像部署
+  用于服务端通过镜像部署，内置 `gateway` Nginx 做 HTTPS 终止
 
 - `scripts/deploy.bat`
 - `scripts/deploy.ps1`
@@ -162,6 +162,13 @@ mysql -u root -p < sql/005_world_setting_association_and_character_attributes.sq
 3. 构建并推送前后端镜像
 4. 在服务端准备 `.env`
 5. 使用 `docker-compose.server.yml` 拉取镜像并启动
+
+当前服务端部署默认值：
+
+- 域名：`home.silvericekey.fun`
+- 证书目录：`/usr/local/project/cer`
+- 证书文件：`fullchain.pem` + `privkey.pem`
+- 外部端口：`${HTTP_PORT:-80}` / `${HTTPS_PORT:-443}`
 
 当前发布脚本支持三类仓库：
 

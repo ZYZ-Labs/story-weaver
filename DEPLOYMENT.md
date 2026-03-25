@@ -14,7 +14,7 @@
   用于本地容器化开发
 
 - `docker-compose.server.yml`  
-  用于服务端部署镜像
+  用于服务端部署镜像，内置 `gateway` Nginx 做 HTTPS 终止
 
 对应的发布脚本：
 
@@ -131,6 +131,14 @@ chmod +x scripts/deploy.sh
 
 如果你直接沿用当前这套阿里云仓库，通常只需要改镜像标签，不需要再手填 host、namespace 和用户名。
 
+当前服务端 HTTPS 默认值：
+
+- 域名：`home.silvericekey.fun`
+- 证书目录：`/usr/local/project/cer`
+- 证书文件：`fullchain.pem`
+- 私钥文件：`privkey.pem`
+- 端口：`HTTP_PORT=80`、`HTTPS_PORT=443`
+
 旧版本如果已经存在：
 
 ```text
@@ -211,8 +219,14 @@ BACKEND_IMAGE=your-registry/story-weaver-backend:latest
 FRONTEND_IMAGE=your-registry/story-weaver-front:latest
 
 BACKEND_PORT=8080
-FRONTEND_PORT=80
+HTTP_PORT=80
+HTTPS_PORT=443
 TZ=Asia/Shanghai
+
+SERVER_NAME=home.silvericekey.fun
+SSL_CERT_DIR=/usr/local/project/cer
+SSL_CERT_FILE=/etc/nginx/ssl/fullchain.pem
+SSL_CERT_KEY_FILE=/etc/nginx/ssl/privkey.pem
 
 SPRING_DATASOURCE_URL=jdbc:mysql://192.168.5.249:3306/story_weaver?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
 SPRING_DATASOURCE_USERNAME=root
@@ -232,6 +246,8 @@ APP_CORS_ALLOWED_ORIGIN_PATTERNS=http://localhost:*,http://127.0.0.1:*,http://19
 - `FRONTEND_IMAGE`
 - `JWT_SECRET`
 - `APP_CORS_ALLOWED_ORIGIN_PATTERNS`
+- `HTTP_PORT`
+- `HTTPS_PORT`
 
 ### 3. 启动服务
 

@@ -37,3 +37,4 @@ coverage/
 !backend/src/main/resources/application-example.yml
 
 !docker-compose.yml
+!docker-compose.server.yml
