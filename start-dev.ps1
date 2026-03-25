@@ -71,6 +71,61 @@ function Test-TcpOnce {
     }
 }
 
+function Get-ListeningProcessIds {
+    param(
+        [int]$Port
+    )
+
+    $connections = Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction SilentlyContinue
+    if (-not $connections) {
+        return @()
+    }
+
+    return @($connections | Select-Object -ExpandProperty OwningProcess -Unique)
+}
+
+function Wait-PortReleased {
+    param(
+        [int]$Port,
+        [int]$Retries = 20
+    )
+
+    for ($i = 0; $i -lt $Retries; $i++) {
+        if (-not (Get-ListeningProcessIds -Port $Port).Count) {
+            return
+        }
+        Start-Sleep -Milliseconds 500
+    }
+
+    throw "[ERROR] Port $Port is still occupied after waiting"
+}
+
+function Restart-PortProcesses {
+    param(
+        [int]$Port,
+        [string]$Name
+    )
+
+    $pids = Get-ListeningProcessIds -Port $Port
+    if (-not $pids.Count) {
+        Write-Host "[INFO] No existing $Name process detected on port $Port"
+        return
+    }
+
+    foreach ($processId in $pids) {
+        try {
+            $process = Get-Process -Id $processId -ErrorAction Stop
+            Write-Host "[INFO] Stopping existing $Name process: PID $processId ($($process.ProcessName))"
+            Stop-Process -Id $processId -Force -ErrorAction Stop
+        } catch {
+            Write-Host "[WARN] Failed to stop PID $processId on port ${Port}: $($_.Exception.Message)"
+        }
+    }
+
+    Wait-PortReleased -Port $Port
+    Write-Host "[OK] Port $Port is free"
+}
+
 function Get-LanIPv4Addresses {
     $addresses = Get-NetIPAddress -AddressFamily IPv4 -ErrorAction SilentlyContinue |
         Where-Object {
@@ -150,20 +205,18 @@ try {
     Pop-Location
 }
 
+Write-Host '[INFO] Restarting backend port'
+Restart-PortProcesses -Port 8080 -Name 'Backend'
+
 Write-Host '[INFO] Starting backend'
-if (Test-TcpOnce -TargetHost '127.0.0.1' -Port 8080) {
-    Write-Host '[INFO] Backend already running on 127.0.0.1:8080, skipping start'
-} else {
-    Start-Process -FilePath 'cmd.exe' -ArgumentList "/c","mvn spring-boot:run > ""$BackendLog"" 2>&1" -WorkingDirectory $BackendDir -WindowStyle Minimized
-}
+Start-Process -FilePath 'cmd.exe' -ArgumentList "/c","mvn spring-boot:run > ""$BackendLog"" 2>&1" -WorkingDirectory $BackendDir -WindowStyle Minimized
 Test-TcpPort -TargetHost '127.0.0.1' -Port 8080 -Name 'Backend' -Retries 45
 
+Write-Host '[INFO] Restarting frontend port'
+Restart-PortProcesses -Port 5173 -Name 'Frontend'
+
 Write-Host '[INFO] Starting frontend'
-if (Test-TcpOnce -TargetHost '127.0.0.1' -Port 5173) {
-    Write-Host '[INFO] Frontend already running on 127.0.0.1:5173, skipping start'
-} else {
-    Start-Process -FilePath 'cmd.exe' -ArgumentList "/c","npm run dev -- --host 0.0.0.0 --port 5173 > ""$FrontendLog"" 2>&1" -WorkingDirectory $FrontendDir -WindowStyle Minimized
-}
+Start-Process -FilePath 'cmd.exe' -ArgumentList "/c","npm run dev > ""$FrontendLog"" 2>&1" -WorkingDirectory $FrontendDir -WindowStyle Minimized
 Test-TcpPort -TargetHost '127.0.0.1' -Port 5173 -Name 'Frontend' -Retries 45
 
 Write-Host '========================================'

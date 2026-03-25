@@ -51,6 +51,63 @@ check_port() {
   return 1
 }
 
+find_listening_pids() {
+  local port="$1"
+
+  if command -v lsof >/dev/null 2>&1; then
+    lsof -tiTCP:"$port" -sTCP:LISTEN 2>/dev/null | sort -u
+    return 0
+  fi
+
+  if command -v fuser >/dev/null 2>&1; then
+    fuser -n tcp "$port" 2>/dev/null | tr ' ' '\n' | sed '/^$/d' | sort -u
+    return 0
+  fi
+
+  if command -v ss >/dev/null 2>&1; then
+    ss -ltnp 2>/dev/null | awk -v port=":$port" '$4 ~ port {print $NF}' | sed -n 's/.*pid=\([0-9]\+\).*/\1/p' | sort -u
+    return 0
+  fi
+
+  return 0
+}
+
+wait_port_released() {
+  local port="$1"
+  local retries="${2:-20}"
+
+  for ((i=1; i<=retries; i++)); do
+    if [[ -z "$(find_listening_pids "$port")" ]]; then
+      return 0
+    fi
+    sleep 0.5
+  done
+
+  echo "[ERROR] Port $port is still occupied after waiting"
+  return 1
+}
+
+restart_port_processes() {
+  local port="$1"
+  local name="$2"
+  local pids
+
+  pids="$(find_listening_pids "$port")"
+  if [[ -z "$pids" ]]; then
+    echo "[INFO] No existing $name process detected on port $port"
+    return 0
+  fi
+
+  while IFS= read -r pid; do
+    [[ -z "$pid" ]] && continue
+    echo "[INFO] Stopping existing $name process: PID $pid"
+    kill -9 "$pid" 2>/dev/null || true
+  done <<< "$pids"
+
+  wait_port_released "$port"
+  echo "[OK] Port $port is free"
+}
+
 check_java_version() {
   local major
   major="$(java -version 2>&1 | awk -F[\".] '/version/ {print $2; exit}')"
@@ -119,9 +176,15 @@ fi
 echo "[INFO] Installing frontend dependencies"
 (cd "$FRONTEND_DIR" && npm install >/dev/null)
 
+echo "[INFO] Restarting backend port"
+restart_port_processes "8080" "Backend"
+
 echo "[INFO] Starting backend, log: $BACKEND_LOG"
 (cd "$BACKEND_DIR" && nohup mvn spring-boot:run >"$BACKEND_LOG" 2>&1 &)
 check_port "127.0.0.1" "8080" "Backend" 45
+
+echo "[INFO] Restarting frontend port"
+restart_port_processes "5173" "Frontend"
 
 echo "[INFO] Starting frontend, log: $FRONTEND_LOG"
 (cd "$FRONTEND_DIR" && nohup npm run dev >"$FRONTEND_LOG" 2>&1 &)

@@ -1,11 +1,24 @@
 package com.storyweaver.service.impl;
 
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.storyweaver.domain.dto.ProjectRequestDTO;
+import com.storyweaver.domain.entity.AIWritingRecord;
+import com.storyweaver.domain.entity.Causality;
+import com.storyweaver.domain.entity.Chapter;
+import com.storyweaver.domain.entity.KnowledgeDocument;
+import com.storyweaver.domain.entity.Plot;
 import com.storyweaver.domain.entity.Project;
+import com.storyweaver.domain.entity.ProjectWorldSettingLink;
+import com.storyweaver.repository.AIWritingRecordMapper;
+import com.storyweaver.repository.CausalityMapper;
+import com.storyweaver.repository.ChapterMapper;
+import com.storyweaver.repository.KnowledgeDocumentMapper;
+import com.storyweaver.repository.PlotMapper;
 import com.storyweaver.domain.vo.WorldSettingVO;
 import com.storyweaver.repository.ProjectMapper;
+import com.storyweaver.repository.ProjectWorldSettingMapper;
 import com.storyweaver.service.ProjectService;
 import com.storyweaver.service.WorldSettingService;
 import org.springframework.stereotype.Service;
@@ -19,9 +32,28 @@ import java.util.stream.Collectors;
 public class ProjectServiceImpl extends ServiceImpl<ProjectMapper, Project> implements ProjectService {
 
     private final WorldSettingService worldSettingService;
+    private final ChapterMapper chapterMapper;
+    private final PlotMapper plotMapper;
+    private final CausalityMapper causalityMapper;
+    private final KnowledgeDocumentMapper knowledgeDocumentMapper;
+    private final AIWritingRecordMapper aiWritingRecordMapper;
+    private final ProjectWorldSettingMapper projectWorldSettingMapper;
 
-    public ProjectServiceImpl(WorldSettingService worldSettingService) {
+    public ProjectServiceImpl(
+            WorldSettingService worldSettingService,
+            ChapterMapper chapterMapper,
+            PlotMapper plotMapper,
+            CausalityMapper causalityMapper,
+            KnowledgeDocumentMapper knowledgeDocumentMapper,
+            AIWritingRecordMapper aiWritingRecordMapper,
+            ProjectWorldSettingMapper projectWorldSettingMapper) {
         this.worldSettingService = worldSettingService;
+        this.chapterMapper = chapterMapper;
+        this.plotMapper = plotMapper;
+        this.causalityMapper = causalityMapper;
+        this.knowledgeDocumentMapper = knowledgeDocumentMapper;
+        this.aiWritingRecordMapper = aiWritingRecordMapper;
+        this.projectWorldSettingMapper = projectWorldSettingMapper;
     }
 
     @Override
@@ -80,6 +112,7 @@ public class ProjectServiceImpl extends ServiceImpl<ProjectMapper, Project> impl
     }
 
     @Override
+    @Transactional
     public boolean deleteProject(Long projectId, Long userId) {
         QueryWrapper<Project> queryWrapper = new QueryWrapper<>();
         queryWrapper.eq("id", projectId)
@@ -91,6 +124,40 @@ public class ProjectServiceImpl extends ServiceImpl<ProjectMapper, Project> impl
             return false;
         }
 
+        List<Long> chapterIds = chapterMapper.selectList(new LambdaQueryWrapper<Chapter>()
+                        .eq(Chapter::getProjectId, projectId)
+                        .eq(Chapter::getDeleted, 0))
+                .stream()
+                .map(Chapter::getId)
+                .collect(Collectors.toList());
+
+        if (!chapterIds.isEmpty()) {
+            aiWritingRecordMapper.delete(new LambdaQueryWrapper<AIWritingRecord>()
+                    .in(AIWritingRecord::getChapterId, chapterIds)
+                    .eq(AIWritingRecord::getDeleted, 0));
+        }
+
+        chapterMapper.delete(new LambdaQueryWrapper<Chapter>()
+                .eq(Chapter::getProjectId, projectId)
+                .eq(Chapter::getDeleted, 0));
+
+        plotMapper.delete(new LambdaQueryWrapper<Plot>()
+                .eq(Plot::getProjectId, projectId)
+                .eq(Plot::getDeleted, 0));
+
+        causalityMapper.delete(new LambdaQueryWrapper<Causality>()
+                .eq(Causality::getProjectId, projectId)
+                .eq(Causality::getDeleted, 0));
+
+        knowledgeDocumentMapper.delete(new LambdaQueryWrapper<KnowledgeDocument>()
+                .eq(KnowledgeDocument::getProjectId, projectId)
+                .eq(KnowledgeDocument::getDeleted, 0));
+
+        // Keep reusable world-setting models themselves, only remove the project associations.
+        projectWorldSettingMapper.delete(new QueryWrapper<ProjectWorldSettingLink>()
+                .eq("project_id", projectId));
+
+        // Characters are intentionally retained for future reuse, so they are not cascade deleted here.
         return removeById(projectId);
     }
 
