@@ -11,9 +11,9 @@ import java.util.function.Consumer;
 
 public interface AIWritingService extends IService<AIWritingRecord> {
 
-    AIWritingResponseVO generateContent(AIWritingRequestDTO requestDTO);
+    AIWritingResponseVO generateContent(Long userId, AIWritingRequestDTO requestDTO);
 
-    void streamContent(AIWritingRequestDTO requestDTO, Consumer<AIWritingStreamEventVO> eventConsumer);
+    void streamContent(Long userId, AIWritingRequestDTO requestDTO, Consumer<AIWritingStreamEventVO> eventConsumer);
 
     List<AIWritingResponseVO> getRecordsByChapterId(Long chapterId);
 

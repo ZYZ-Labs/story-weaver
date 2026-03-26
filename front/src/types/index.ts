@@ -165,6 +165,30 @@ export interface Plot {
   updateTime?: string
 }
 
+export interface Outline {
+  id: number
+  projectId: number
+  chapterId?: number | null
+  title?: string
+  summary?: string
+  content?: string
+  stageGoal?: string
+  keyConflict?: string
+  turningPoints?: string
+  expectedEnding?: string
+  focusCharacterIds?: number[]
+  focusCharacterNames?: string[]
+  relatedPlotIds?: number[]
+  relatedPlotTitles?: string[]
+  relatedCausalityIds?: number[]
+  relatedCausalityNames?: string[]
+  chapterTitle?: string
+  status?: number
+  orderNum?: number
+  createTime?: string
+  updateTime?: string
+}
+
 export interface Causality {
   id: number
   projectId: number

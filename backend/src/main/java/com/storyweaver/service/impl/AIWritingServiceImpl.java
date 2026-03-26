@@ -6,52 +6,77 @@ import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.storyweaver.domain.dto.AIWritingRequestDTO;
 import com.storyweaver.domain.entity.AIProvider;
 import com.storyweaver.domain.entity.AIWritingRecord;
+import com.storyweaver.domain.entity.Causality;
 import com.storyweaver.domain.entity.Chapter;
 import com.storyweaver.domain.entity.KnowledgeDocument;
+import com.storyweaver.domain.entity.Outline;
+import com.storyweaver.domain.entity.Plot;
 import com.storyweaver.domain.entity.Project;
 import com.storyweaver.domain.vo.AIWritingResponseVO;
 import com.storyweaver.domain.vo.AIWritingStreamEventVO;
+import com.storyweaver.domain.vo.WorldSettingVO;
 import com.storyweaver.repository.AIWritingRecordMapper;
 import com.storyweaver.service.AIProviderService;
 import com.storyweaver.service.AIWritingService;
+import com.storyweaver.service.CausalityService;
 import com.storyweaver.service.ChapterService;
 import com.storyweaver.service.KnowledgeDocumentService;
+import com.storyweaver.service.OutlineService;
+import com.storyweaver.service.PlotService;
 import com.storyweaver.service.ProjectService;
 import com.storyweaver.service.SystemConfigService;
+import com.storyweaver.service.WorldSettingService;
 import org.springframework.beans.BeanUtils;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
+import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
 @Service
 public class AIWritingServiceImpl extends ServiceImpl<AIWritingRecordMapper, AIWritingRecord> implements AIWritingService {
 
+    private static final int MAX_CONTEXT_ITEMS = 4;
+
     private final ChapterService chapterService;
     private final KnowledgeDocumentService knowledgeDocumentService;
     private final AIProviderService aiProviderService;
     private final ProjectService projectService;
     private final SystemConfigService systemConfigService;
+    private final OutlineService outlineService;
+    private final PlotService plotService;
+    private final CausalityService causalityService;
+    private final WorldSettingService worldSettingService;
 
     public AIWritingServiceImpl(
             ChapterService chapterService,
             KnowledgeDocumentService knowledgeDocumentService,
             AIProviderService aiProviderService,
             ProjectService projectService,
-            SystemConfigService systemConfigService) {
+            SystemConfigService systemConfigService,
+            OutlineService outlineService,
+            PlotService plotService,
+            CausalityService causalityService,
+            WorldSettingService worldSettingService) {
         this.chapterService = chapterService;
         this.knowledgeDocumentService = knowledgeDocumentService;
         this.aiProviderService = aiProviderService;
         this.projectService = projectService;
         this.systemConfigService = systemConfigService;
+        this.outlineService = outlineService;
+        this.plotService = plotService;
+        this.causalityService = causalityService;
+        this.worldSettingService = worldSettingService;
     }
 
     @Override
-    public AIWritingResponseVO generateContent(AIWritingRequestDTO requestDTO) {
-        PreparedGenerationContext context = prepareGeneration(requestDTO);
+    public AIWritingResponseVO generateContent(Long userId, AIWritingRequestDTO requestDTO) {
+        PreparedGenerationContext context = prepareGeneration(userId, requestDTO);
         String generatedContent = aiProviderService.generateText(
                 context.provider(),
                 context.selectedModel(),
@@ -64,8 +89,8 @@ public class AIWritingServiceImpl extends ServiceImpl<AIWritingRecordMapper, AIW
     }
 
     @Override
-    public void streamContent(AIWritingRequestDTO requestDTO, Consumer<AIWritingStreamEventVO> eventConsumer) {
-        PreparedGenerationContext context = prepareGeneration(requestDTO);
+    public void streamContent(Long userId, AIWritingRequestDTO requestDTO, Consumer<AIWritingStreamEventVO> eventConsumer) {
+        PreparedGenerationContext context = prepareGeneration(userId, requestDTO);
 
         eventConsumer.accept(AIWritingStreamEventVO.meta(
                 context.writingType(),
@@ -83,7 +108,7 @@ public class AIWritingServiceImpl extends ServiceImpl<AIWritingRecordMapper, AIW
                 null,
                 context.maxTokens(),
                 delta -> {
-                    if (delta == null || delta.isEmpty()) {
+                    if (!StringUtils.hasText(delta)) {
                         return;
                     }
                     contentBuilder.append(delta);
@@ -160,10 +185,10 @@ public class AIWritingServiceImpl extends ServiceImpl<AIWritingRecordMapper, AIW
         }
     }
 
-    private PreparedGenerationContext prepareGeneration(AIWritingRequestDTO requestDTO) {
-        Chapter chapter = chapterService.getById(requestDTO.getChapterId());
-        if (chapter == null || Integer.valueOf(1).equals(chapter.getDeleted())) {
-            throw new IllegalArgumentException("章节不存在");
+    private PreparedGenerationContext prepareGeneration(Long userId, AIWritingRequestDTO requestDTO) {
+        Chapter chapter = chapterService.getChapterWithAuth(requestDTO.getChapterId(), userId);
+        if (chapter == null) {
+            throw new IllegalArgumentException("章节不存在或无权访问");
         }
 
         String currentContent = normalizeText(requestDTO.getCurrentContent());
@@ -173,6 +198,7 @@ public class AIWritingServiceImpl extends ServiceImpl<AIWritingRecordMapper, AIW
         String selectedModel = resolveModelName(provider, requestDTO.getSelectedModel());
         String promptSnapshot = resolvePromptSnapshot(requestDTO.getPromptSnapshot(), writingType);
         Project project = chapter.getProjectId() == null ? null : projectService.getById(chapter.getProjectId());
+        WritingContextBundle contextBundle = buildContextBundle(userId, project, chapter, userInstruction);
 
         return new PreparedGenerationContext(
                 chapter,
@@ -183,8 +209,66 @@ public class AIWritingServiceImpl extends ServiceImpl<AIWritingRecordMapper, AIW
                 selectedModel,
                 promptSnapshot,
                 buildSystemPrompt(promptSnapshot),
-                buildUserPrompt(project, chapter, currentContent, writingType, userInstruction),
+                buildUserPrompt(project, chapter, contextBundle, currentContent, writingType, userInstruction),
                 normalizeMaxTokens(requestDTO.getMaxTokens())
+        );
+    }
+
+    private WritingContextBundle buildContextBundle(Long userId, Project project, Chapter chapter, String userInstruction) {
+        if (project == null || chapter.getProjectId() == null) {
+            return WritingContextBundle.empty();
+        }
+
+        List<Outline> outlines = outlineService.getProjectOutlines(project.getId(), userId);
+        Outline currentOutline = outlines.stream()
+                .filter(item -> item.getChapterId() != null && item.getChapterId().equals(chapter.getId()))
+                .findFirst()
+                .orElse(null);
+
+        Set<Long> relatedPlotIds = new LinkedHashSet<>();
+        Set<Long> relatedCausalityIds = new LinkedHashSet<>();
+        if (currentOutline != null) {
+            relatedPlotIds.addAll(currentOutline.getRelatedPlotIdList() == null ? List.of() : currentOutline.getRelatedPlotIdList());
+            relatedCausalityIds.addAll(currentOutline.getRelatedCausalityIdList() == null ? List.of() : currentOutline.getRelatedCausalityIdList());
+        }
+
+        List<Plot> allPlots = plotService.getProjectPlots(project.getId());
+        List<Plot> relevantPlots = allPlots.stream()
+                .filter(item -> item.getChapterId() != null && item.getChapterId().equals(chapter.getId()) || relatedPlotIds.contains(item.getId()))
+                .limit(MAX_CONTEXT_ITEMS)
+                .collect(Collectors.toCollection(ArrayList::new));
+        if (relevantPlots.isEmpty()) {
+            relevantPlots = allPlots.stream().limit(MAX_CONTEXT_ITEMS).toList();
+        }
+
+        List<Causality> allCausalities = causalityService.getProjectCausalities(project.getId(), userId);
+        List<Causality> relevantCausalities = allCausalities.stream()
+                .filter(item -> relatedCausalityIds.contains(item.getId()))
+                .limit(MAX_CONTEXT_ITEMS)
+                .collect(Collectors.toCollection(ArrayList::new));
+        if (relevantCausalities.isEmpty()) {
+            relevantCausalities = allCausalities.stream().limit(MAX_CONTEXT_ITEMS).toList();
+        }
+
+        List<WorldSettingVO> worldSettings = worldSettingService.getWorldSettingsByProjectId(project.getId()).stream()
+                .limit(MAX_CONTEXT_ITEMS)
+                .toList();
+
+        String retrievalQuery = String.join(" ",
+                safe(chapter.getTitle(), ""),
+                userInstruction,
+                currentOutline == null ? "" : safe(currentOutline.getSummary(), currentOutline.getTitle()));
+        List<KnowledgeDocument> knowledgeDocuments = StringUtils.hasText(retrievalQuery)
+                ? knowledgeDocumentService.queryDocuments(project.getId(), userId, retrievalQuery).stream().limit(3).toList()
+                : List.of();
+
+        return new WritingContextBundle(
+                currentOutline,
+                relevantPlots,
+                relevantCausalities,
+                worldSettings,
+                knowledgeDocuments,
+                chapter.getRequiredCharacterNames() == null ? List.of() : chapter.getRequiredCharacterNames()
         );
     }
 
@@ -280,46 +364,173 @@ public class AIWritingServiceImpl extends ServiceImpl<AIWritingRecordMapper, AIW
     private String buildUserPrompt(
             Project project,
             Chapter chapter,
+            WritingContextBundle contextBundle,
             String currentContent,
             String writingType,
             String userInstruction) {
         StringBuilder builder = new StringBuilder();
-        builder.append("请帮助我处理当前章节正文。\n");
+        builder.append("请基于以下上下文处理当前章节正文。\n");
+
         if (project != null) {
+            builder.append("【项目信息】\n");
             builder.append("项目名称：").append(safe(project.getName(), "未命名项目")).append('\n');
             if (StringUtils.hasText(project.getGenre())) {
-                builder.append("项目题材：").append(project.getGenre().trim()).append('\n');
+                builder.append("题材类型：").append(project.getGenre().trim()).append('\n');
             }
             if (StringUtils.hasText(project.getDescription())) {
                 builder.append("项目简介：").append(project.getDescription().trim()).append('\n');
             }
+            if (StringUtils.hasText(project.getTags())) {
+                builder.append("项目标签：").append(project.getTags().trim()).append('\n');
+            }
+            builder.append('\n');
         }
 
+        builder.append("【当前章节】\n");
         builder.append("章节标题：").append(safe(chapter.getTitle(), "未命名章节")).append('\n');
         if (chapter.getOrderNum() != null) {
             builder.append("章节顺序：第 ").append(chapter.getOrderNum()).append(" 章\n");
         }
-
-        switch (writingType) {
-            case "draft" -> builder.append("当前正文为空，需要先拟生成一段可继续扩写的章节初稿。\n");
-            case "continue" -> builder.append("请基于已有正文自然续写后续内容，不要重复已经写过的句子。\n");
-            case "expand" -> builder.append("请在保留现有情节事实的前提下，输出扩写后的完整章节版本。\n");
-            case "rewrite" -> builder.append("请保留核心剧情意图，输出重写后的完整章节版本。\n");
-            case "polish" -> builder.append("请保留剧情事实，输出润色后的完整章节版本。\n");
-            default -> builder.append("请输出可直接放入章节中的正文内容。\n");
+        if (!contextBundle.requiredCharacters().isEmpty()) {
+            builder.append("本章必须出现人物：").append(String.join("、", contextBundle.requiredCharacters())).append('\n');
         }
+        builder.append(resolveWritingIntent(writingType));
 
+        appendOutlineSection(builder, contextBundle.currentOutline());
+        appendPlotSection(builder, contextBundle.plots());
+        appendCausalitySection(builder, contextBundle.causalities());
+        appendWorldSettingSection(builder, contextBundle.worldSettings());
+        appendKnowledgeSection(builder, contextBundle.knowledgeDocuments());
+
+        builder.append("\n【当前正文】\n");
         if (StringUtils.hasText(currentContent)) {
-            builder.append("\n当前正文：\n").append(currentContent.trim()).append('\n');
+            builder.append(currentContent.trim()).append('\n');
         } else {
-            builder.append("\n当前正文：\n（暂无正文内容）\n");
+            builder.append("（当前章节还没有正文，请先拟生成一版可继续扩写的草稿）\n");
         }
 
         if (StringUtils.hasText(userInstruction)) {
-            builder.append("\n补充要求：\n").append(userInstruction.trim()).append('\n');
+            builder.append("\n【补充要求】\n").append(userInstruction.trim()).append('\n');
         }
 
         return builder.toString();
+    }
+
+    private void appendOutlineSection(StringBuilder builder, Outline outline) {
+        if (outline == null) {
+            return;
+        }
+        builder.append("\n【章节大纲】\n");
+        if (StringUtils.hasText(outline.getTitle())) {
+            builder.append("大纲标题：").append(outline.getTitle().trim()).append('\n');
+        }
+        if (StringUtils.hasText(outline.getSummary())) {
+            builder.append("大纲摘要：").append(limit(outline.getSummary(), 220)).append('\n');
+        }
+        if (StringUtils.hasText(outline.getStageGoal())) {
+            builder.append("本章目标：").append(limit(outline.getStageGoal(), 160)).append('\n');
+        }
+        if (StringUtils.hasText(outline.getKeyConflict())) {
+            builder.append("核心冲突：").append(limit(outline.getKeyConflict(), 160)).append('\n');
+        }
+        if (StringUtils.hasText(outline.getTurningPoints())) {
+            builder.append("关键转折：").append(limit(outline.getTurningPoints(), 180)).append('\n');
+        }
+        if (StringUtils.hasText(outline.getExpectedEnding())) {
+            builder.append("收束方向：").append(limit(outline.getExpectedEnding(), 160)).append('\n');
+        }
+        if (outline.getFocusCharacterNames() != null && !outline.getFocusCharacterNames().isEmpty()) {
+            builder.append("聚焦人物：").append(String.join("、", outline.getFocusCharacterNames())).append('\n');
+        }
+    }
+
+    private void appendPlotSection(StringBuilder builder, List<Plot> plots) {
+        if (plots == null || plots.isEmpty()) {
+            return;
+        }
+        builder.append("\n【相关剧情节点】\n");
+        for (int index = 0; index < Math.min(plots.size(), MAX_CONTEXT_ITEMS); index++) {
+            Plot plot = plots.get(index);
+            builder.append(index + 1).append(". ");
+            builder.append(safe(plot.getTitle(), "未命名剧情"));
+            if (StringUtils.hasText(plot.getDescription())) {
+                builder.append("｜").append(limit(plot.getDescription(), 120));
+            }
+            if (StringUtils.hasText(plot.getConflicts())) {
+                builder.append("｜冲突：").append(limit(plot.getConflicts(), 80));
+            }
+            if (StringUtils.hasText(plot.getResolutions())) {
+                builder.append("｜预期解法：").append(limit(plot.getResolutions(), 80));
+            }
+            builder.append('\n');
+        }
+    }
+
+    private void appendCausalitySection(StringBuilder builder, List<Causality> causalities) {
+        if (causalities == null || causalities.isEmpty()) {
+            return;
+        }
+        builder.append("\n【相关因果链】\n");
+        for (int index = 0; index < Math.min(causalities.size(), MAX_CONTEXT_ITEMS); index++) {
+            Causality item = causalities.get(index);
+            builder.append(index + 1).append(". ");
+            builder.append(safe(item.getName(), safe(item.getRelationship(), "未命名因果")));
+            if (StringUtils.hasText(item.getDescription())) {
+                builder.append("｜").append(limit(item.getDescription(), 120));
+            }
+            if (StringUtils.hasText(item.getConditions())) {
+                builder.append("｜触发条件：").append(limit(item.getConditions(), 80));
+            }
+            builder.append('\n');
+        }
+    }
+
+    private void appendWorldSettingSection(StringBuilder builder, List<WorldSettingVO> worldSettings) {
+        if (worldSettings == null || worldSettings.isEmpty()) {
+            return;
+        }
+        builder.append("\n【世界观上下文】\n");
+        for (int index = 0; index < Math.min(worldSettings.size(), MAX_CONTEXT_ITEMS); index++) {
+            WorldSettingVO item = worldSettings.get(index);
+            builder.append(index + 1).append(". ");
+            builder.append(safe(item.getName(), item.getTitle() == null ? "未命名设定" : item.getTitle()));
+            if (StringUtils.hasText(item.getCategory())) {
+                builder.append("（").append(item.getCategory().trim()).append("）");
+            }
+            String description = StringUtils.hasText(item.getDescription()) ? item.getDescription() : item.getContent();
+            if (StringUtils.hasText(description)) {
+                builder.append("｜").append(limit(description, 120));
+            }
+            builder.append('\n');
+        }
+    }
+
+    private void appendKnowledgeSection(StringBuilder builder, List<KnowledgeDocument> knowledgeDocuments) {
+        if (knowledgeDocuments == null || knowledgeDocuments.isEmpty()) {
+            return;
+        }
+        builder.append("\n【知识片段】\n");
+        for (int index = 0; index < knowledgeDocuments.size(); index++) {
+            KnowledgeDocument document = knowledgeDocuments.get(index);
+            builder.append(index + 1).append(". ");
+            builder.append(safe(document.getTitle(), "未命名知识"));
+            String summary = StringUtils.hasText(document.getSummary()) ? document.getSummary() : document.getContentText();
+            if (StringUtils.hasText(summary)) {
+                builder.append("｜").append(limit(summary, 120));
+            }
+            builder.append('\n');
+        }
+    }
+
+    private String resolveWritingIntent(String writingType) {
+        return switch (writingType) {
+            case "draft" -> "任务要求：当前正文为空，请先拟生成一版可继续扩写的章节初稿。\n";
+            case "continue" -> "任务要求：请承接现有正文自然续写，不要重复已经写过的句子。\n";
+            case "expand" -> "任务要求：请在不偏离既有剧情事实的前提下扩写，输出更完整的章节版本。\n";
+            case "rewrite" -> "任务要求：保留核心剧情意图，输出重写后的完整章节版本。\n";
+            case "polish" -> "任务要求：保留剧情事实，对当前正文做语言润色与节奏优化。\n";
+            default -> "任务要求：输出可直接放入章节中的小说正文。\n";
+        };
     }
 
     private void syncKnowledgeDocument(Chapter chapter, AIWritingRecord record) {
@@ -408,7 +619,7 @@ public class AIWritingServiceImpl extends ServiceImpl<AIWritingRecordMapper, AIW
 
     private String getDefaultPromptTemplate(String writingType) {
         return switch (writingType) {
-            case "draft" -> "先根据章节标题和补充要求拟生成一段可继续扩写的小说正文初稿，优先搭好场景、人物状态和冲突起点。";
+            case "draft" -> "先根据章节标题、大纲和上下文拟生成一段可继续扩写的小说正文初稿，优先搭好场景、人物状态和冲突起点。";
             case "continue" -> "延续当前章节的叙事节奏，保持人物口吻与设定一致，优先推进当前冲突。";
             case "expand" -> "在不偏离原意的前提下补足细节、动作、环境与情绪描写，让场景更饱满。";
             case "rewrite" -> "保留关键信息与剧情目标，重写表达方式，提升节奏、清晰度和戏剧性。";
@@ -419,6 +630,14 @@ public class AIWritingServiceImpl extends ServiceImpl<AIWritingRecordMapper, AIW
 
     private String safe(String value, String fallback) {
         return StringUtils.hasText(value) ? value.trim() : fallback;
+    }
+
+    private String limit(String value, int maxLength) {
+        if (!StringUtils.hasText(value)) {
+            return "";
+        }
+        String normalized = value.replaceAll("\\s+", " ").trim();
+        return normalized.length() <= maxLength ? normalized : normalized.substring(0, maxLength) + "...";
     }
 
     private AIWritingResponseVO convertToVO(AIWritingRecord record) {
@@ -438,5 +657,18 @@ public class AIWritingServiceImpl extends ServiceImpl<AIWritingRecordMapper, AIW
             String systemPrompt,
             String userPrompt,
             Integer maxTokens) {
+    }
+
+    private record WritingContextBundle(
+            Outline currentOutline,
+            List<Plot> plots,
+            List<Causality> causalities,
+            List<WorldSettingVO> worldSettings,
+            List<KnowledgeDocument> knowledgeDocuments,
+            List<String> requiredCharacters) {
+
+        private static WritingContextBundle empty() {
+            return new WritingContextBundle(null, List.of(), List.of(), List.of(), List.of(), List.of());
+        }
     }
 }

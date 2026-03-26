@@ -9,6 +9,7 @@ import com.storyweaver.domain.entity.Causality;
 import com.storyweaver.domain.entity.Chapter;
 import com.storyweaver.domain.entity.ChapterCharacterLink;
 import com.storyweaver.domain.entity.KnowledgeDocument;
+import com.storyweaver.domain.entity.Outline;
 import com.storyweaver.domain.entity.Plot;
 import com.storyweaver.domain.entity.Project;
 import com.storyweaver.domain.entity.ProjectCharacterLink;
@@ -17,6 +18,7 @@ import com.storyweaver.repository.AIWritingRecordMapper;
 import com.storyweaver.repository.CausalityMapper;
 import com.storyweaver.repository.ChapterMapper;
 import com.storyweaver.repository.KnowledgeDocumentMapper;
+import com.storyweaver.repository.OutlineMapper;
 import com.storyweaver.repository.PlotMapper;
 import com.storyweaver.domain.vo.WorldSettingVO;
 import com.storyweaver.repository.ChapterCharacterMapper;
@@ -38,6 +40,7 @@ public class ProjectServiceImpl extends ServiceImpl<ProjectMapper, Project> impl
     private final WorldSettingService worldSettingService;
     private final ChapterMapper chapterMapper;
     private final PlotMapper plotMapper;
+    private final OutlineMapper outlineMapper;
     private final CausalityMapper causalityMapper;
     private final KnowledgeDocumentMapper knowledgeDocumentMapper;
     private final AIWritingRecordMapper aiWritingRecordMapper;
@@ -49,6 +52,7 @@ public class ProjectServiceImpl extends ServiceImpl<ProjectMapper, Project> impl
             WorldSettingService worldSettingService,
             ChapterMapper chapterMapper,
             PlotMapper plotMapper,
+            OutlineMapper outlineMapper,
             CausalityMapper causalityMapper,
             KnowledgeDocumentMapper knowledgeDocumentMapper,
             AIWritingRecordMapper aiWritingRecordMapper,
@@ -58,6 +62,7 @@ public class ProjectServiceImpl extends ServiceImpl<ProjectMapper, Project> impl
         this.worldSettingService = worldSettingService;
         this.chapterMapper = chapterMapper;
         this.plotMapper = plotMapper;
+        this.outlineMapper = outlineMapper;
         this.causalityMapper = causalityMapper;
         this.knowledgeDocumentMapper = knowledgeDocumentMapper;
         this.aiWritingRecordMapper = aiWritingRecordMapper;
@@ -157,6 +162,10 @@ public class ProjectServiceImpl extends ServiceImpl<ProjectMapper, Project> impl
         plotMapper.delete(new LambdaQueryWrapper<Plot>()
                 .eq(Plot::getProjectId, projectId)
                 .eq(Plot::getDeleted, 0));
+
+        outlineMapper.delete(new LambdaQueryWrapper<Outline>()
+                .eq(Outline::getProjectId, projectId)
+                .eq(Outline::getDeleted, 0));
 
         causalityMapper.delete(new LambdaQueryWrapper<Causality>()
                 .eq(Causality::getProjectId, projectId)

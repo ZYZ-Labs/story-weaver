@@ -41,8 +41,8 @@ public class AIWritingController {
         if (!AuthHeaderSupport.hasValidBearerToken(authorizationHeader)) {
             return ResponseEntity.status(401).build();
         }
-        SecurityUtils.getCurrentUserId(authentication);
-        AIWritingResponseVO response = aiWritingService.generateContent(requestDTO);
+        Long userId = SecurityUtils.getCurrentUserId(authentication);
+        AIWritingResponseVO response = aiWritingService.generateContent(userId, requestDTO);
         return ResponseEntity.ok(response);
     }
 
@@ -54,12 +54,12 @@ public class AIWritingController {
         if (!AuthHeaderSupport.hasValidBearerToken(authorizationHeader)) {
             return ResponseEntity.status(401).build();
         }
-        SecurityUtils.getCurrentUserId(authentication);
+        Long userId = SecurityUtils.getCurrentUserId(authentication);
 
         SseEmitter emitter = new SseEmitter(0L);
         Thread.startVirtualThread(() -> {
             try {
-                aiWritingService.streamContent(requestDTO, event -> sendStreamEvent(emitter, event));
+                aiWritingService.streamContent(userId, requestDTO, event -> sendStreamEvent(emitter, event));
                 emitter.complete();
             } catch (Exception exception) {
                 sendStreamEvent(emitter, AIWritingStreamEventVO.error(resolveMessage(exception)));

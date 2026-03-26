@@ -1,5 +1,7 @@
 # Story Weaver
 
+> AI 写作上下文流程图与泳道图见 [docs/ai-context-flow.md](./docs/ai-context-flow.md)。
+
 Story Weaver 是一个面向长篇小说创作的 AI 辅助平台，当前项目已经包含可运行的前后端、局域网开发访问、AI 流式正文生成、世界观关联、RAG、模型服务管理，以及镜像发布与服务端部署链路。
 
 ## 当前能力
@@ -124,6 +126,9 @@ mysql -u root -p < sql/002_seed_data.sql
 mysql -u root -p < sql/003_align_legacy_dev_schema.sql
 mysql -u root -p < sql/004_world_setting_and_naming_config.sql
 mysql -u root -p < sql/005_world_setting_association_and_character_attributes.sql
+mysql -u root -p < sql/006_account_security_and_user_management.sql
+mysql -u root -p < sql/007_character_reuse_and_chapter_binding.sql
+mysql -u root -p < sql/008_outline_module.sql
 ```
 
 ## Docker 相关文件说明

@@ -53,6 +53,12 @@ const router = createRouter({
           meta: { title: '世界观管理' },
         },
         {
+          path: 'outlines',
+          name: 'outlines',
+          component: () => import('@/views/outline/OutlineView.vue'),
+          meta: { title: '大纲管理' },
+        },
+        {
           path: 'plots',
           name: 'plots',
           component: () => import('@/views/plot/PlotView.vue'),
