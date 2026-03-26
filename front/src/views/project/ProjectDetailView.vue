@@ -3,6 +3,7 @@ import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import EmptyState from '@/components/EmptyState.vue'
+import MarkdownContent from '@/components/MarkdownContent.vue'
 import PageContainer from '@/components/PageContainer.vue'
 import {
   attachWorldSettingToProject,
@@ -143,8 +144,8 @@ watch(
         <v-window-item value="overview">
           <v-card-text class="pa-6">
             <div class="text-h5 font-weight-bold">{{ project?.name || '未找到项目' }}</div>
-            <div class="text-body-1 text-medium-emphasis mt-3">
-              {{ project?.description || '暂无项目说明。' }}
+            <div class="mt-3">
+              <MarkdownContent :source="project?.description" empty-text="暂无项目说明。" />
             </div>
 
             <v-row class="mt-4">
@@ -265,8 +266,8 @@ watch(
                       </v-chip>
                     </div>
 
-                    <div class="text-body-2 mt-4">
-                      {{ getWorldSettingDescription(item) }}
+                    <div class="mt-4">
+                      <MarkdownContent :source="getWorldSettingDescription(item)" empty-text="暂无设定内容" compact />
                     </div>
 
                     <div class="d-flex justify-space-between align-center mt-auto pt-4">
@@ -302,8 +303,11 @@ watch(
                 v-for="character in characterStore.characters"
                 :key="character.id"
                 :title="character.name"
-                :subtitle="character.description || '暂无角色描述'"
-              />
+              >
+                <template #subtitle>
+                  <MarkdownContent :source="character.description" empty-text="暂无角色描述" compact />
+                </template>
+              </v-list-item>
             </v-list>
           </v-card-text>
         </v-window-item>
@@ -321,8 +325,11 @@ watch(
                 v-for="chapter in chapterStore.chapters"
                 :key="chapter.id"
                 :title="chapter.title"
-                :subtitle="chapter.content || '暂无章节正文'"
-              />
+              >
+                <template #subtitle>
+                  <MarkdownContent :source="chapter.content" empty-text="暂无章节正文" compact />
+                </template>
+              </v-list-item>
             </v-list>
           </v-card-text>
         </v-window-item>

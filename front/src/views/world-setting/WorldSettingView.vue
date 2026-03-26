@@ -3,6 +3,8 @@ import { computed, onMounted, reactive, ref, watch } from 'vue'
 
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import EmptyState from '@/components/EmptyState.vue'
+import MarkdownContent from '@/components/MarkdownContent.vue'
+import MarkdownEditor from '@/components/MarkdownEditor.vue'
 import PageContainer from '@/components/PageContainer.vue'
 import { useProjectStore } from '@/stores/project'
 import { useWorldSettingStore } from '@/stores/world-setting'
@@ -206,8 +208,12 @@ async function loadData(id: number) {
                     </v-chip>
                   </div>
 
-                  <div class="text-body-2 mt-4">
-                    {{ item.description || item.content || '暂无设定描述' }}
+                  <div class="mt-4">
+                    <MarkdownContent
+                      :source="item.description || item.content"
+                      empty-text="暂无设定描述"
+                      compact
+                    />
                   </div>
 
                   <div class="d-flex ga-2 mt-auto pt-4">
@@ -254,8 +260,12 @@ async function loadData(id: number) {
                     </v-chip>
                   </div>
 
-                  <div class="text-body-2 mt-4">
-                    {{ item.description || item.content || '暂无设定描述' }}
+                  <div class="mt-4">
+                    <MarkdownContent
+                      :source="item.description || item.content"
+                      empty-text="暂无设定描述"
+                      compact
+                    />
                   </div>
 
                   <div class="d-flex ga-2 mt-auto pt-4">
@@ -284,12 +294,13 @@ async function loadData(id: number) {
               <v-combobox v-model="form.category" label="模型分类" :items="categoryOptions" />
             </v-col>
             <v-col cols="12">
-              <v-textarea
+              <MarkdownEditor
                 v-model="form.description"
-                rows="8"
                 label="设定描述"
+                :rows="8"
                 hint="可以录入世界规则、地理背景、阵营介绍、历史事件等内容。新建后会自动关联到当前项目，同时进入世界观模型库。"
                 persistent-hint
+                preview-empty-text="暂无设定描述"
               />
             </v-col>
           </v-row>

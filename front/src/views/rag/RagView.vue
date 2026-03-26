@@ -3,6 +3,8 @@ import { computed, onMounted, reactive, ref, watch } from 'vue'
 
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import EmptyState from '@/components/EmptyState.vue'
+import MarkdownContent from '@/components/MarkdownContent.vue'
+import MarkdownEditor from '@/components/MarkdownEditor.vue'
 import PageContainer from '@/components/PageContainer.vue'
 import { useCausalityStore } from '@/stores/causality'
 import { useChapterStore } from '@/stores/chapter'
@@ -472,14 +474,28 @@ function getStatusColor(status?: string) {
                 <div class="text-caption text-medium-emphasis mt-1">
                   {{ sourceMeta.meta || '已选择来源' }}
                 </div>
-                <div class="text-body-2 mt-2">{{ sourceMeta.summary || '暂无摘要' }}</div>
+                <div class="mt-2">
+                  <MarkdownContent compact :source="sourceMeta.summary" empty-text="暂无摘要" />
+                </div>
               </v-alert>
             </v-col>
             <v-col cols="12">
-              <v-textarea v-model="form.contentText" label="正文" rows="8" />
+              <MarkdownEditor
+                v-model="form.contentText"
+                label="正文"
+                :rows="10"
+                auto-grow
+                preview-empty-text="暂无正文"
+              />
             </v-col>
             <v-col cols="12">
-              <v-textarea v-model="form.summary" label="摘要" rows="3" />
+              <MarkdownEditor
+                v-model="form.summary"
+                label="摘要"
+                :rows="4"
+                auto-grow
+                preview-empty-text="暂无摘要"
+              />
             </v-col>
           </v-row>
         </v-card-text>

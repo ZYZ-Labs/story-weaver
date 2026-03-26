@@ -3,6 +3,8 @@ import { computed, onMounted, reactive, ref, watch } from 'vue'
 
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import EmptyState from '@/components/EmptyState.vue'
+import MarkdownContent from '@/components/MarkdownContent.vue'
+import MarkdownEditor from '@/components/MarkdownEditor.vue'
 import NameSuggestionDialog from '@/components/NameSuggestionDialog.vue'
 import PageContainer from '@/components/PageContainer.vue'
 import { generateNameSuggestions } from '@/api/name-suggestion'
@@ -441,7 +443,10 @@ async function confirmDelete() {
             </div>
             <v-divider class="my-4" />
             <div class="chapter-preview-content">
-              {{ currentPreview.content || '暂无正文。可以直接在下方让 AI 先帮你拟一版初稿。' }}
+              <MarkdownContent
+                :source="currentPreview.content"
+                empty-text="暂无正文。可以直接在下方让 AI 先帮你拟一版初稿。"
+              />
             </div>
           </v-card-text>
           <v-card-text v-else class="text-medium-emphasis">
@@ -553,7 +558,7 @@ async function confirmDelete() {
               />
 
               <div v-if="displayChapterAiStreamingContent" class="chapter-ai-result">
-                {{ displayChapterAiStreamingContent }}
+                <MarkdownContent :source="displayChapterAiStreamingContent" empty-text="暂无生成内容" />
               </div>
               <div v-else class="text-medium-emphasis">
                 这里会实时显示生成中的正文片段，生成完成后可直接采纳到当前章节。
@@ -615,7 +620,12 @@ async function confirmDelete() {
               <v-text-field v-model="form.orderNum" type="number" label="章节顺序" />
             </v-col>
             <v-col cols="12">
-              <v-textarea v-model="form.content" rows="10" label="正文内容" />
+              <MarkdownEditor
+                v-model="form.content"
+                label="正文内容"
+                :rows="10"
+                preview-empty-text="暂无正文内容"
+              />
             </v-col>
             <v-col cols="12">
               <v-select
@@ -702,8 +712,6 @@ async function confirmDelete() {
 .chapter-preview-content {
   max-height: 320px;
   overflow: auto;
-  white-space: pre-wrap;
-  line-height: 1.8;
   padding-right: 4px;
 }
 
@@ -713,8 +721,6 @@ async function confirmDelete() {
   padding: 16px;
   border-radius: 16px;
   background: rgba(var(--v-theme-surface-variant), 0.28);
-  white-space: pre-wrap;
-  line-height: 1.8;
 }
 
 @media (max-width: 960px) {

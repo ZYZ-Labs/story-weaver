@@ -3,6 +3,8 @@ import { computed, onMounted, reactive, ref, watch } from 'vue'
 
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import EmptyState from '@/components/EmptyState.vue'
+import MarkdownContent from '@/components/MarkdownContent.vue'
+import MarkdownEditor from '@/components/MarkdownEditor.vue'
 import PageContainer from '@/components/PageContainer.vue'
 import { useChapterStore } from '@/stores/chapter'
 import { useCharacterStore } from '@/stores/character'
@@ -65,13 +67,12 @@ const characterOptions = computed(() =>
 watch(
   projectId,
   async (id) => {
-    if (id) {
-      await Promise.allSettled([
-        plotStore.fetchByProject(id),
-        chapterStore.fetchByProject(id),
-        characterStore.fetchByProject(id),
-      ])
-    }
+    if (!id) return
+    await Promise.allSettled([
+      plotStore.fetchByProject(id),
+      chapterStore.fetchByProject(id),
+      characterStore.fetchByProject(id),
+    ])
   },
   { immediate: true },
 )
@@ -84,9 +85,9 @@ watch(
 
     const autoTitle = `围绕《${chapter.title}》的剧情节点`
     const autoDescription = chapter.content
-      ? chapter.content.slice(0, 80)
+      ? chapter.content.slice(0, 120)
       : `从章节《${chapter.title}》延展出的剧情事件。`
-    const autoTimeline = `第${chapter.orderNum || '?'}章 · ${chapter.title}`
+    const autoTimeline = `第 ${chapter.orderNum || '?'} 章 · ${chapter.title}`
 
     if (!form.title || form.title === lastAutoTitle.value) {
       form.title = autoTitle
@@ -149,6 +150,7 @@ function openCreate() {
 function openEdit(id: number) {
   const target = plotStore.plotlines.find((item) => item.id === id)
   if (!target) return
+
   editingId.value = id
   Object.assign(form, {
     chapterId: target.chapterId ?? null,
@@ -163,8 +165,9 @@ function openEdit(id: number) {
     conflicts: target.conflicts || '',
     resolutions: target.resolutions || '',
     tags: splitCsv(target.tags),
-    status: target.status || 1,
+    status: target.status ?? 1,
   })
+
   lastAutoTitle.value = form.title
   lastAutoDescription.value = form.description
   lastAutoTimeline.value = form.timeline
@@ -178,6 +181,10 @@ function requestDelete(id: number) {
 
 function getPlotTypeLabel(plotType?: number) {
   return plotTypeOptions.find((item) => item.value === plotType)?.title || '未分类'
+}
+
+function getStatusLabel(status?: number) {
+  return statusOptions.find((item) => item.value === status)?.title || '未知'
 }
 
 async function submit() {
@@ -194,6 +201,7 @@ async function submit() {
   } else {
     await plotStore.create(projectId.value, payload)
   }
+
   dialog.value = false
 }
 
@@ -207,16 +215,24 @@ async function confirmDelete() {
 <template>
   <PageContainer
     title="剧情管理"
-    description="剧情页已经接入项目上下文，创建时可以直接选择章节、关联人物和剧情类型，减少重复录入。"
+    description="剧情节点现在支持 Markdown 编辑和预览，适合写冲突、伏笔、解决方案等结构化内容。"
   >
     <template #actions>
-      <v-btn color="primary" prepend-icon="mdi-plus" :disabled="!projectId" @click="openCreate">新增剧情</v-btn>
+      <v-btn color="primary" prepend-icon="mdi-plus" :disabled="!projectId" @click="openCreate">
+        新增剧情
+      </v-btn>
     </template>
 
     <EmptyState
       v-if="!projectId"
       title="先选择项目"
       description="剧情线和项目强绑定，请先在左侧切换到一个小说项目。"
+    />
+
+    <EmptyState
+      v-else-if="!plotStore.plotlines.length"
+      title="还没有剧情节点"
+      description="可以先从章节生成一个初步剧情节点，再补充冲突、解决方案和时间线。"
     />
 
     <v-row v-else>
@@ -226,15 +242,40 @@ async function confirmDelete() {
             <div class="d-flex justify-space-between align-start ga-3">
               <div>
                 <div class="text-h6">{{ plot.title || '未命名剧情' }}</div>
-                <div class="text-body-2 text-medium-emphasis mt-2">{{ plot.description || '暂无剧情简介' }}</div>
+                <div class="d-flex flex-wrap ga-2 mt-3">
+                  <v-chip size="small" color="primary" variant="tonal">
+                    {{ getPlotTypeLabel(plot.plotType) }}
+                  </v-chip>
+                  <v-chip size="small" variant="outlined">
+                    {{ getStatusLabel(plot.status) }}
+                  </v-chip>
+                </div>
               </div>
-              <v-chip color="primary" variant="tonal">{{ getPlotTypeLabel(plot.plotType) }}</v-chip>
             </div>
 
-            <div class="text-body-2 mt-4">关联人物：{{ plot.characters || '暂无' }}</div>
-            <div class="text-body-2 mt-2">冲突：{{ plot.conflicts || '暂无' }}</div>
-            <div class="text-body-2 mt-2">解决：{{ plot.resolutions || '暂无' }}</div>
-            <div class="text-caption text-medium-emphasis mt-3">时间线：{{ plot.timeline || '未设置' }}</div>
+            <div class="mt-4">
+              <div class="text-caption text-medium-emphasis mb-1">剧情简介</div>
+              <MarkdownContent compact :source="plot.description" empty-text="暂无剧情简介" />
+            </div>
+
+            <div class="mt-3">
+              <div class="text-caption text-medium-emphasis mb-1">详细内容</div>
+              <MarkdownContent compact :source="plot.content" empty-text="暂无详细内容" />
+            </div>
+
+            <div class="text-body-2 mt-4">涉及角色：{{ plot.characters || '暂无' }}</div>
+            <div class="text-body-2 mt-2">涉及地点：{{ plot.locations || '暂无' }}</div>
+            <div class="text-caption text-medium-emphasis mt-2">时间线：{{ plot.timeline || '未设置' }}</div>
+
+            <div class="mt-3">
+              <div class="text-caption text-medium-emphasis mb-1">冲突</div>
+              <MarkdownContent compact :source="plot.conflicts" empty-text="暂无冲突描述" />
+            </div>
+
+            <div class="mt-3">
+              <div class="text-caption text-medium-emphasis mb-1">解决方案</div>
+              <MarkdownContent compact :source="plot.resolutions" empty-text="暂无解决方案" />
+            </div>
 
             <div class="d-flex ga-2 mt-5">
               <v-btn variant="outlined" @click="openEdit(plot.id)">编辑</v-btn>
@@ -281,10 +322,22 @@ async function confirmDelete() {
               <v-text-field v-model="form.title" label="标题" />
             </v-col>
             <v-col cols="12">
-              <v-textarea v-model="form.description" label="简介" rows="3" />
+              <MarkdownEditor
+                v-model="form.description"
+                label="简介"
+                :rows="4"
+                auto-grow
+                preview-empty-text="暂无剧情简介"
+              />
             </v-col>
             <v-col cols="12">
-              <v-textarea v-model="form.content" label="详细内容" rows="6" />
+              <MarkdownEditor
+                v-model="form.content"
+                label="详细内容"
+                :rows="8"
+                auto-grow
+                preview-empty-text="暂无详细内容"
+              />
             </v-col>
             <v-col cols="12" md="6">
               <v-select
@@ -317,10 +370,22 @@ async function confirmDelete() {
               <v-text-field v-model="form.sequence" label="排序" type="number" />
             </v-col>
             <v-col cols="12">
-              <v-textarea v-model="form.conflicts" label="冲突" rows="3" />
+              <MarkdownEditor
+                v-model="form.conflicts"
+                label="冲突"
+                :rows="4"
+                auto-grow
+                preview-empty-text="暂无冲突描述"
+              />
             </v-col>
             <v-col cols="12">
-              <v-textarea v-model="form.resolutions" label="解决方案" rows="3" />
+              <MarkdownEditor
+                v-model="form.resolutions"
+                label="解决方案"
+                :rows="4"
+                auto-grow
+                preview-empty-text="暂无解决方案"
+              />
             </v-col>
           </v-row>
         </v-card-text>
@@ -331,6 +396,11 @@ async function confirmDelete() {
       </v-card>
     </v-dialog>
 
-    <ConfirmDialog v-model="confirmVisible" title="删除剧情" text="确认删除这条剧情线吗？" @confirm="confirmDelete" />
+    <ConfirmDialog
+      v-model="confirmVisible"
+      title="删除剧情"
+      text="确认删除这条剧情线吗？"
+      @confirm="confirmDelete"
+    />
   </PageContainer>
 </template>

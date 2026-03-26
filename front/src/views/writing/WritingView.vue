@@ -2,6 +2,8 @@
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 
 import EmptyState from '@/components/EmptyState.vue'
+import MarkdownContent from '@/components/MarkdownContent.vue'
+import MarkdownEditor from '@/components/MarkdownEditor.vue'
 import PageContainer from '@/components/PageContainer.vue'
 import { useChapterStore } from '@/stores/chapter'
 import { useProjectStore } from '@/stores/project'
@@ -97,6 +99,14 @@ const generateButtonLabel = computed(() => {
 const currentWordCount = computed(
   () => chapterStore.currentChapter?.wordCount || chapterStore.currentChapter?.content?.length || 0,
 )
+const currentChapterContent = computed({
+  get: () => chapterStore.currentChapter?.content || '',
+  set: (value: string) => {
+    if (chapterStore.currentChapter) {
+      chapterStore.currentChapter.content = value
+    }
+  },
+})
 const isOllamaSelected = computed(() => selectedProvider.value?.providerType === 'ollama')
 const sharedStreamState = computed(() => writingStore.getStreamState(chapterId.value))
 const displayGenerating = computed(() => sharedStreamState.value.generating || generating.value)
@@ -353,20 +363,15 @@ async function rejectRecord(record: AIWritingRecord) {
             </v-chip>
           </div>
 
-          <v-textarea
-            :model-value="chapterStore.currentChapter?.content || ''"
-            label="章节正文"
-            rows="18"
-            class="mt-4"
-            :disabled="!chapterStore.currentChapter"
-            @update:model-value="
-              (value) => {
-                if (chapterStore.currentChapter) {
-                  chapterStore.currentChapter.content = value
-                }
-              }
-            "
-          />
+          <div class="mt-4">
+            <MarkdownEditor
+              v-model="currentChapterContent"
+              label="章节正文"
+              :rows="18"
+              :disabled="!chapterStore.currentChapter"
+              preview-empty-text="当前章节还没有正文"
+            />
+          </div>
 
           <div class="d-flex justify-space-between align-center mt-4">
             <div class="text-body-2 text-medium-emphasis">当前字数：{{ currentWordCount }}</div>
@@ -509,7 +514,7 @@ async function rejectRecord(record: AIWritingRecord) {
             />
 
             <div v-if="displayStreamingContent" class="stream-preview">
-              {{ displayStreamingContent }}
+              <MarkdownContent :source="displayStreamingContent" empty-text="暂无生成内容" />
             </div>
             <div v-else class="text-medium-emphasis">
               这里会实时显示生成中的正文片段。切换到章节页后再回来，也会继续显示当前章节的进行中内容。
@@ -528,8 +533,12 @@ async function rejectRecord(record: AIWritingRecord) {
               v-for="record in writingStore.records"
               :key="record.id"
               :title="`${getWritingTypeLabel(record.writingType)} · ${getRecordStatusLabel(record.status)}`"
-              :subtitle="record.generatedContent"
             >
+              <template #subtitle>
+                <div class="mt-2">
+                  <MarkdownContent :source="record.generatedContent" empty-text="暂无生成内容" compact />
+                </div>
+              </template>
               <template #append>
                 <div class="d-flex flex-column align-end ga-2">
                   <div class="d-flex ga-2">

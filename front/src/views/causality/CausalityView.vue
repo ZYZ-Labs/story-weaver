@@ -3,6 +3,8 @@ import { computed, onMounted, reactive, ref, watch } from 'vue'
 
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import EmptyState from '@/components/EmptyState.vue'
+import MarkdownContent from '@/components/MarkdownContent.vue'
+import MarkdownEditor from '@/components/MarkdownEditor.vue'
 import PageContainer from '@/components/PageContainer.vue'
 import { useCausalityStore } from '@/stores/causality'
 import { useChapterStore } from '@/stores/chapter'
@@ -134,9 +136,7 @@ watch(
     if (type !== 'manual' && !getEntityOptions(type).some((item) => item.value === form.causeEntityId)) {
       form.causeEntityId = ''
     }
-    if (!form.causeType || form.causeType === entityTypeToNodeType[type]) {
-      form.causeType = entityTypeToNodeType[type] || 'event'
-    }
+    form.causeType = entityTypeToNodeType[type] || 'event'
   },
 )
 
@@ -146,9 +146,7 @@ watch(
     if (type !== 'manual' && !getEntityOptions(type).some((item) => item.value === form.effectEntityId)) {
       form.effectEntityId = ''
     }
-    if (!form.effectType || form.effectType === entityTypeToNodeType[type]) {
-      form.effectType = entityTypeToNodeType[type] || 'result'
-    }
+    form.effectType = entityTypeToNodeType[type] || 'result'
   },
 )
 
@@ -161,7 +159,7 @@ onMounted(() => {
 function splitCsv(value?: string) {
   if (!value) return []
   return value
-    .split(/[，,]/)
+    .split(/[,，]/)
     .map((item) => item.trim())
     .filter(Boolean)
 }
@@ -192,6 +190,7 @@ function getWritingTypeLabel(value?: string) {
     expand: '扩写',
     rewrite: '改写',
     polish: '润色',
+    draft: '草稿',
   }
   return mapping[value || ''] || value || '草稿'
 }
@@ -226,7 +225,7 @@ function getEntityOptions(type: string): EntityOption[] {
         value: String(item.id),
         title: item.name,
         summary: item.description || '',
-        meta: '人物',
+        meta: item.projectRole || '人物',
       }))
     case 'knowledge':
       return ragStore.documents.map((item) => ({
@@ -256,7 +255,7 @@ function getRelationshipLabel(value: string) {
 }
 
 function getStatusLabel(value?: number) {
-  return statusOptions.find((item) => item.value === value)?.title || '未知状态'
+  return statusOptions.find((item) => item.value === value)?.title || '未知'
 }
 
 function getDisplayEntity(type: string, storedId?: string, fallback = '未关联') {
@@ -281,8 +280,8 @@ function syncAutoFields() {
         : ''
 
   const summaryParts = [
-    causeMeta?.summary ? `原因摘要：${causeMeta.summary.slice(0, 60)}` : '',
-    effectMeta?.summary ? `结果摘要：${effectMeta.summary.slice(0, 60)}` : '',
+    causeMeta?.summary ? `原因摘要：${causeMeta.summary.slice(0, 80)}` : '',
+    effectMeta?.summary ? `结果摘要：${effectMeta.summary.slice(0, 80)}` : '',
   ].filter(Boolean)
 
   const autoDescription = causeMeta && effectMeta
@@ -329,6 +328,7 @@ function openCreate() {
 function openEdit(id: number) {
   const target = causalityStore.nodes.find((item) => item.id === id)
   if (!target) return
+
   editingId.value = id
   Object.assign(form, {
     name: target.name || '',
@@ -340,7 +340,7 @@ function openEdit(id: number) {
     causeEntityType: target.causeEntityType || 'manual',
     effectEntityType: target.effectEntityType || 'manual',
     relationship: target.relationship || 'causes',
-    strength: target.strength || 60,
+    strength: target.strength ?? 60,
     conditions: target.conditions || '',
     tags: splitCsv(target.tags),
     status: target.status ?? 1,
@@ -383,7 +383,7 @@ async function confirmDelete() {
 <template>
   <PageContainer
     title="因果管理"
-    description="因果关系可以直接绑定章节、剧情事件、人物、知识条目和 AI 草稿任务，创建时会自动带出标题和描述，减少重复录入。"
+    description="因果关系支持 Markdown 描述与条件编写，并可直接关联章节、剧情、人物、知识条目和 AI 草稿。"
   >
     <template #actions>
       <v-btn color="primary" prepend-icon="mdi-plus" :disabled="!projectId" @click="openCreate">
@@ -395,6 +395,12 @@ async function confirmDelete() {
       v-if="!projectId"
       title="先选择项目"
       description="因果关系会基于当前项目的章节、剧情、人物和知识数据建立关联。"
+    />
+
+    <EmptyState
+      v-else-if="!causalityStore.nodes.length"
+      title="还没有因果关系"
+      description="可以先从章节、剧情事件或 AI 草稿中选一对原因和结果，快速建立因果链。"
     />
 
     <div v-else class="content-grid two-column">
@@ -438,8 +444,10 @@ async function confirmDelete() {
             v-for="node in causalityStore.nodes.slice(0, 8)"
             :key="node.id"
             :title="node.name || '未命名因果'"
-            :subtitle="node.description || '暂无描述'"
           >
+            <template #subtitle>
+              <MarkdownContent compact :source="node.description" empty-text="暂无描述" />
+            </template>
             <template #append>
               <v-chip size="small" variant="tonal">{{ getRelationshipLabel(node.relationship || 'causes') }}</v-chip>
             </template>
@@ -465,8 +473,15 @@ async function confirmDelete() {
                 item-value="value"
               />
             </v-col>
+
             <v-col cols="12">
-              <v-textarea v-model="form.description" label="描述" rows="3" />
+              <MarkdownEditor
+                v-model="form.description"
+                label="描述"
+                :rows="4"
+                auto-grow
+                preview-empty-text="暂无描述"
+              />
             </v-col>
 
             <v-col cols="12" md="6">
@@ -515,7 +530,9 @@ async function confirmDelete() {
                         <div class="text-caption text-medium-emphasis mt-1">
                           {{ causeEntityMeta.meta || '已选择' }}
                         </div>
-                        <div class="text-body-2 mt-2">{{ causeEntityMeta.summary || '暂无摘要' }}</div>
+                        <div class="mt-2">
+                          <MarkdownContent compact :source="causeEntityMeta.summary" empty-text="暂无摘要" />
+                        </div>
                       </v-alert>
                     </v-col>
                   </v-row>
@@ -569,7 +586,9 @@ async function confirmDelete() {
                         <div class="text-caption text-medium-emphasis mt-1">
                           {{ effectEntityMeta.meta || '已选择' }}
                         </div>
-                        <div class="text-body-2 mt-2">{{ effectEntityMeta.summary || '暂无摘要' }}</div>
+                        <div class="mt-2">
+                          <MarkdownContent compact :source="effectEntityMeta.summary" empty-text="暂无摘要" />
+                        </div>
                       </v-alert>
                     </v-col>
                   </v-row>
@@ -594,7 +613,13 @@ async function confirmDelete() {
               <v-combobox v-model="form.tags" label="标签" multiple chips closable-chips />
             </v-col>
             <v-col cols="12">
-              <v-textarea v-model="form.conditions" label="触发条件" rows="3" />
+              <MarkdownEditor
+                v-model="form.conditions"
+                label="触发条件"
+                :rows="4"
+                auto-grow
+                preview-empty-text="暂无触发条件"
+              />
             </v-col>
           </v-row>
         </v-card-text>

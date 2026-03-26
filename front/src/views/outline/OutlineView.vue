@@ -3,6 +3,8 @@ import { computed, onMounted, reactive, ref, watch } from 'vue'
 
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import EmptyState from '@/components/EmptyState.vue'
+import MarkdownContent from '@/components/MarkdownContent.vue'
+import MarkdownEditor from '@/components/MarkdownEditor.vue'
 import PageContainer from '@/components/PageContainer.vue'
 import { useCausalityStore } from '@/stores/causality'
 import { useChapterStore } from '@/stores/chapter'
@@ -271,19 +273,25 @@ async function confirmDelete() {
                 <v-chip color="primary" variant="tonal">{{ getStatusLabel(outline.status) }}</v-chip>
               </div>
 
-              <div class="text-body-2 mt-4">{{ outline.summary || '暂无摘要' }}</div>
+              <div class="mt-4">
+                <MarkdownContent :source="outline.summary" empty-text="暂无摘要" compact />
+              </div>
 
-              <div v-if="outline.stageGoal" class="text-body-2 mt-4">
-                本章目标：{{ outline.stageGoal }}
+              <div v-if="outline.stageGoal" class="mt-4">
+                <div class="text-body-2 font-weight-medium mb-2">本章目标</div>
+                <MarkdownContent :source="outline.stageGoal" compact />
               </div>
-              <div v-if="outline.keyConflict" class="text-body-2 mt-2">
-                核心冲突：{{ outline.keyConflict }}
+              <div v-if="outline.keyConflict" class="mt-3">
+                <div class="text-body-2 font-weight-medium mb-2">核心冲突</div>
+                <MarkdownContent :source="outline.keyConflict" compact />
               </div>
-              <div v-if="outline.turningPoints" class="text-body-2 mt-2">
-                关键转折：{{ outline.turningPoints }}
+              <div v-if="outline.turningPoints" class="mt-3">
+                <div class="text-body-2 font-weight-medium mb-2">关键转折</div>
+                <MarkdownContent :source="outline.turningPoints" compact />
               </div>
-              <div v-if="outline.expectedEnding" class="text-body-2 mt-2">
-                收束方向：{{ outline.expectedEnding }}
+              <div v-if="outline.expectedEnding" class="mt-3">
+                <div class="text-body-2 font-weight-medium mb-2">收束方向</div>
+                <MarkdownContent :source="outline.expectedEnding" compact />
               </div>
 
               <div v-if="outline.focusCharacterNames?.length" class="d-flex flex-wrap ga-2 mt-4">
@@ -347,26 +355,27 @@ async function confirmDelete() {
               <v-text-field v-model="form.title" label="大纲标题" />
             </v-col>
             <v-col cols="12">
-              <v-textarea v-model="form.summary" label="摘要" rows="3" />
+              <MarkdownEditor v-model="form.summary" label="摘要" :rows="3" preview-empty-text="暂无摘要" />
             </v-col>
             <v-col cols="12" md="6">
-              <v-textarea v-model="form.stageGoal" label="本章目标" rows="3" />
+              <MarkdownEditor v-model="form.stageGoal" label="本章目标" :rows="3" preview-empty-text="暂无本章目标" />
             </v-col>
             <v-col cols="12" md="6">
-              <v-textarea v-model="form.keyConflict" label="核心冲突" rows="3" />
+              <MarkdownEditor v-model="form.keyConflict" label="核心冲突" :rows="3" preview-empty-text="暂无核心冲突" />
             </v-col>
             <v-col cols="12" md="6">
-              <v-textarea v-model="form.turningPoints" label="关键转折" rows="3" />
+              <MarkdownEditor v-model="form.turningPoints" label="关键转折" :rows="3" preview-empty-text="暂无关键转折" />
             </v-col>
             <v-col cols="12" md="6">
-              <v-textarea v-model="form.expectedEnding" label="收束方向" rows="3" />
+              <MarkdownEditor v-model="form.expectedEnding" label="收束方向" :rows="3" preview-empty-text="暂无收束方向" />
             </v-col>
             <v-col cols="12">
-              <v-textarea
+              <MarkdownEditor
                 v-model="form.content"
                 label="详细大纲正文"
-                rows="8"
+                :rows="8"
                 placeholder="可以按场景、节拍、镜头感或事件顺序展开详细大纲。"
+                preview-empty-text="暂无详细大纲正文"
               />
             </v-col>
             <v-col cols="12" md="4">

@@ -5,6 +5,7 @@ import { useRouter } from 'vue-router'
 import { getWorldSettings } from '@/api/world-setting'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import EmptyState from '@/components/EmptyState.vue'
+import MarkdownEditor from '@/components/MarkdownEditor.vue'
 import PageContainer from '@/components/PageContainer.vue'
 import { useProjectStore } from '@/stores/project'
 import { useWorldSettingStore } from '@/stores/world-setting'
@@ -217,7 +218,13 @@ onMounted(async () => {
               />
             </v-col>
             <v-col cols="12">
-              <v-textarea v-model="form.description" label="项目简介" rows="4" />
+              <MarkdownEditor
+                v-model="form.description"
+                label="项目简介"
+                :rows="5"
+                auto-grow
+                preview-empty-text="暂无项目简介"
+              />
             </v-col>
             <v-col cols="12">
               <v-autocomplete

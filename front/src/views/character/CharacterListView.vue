@@ -5,6 +5,8 @@ import { generateCharacterAttributes } from '@/api/character'
 import { generateNameSuggestions } from '@/api/name-suggestion'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import EmptyState from '@/components/EmptyState.vue'
+import MarkdownContent from '@/components/MarkdownContent.vue'
+import MarkdownEditor from '@/components/MarkdownEditor.vue'
 import NameSuggestionDialog from '@/components/NameSuggestionDialog.vue'
 import PageContainer from '@/components/PageContainer.vue'
 import { useCharacterStore } from '@/stores/character'
@@ -527,8 +529,8 @@ async function confirmDelete() {
               </v-col>
               <v-col v-if="selectedReusableCharacter" cols="12">
                 <div class="text-subtitle-2 font-weight-medium">角色预览</div>
-                <div class="text-body-2 text-medium-emphasis mt-2">
-                  {{ selectedReusableCharacter.description || '暂无简介。' }}
+                <div class="mt-2">
+                  <MarkdownContent compact :source="selectedReusableCharacter.description" empty-text="暂无简介" />
                 </div>
                 <div v-if="selectedReusableCharacter.projectNames?.length" class="d-flex flex-wrap ga-2 mt-3">
                   <v-chip
@@ -559,12 +561,14 @@ async function confirmDelete() {
                 </div>
               </v-col>
               <v-col cols="12">
-                <v-textarea
+                <MarkdownEditor
                   v-model="form.description"
-                  rows="4"
                   label="角色描述"
+                  :rows="5"
                   hint="尽量描述身份、气质、经历或当前定位，下面的属性生成会优先参考这里。"
                   persistent-hint
+                  auto-grow
+                  preview-empty-text="暂无角色描述"
                 />
               </v-col>
               <v-col cols="12" class="pt-0">
@@ -611,10 +615,22 @@ async function confirmDelete() {
                 <v-text-field v-model="attributeForm.goal" label="核心目标" />
               </v-col>
               <v-col cols="12" md="6">
-                <v-textarea v-model="attributeForm.background" rows="4" label="背景" />
+                <MarkdownEditor
+                  v-model="attributeForm.background"
+                  label="背景"
+                  :rows="5"
+                  auto-grow
+                  preview-empty-text="暂无背景"
+                />
               </v-col>
               <v-col cols="12" md="6">
-                <v-textarea v-model="attributeForm.appearance" rows="4" label="外貌" />
+                <MarkdownEditor
+                  v-model="attributeForm.appearance"
+                  label="外貌"
+                  :rows="5"
+                  auto-grow
+                  preview-empty-text="暂无外貌描写"
+                />
               </v-col>
 
               <v-col cols="12" md="6">
@@ -797,7 +813,13 @@ async function confirmDelete() {
               </v-col>
 
               <v-col cols="12">
-                <v-textarea v-model="attributeForm.notes" rows="3" label="备注 / 秘密" />
+                <MarkdownEditor
+                  v-model="attributeForm.notes"
+                  label="备注 / 秘密"
+                  :rows="4"
+                  auto-grow
+                  preview-empty-text="暂无备注"
+                />
               </v-col>
               <v-col cols="12">
                 <v-textarea
