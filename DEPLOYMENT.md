@@ -328,6 +328,10 @@ mysql -u root -p < sql/002_seed_data.sql
 mysql -u root -p < sql/003_align_legacy_dev_schema.sql
 mysql -u root -p < sql/004_world_setting_and_naming_config.sql
 mysql -u root -p < sql/005_world_setting_association_and_character_attributes.sql
+mysql -u root -p < sql/006_account_security_and_user_management.sql
+mysql -u root -p < sql/007_character_reuse_and_chapter_binding.sql
+mysql -u root -p < sql/008_outline_module.sql
+mysql -u root -p < sql/009_ai_writing_chat_and_workflow.sql
 ```
 
 默认账号：

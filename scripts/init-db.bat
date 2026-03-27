@@ -36,6 +36,27 @@ if errorlevel 1 exit /b 1
 call :run_step 5 002_seed_data.sql
 if errorlevel 1 exit /b 1
 
+call :run_step 6 003_align_legacy_dev_schema.sql
+if errorlevel 1 exit /b 1
+
+call :run_step 7 004_world_setting_and_naming_config.sql
+if errorlevel 1 exit /b 1
+
+call :run_step 8 005_world_setting_association_and_character_attributes.sql
+if errorlevel 1 exit /b 1
+
+call :run_step 9 006_account_security_and_user_management.sql
+if errorlevel 1 exit /b 1
+
+call :run_step 10 007_character_reuse_and_chapter_binding.sql
+if errorlevel 1 exit /b 1
+
+call :run_step 11 008_outline_module.sql
+if errorlevel 1 exit /b 1
+
+call :run_step 12 009_ai_writing_chat_and_workflow.sql
+if errorlevel 1 exit /b 1
+
 echo.
 echo ========================================
 echo ✅ 数据库初始化完成！

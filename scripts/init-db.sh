@@ -6,6 +6,13 @@ SQL_DIR="$ROOT_DIR/sql"
 SQL_STEPS=(
   "001_init_database.sql"
   "002_seed_data.sql"
+  "003_align_legacy_dev_schema.sql"
+  "004_world_setting_and_naming_config.sql"
+  "005_world_setting_association_and_character_attributes.sql"
+  "006_account_security_and_user_management.sql"
+  "007_character_reuse_and_chapter_binding.sql"
+  "008_outline_module.sql"
+  "009_ai_writing_chat_and_workflow.sql"
 )
 
 run_sql_step() {
