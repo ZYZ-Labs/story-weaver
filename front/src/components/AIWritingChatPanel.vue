@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from 'vue'
 
+import MarkdownContent from '@/components/MarkdownContent.vue'
 import { useWritingChatStore } from '@/stores/writing-chat'
 import type { AIWritingChatMessage } from '@/types'
 
@@ -153,6 +154,10 @@ function roleLabel(role: string) {
   if (role === 'system') return '系统'
   return '助手'
 }
+
+function isAiOutput(role: string) {
+  return role === 'assistant'
+}
 </script>
 
 <template>
@@ -287,7 +292,12 @@ function roleLabel(role: string) {
                 <span v-if="message.compressed">已压缩</span>
                 <span v-if="message.pinnedToBackground">已固定到背景</span>
               </div>
-              <div class="bubble-text">{{ message.content }}</div>
+              <MarkdownContent
+                v-if="isAiOutput(message.role)"
+                :source="message.content"
+                compact
+              />
+              <div v-else class="bubble-text">{{ message.content }}</div>
               <div v-if="message.role !== 'system'" class="chat-bubble__actions">
                 <v-btn variant="text" size="small" @click="toggleBackground(message)">
                   {{ message.pinnedToBackground ? '移出固定背景' : '固定到背景' }}
@@ -307,16 +317,16 @@ function roleLabel(role: string) {
           </div>
 
           <div v-if="chatState.sending" class="chat-row chat-row--assistant">
-            <div class="chat-bubble chat-bubble--assistant chat-bubble--streaming">
-              <div class="chat-bubble__meta">
-                <span>助手</span>
-                <span>回复中</span>
-              </div>
-              <div v-if="streamingReply" class="bubble-text">{{ streamingReply }}</div>
-              <div v-else class="chat-typing">
-                <span class="chat-typing-dot" />
-                <span class="chat-typing-dot" />
-                <span class="chat-typing-dot" />
+          <div class="chat-bubble chat-bubble--assistant chat-bubble--streaming">
+            <div class="chat-bubble__meta">
+              <span>助手</span>
+              <span>回复中</span>
+            </div>
+            <MarkdownContent v-if="streamingReply" :source="streamingReply" compact />
+            <div v-else class="chat-typing">
+              <span class="chat-typing-dot" />
+              <span class="chat-typing-dot" />
+              <span class="chat-typing-dot" />
               </div>
             </div>
           </div>
