@@ -1,6 +1,7 @@
 package com.storyweaver.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
+import com.storyweaver.domain.dto.AIWritingBackgroundNoteRequestDTO;
 import com.storyweaver.domain.dto.AIWritingChatMessageRequestDTO;
 import com.storyweaver.domain.entity.AIProvider;
 import com.storyweaver.domain.entity.AIWritingChatMessage;
@@ -131,6 +132,46 @@ public class AIWritingChatServiceImpl implements AIWritingChatService {
 
         message.setPinnedToBackground(pinned ? 1 : 0);
         messageMapper.updateById(message);
+        return toSessionVO(session, loadMessages(session.getId()));
+    }
+
+    @Override
+    @Transactional
+    public AIWritingChatSessionVO addBackgroundNote(Long userId, Long chapterId, AIWritingBackgroundNoteRequestDTO requestDTO) {
+        Chapter chapter = requireChapter(chapterId, userId);
+        String content = normalizeText(requestDTO.getContent());
+        if (!StringUtils.hasText(content)) {
+            throw new IllegalArgumentException("背景信息内容不能为空");
+        }
+
+        AIWritingSession session = ensureSession(chapter, userId);
+        appendMessage(session, chapterId, "user", content, true);
+        syncActiveWindowChars(session);
+        return toSessionVO(session, loadMessages(session.getId()));
+    }
+
+    @Override
+    @Transactional
+    public AIWritingChatSessionVO updateBackgroundNote(Long userId, Long messageId, AIWritingBackgroundNoteRequestDTO requestDTO) {
+        AIWritingChatMessage message = messageMapper.selectById(messageId);
+        if (message == null || Integer.valueOf(1).equals(message.getDeleted())) {
+            throw new IllegalArgumentException("背景信息不存在");
+        }
+        if (Integer.valueOf(1).equals(message.getCompressed())) {
+            throw new IllegalArgumentException("已压缩的背景信息暂不支持修改");
+        }
+
+        Chapter chapter = requireChapter(message.getChapterId(), userId);
+        AIWritingSession session = ensureSession(chapter, userId);
+        String content = normalizeText(requestDTO.getContent());
+        if (!StringUtils.hasText(content)) {
+            throw new IllegalArgumentException("背景信息内容不能为空");
+        }
+
+        message.setContent(content);
+        message.setPinnedToBackground(1);
+        messageMapper.updateById(message);
+        syncActiveWindowChars(session);
         return toSessionVO(session, loadMessages(session.getId()));
     }
 
@@ -273,13 +314,22 @@ public class AIWritingChatServiceImpl implements AIWritingChatService {
     }
 
     private void appendMessage(AIWritingSession session, Long chapterId, String role, String content) {
+        appendMessage(session, chapterId, role, content, false);
+    }
+
+    private void appendMessage(
+            AIWritingSession session,
+            Long chapterId,
+            String role,
+            String content,
+            boolean pinnedToBackground) {
         AIWritingChatMessage message = new AIWritingChatMessage();
         message.setSessionId(session.getId());
         message.setChapterId(chapterId);
         message.setRole(role);
         message.setContent(StringUtils.hasText(content) ? content.trim() : "");
         message.setSegmentNo(session.getActiveSegmentNo());
-        message.setPinnedToBackground(0);
+        message.setPinnedToBackground(pinnedToBackground ? 1 : 0);
         message.setCompressed(0);
         messageMapper.insert(message);
     }

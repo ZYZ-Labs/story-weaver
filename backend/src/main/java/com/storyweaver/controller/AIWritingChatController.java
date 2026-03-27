@@ -1,5 +1,6 @@
 package com.storyweaver.controller;
 
+import com.storyweaver.domain.dto.AIWritingBackgroundNoteRequestDTO;
 import com.storyweaver.domain.dto.AIWritingChatMessagePinRequestDTO;
 import com.storyweaver.domain.dto.AIWritingChatMessageRequestDTO;
 import com.storyweaver.domain.vo.AIWritingChatSessionVO;
@@ -102,6 +103,34 @@ public class AIWritingChatController {
         boolean pinned = requestDTO == null || requestDTO.getPinned() == null || requestDTO.getPinned();
         AIWritingChatSessionVO session = aiWritingChatService.setMessagePinnedToBackground(userId, messageId, pinned);
         return ResponseEntity.ok(Map.of("code", 200, "message", "更新成功", "data", session));
+    }
+
+    @PostMapping("/{chapterId}/background-notes")
+    public ResponseEntity<Map<String, Object>> addBackgroundNote(
+            @PathVariable Long chapterId,
+            @Validated @RequestBody AIWritingBackgroundNoteRequestDTO requestDTO,
+            @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
+            Authentication authentication) {
+        if (!AuthHeaderSupport.hasValidBearerToken(authorizationHeader)) {
+            return AuthHeaderSupport.unauthorizedResponse();
+        }
+        Long userId = SecurityUtils.getCurrentUserId(authentication);
+        AIWritingChatSessionVO session = aiWritingChatService.addBackgroundNote(userId, chapterId, requestDTO);
+        return ResponseEntity.ok(Map.of("code", 200, "message", "背景信息已添加", "data", session));
+    }
+
+    @PostMapping("/messages/{messageId}/content")
+    public ResponseEntity<Map<String, Object>> updateBackgroundNote(
+            @PathVariable Long messageId,
+            @Validated @RequestBody AIWritingBackgroundNoteRequestDTO requestDTO,
+            @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
+            Authentication authentication) {
+        if (!AuthHeaderSupport.hasValidBearerToken(authorizationHeader)) {
+            return AuthHeaderSupport.unauthorizedResponse();
+        }
+        Long userId = SecurityUtils.getCurrentUserId(authentication);
+        AIWritingChatSessionVO session = aiWritingChatService.updateBackgroundNote(userId, messageId, requestDTO);
+        return ResponseEntity.ok(Map.of("code", 200, "message", "背景信息已更新", "data", session));
     }
 
     private void sendStreamEvent(SseEmitter emitter, AIWritingChatStreamEventVO event) {

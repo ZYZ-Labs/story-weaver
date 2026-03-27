@@ -89,6 +89,30 @@ export const useWritingChatStore = defineStore('writing-chat', () => {
     }
   }
 
+  async function addBackgroundNote(chapterId: number, content: string) {
+    const state = ensureState(chapterId)
+    state.error = ''
+    try {
+      state.session = await writingChatApi.addWritingChatBackgroundNote(chapterId, content)
+      return state.session
+    } catch (error) {
+      state.error = error instanceof Error ? error.message : '添加背景信息失败'
+      throw error
+    }
+  }
+
+  async function updateBackgroundNote(chapterId: number, messageId: number, content: string) {
+    const state = ensureState(chapterId)
+    state.error = ''
+    try {
+      state.session = await writingChatApi.updateWritingChatBackgroundNote(messageId, content)
+      return state.session
+    } catch (error) {
+      state.error = error instanceof Error ? error.message : '修改背景信息失败'
+      throw error
+    }
+  }
+
   function ensureState(chapterId: number) {
     if (!chatStates.value[chapterId]) {
       chatStates.value[chapterId] = createEmptyState()
@@ -124,5 +148,7 @@ export const useWritingChatStore = defineStore('writing-chat', () => {
     fetchSession,
     sendMessage,
     setMessageBackground,
+    addBackgroundNote,
+    updateBackgroundNote,
   }
 })

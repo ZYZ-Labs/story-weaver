@@ -1,6 +1,7 @@
 package com.storyweaver.service;
 
 import com.storyweaver.domain.dto.AIWritingChatMessageRequestDTO;
+import com.storyweaver.domain.dto.AIWritingBackgroundNoteRequestDTO;
 import com.storyweaver.domain.entity.AIProvider;
 import com.storyweaver.domain.vo.AIWritingChatParticipationVO;
 import com.storyweaver.domain.vo.AIWritingChatSessionVO;
@@ -21,6 +22,10 @@ public interface AIWritingChatService {
             Consumer<AIWritingChatStreamEventVO> eventConsumer);
 
     AIWritingChatSessionVO setMessagePinnedToBackground(Long userId, Long messageId, boolean pinned);
+
+    AIWritingChatSessionVO addBackgroundNote(Long userId, Long chapterId, AIWritingBackgroundNoteRequestDTO requestDTO);
+
+    AIWritingChatSessionVO updateBackgroundNote(Long userId, Long messageId, AIWritingBackgroundNoteRequestDTO requestDTO);
 
     boolean hasBackgroundContext(Long userId, Long chapterId);
 

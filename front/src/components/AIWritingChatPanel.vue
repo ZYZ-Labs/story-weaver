@@ -25,20 +25,28 @@ const props = withDefaults(
 
 const writingChatStore = useWritingChatStore()
 const draftMessage = ref('')
+const backgroundDraft = ref('')
+const editingMessageId = ref<number | null>(null)
+const editingContent = ref('')
+const savingBackgroundId = ref<number | null>(null)
+const addingBackground = ref(false)
 const historyRef = ref<HTMLElement | null>(null)
 
 const chatState = computed(() => writingChatStore.getState(props.chapterId))
 const session = computed(() => chatState.value.session)
+const timelineMessages = computed(() => session.value?.messages || [])
 const backgroundMessages = computed(() =>
-  (session.value?.messages || []).filter((item) => item.pinnedToBackground),
+  timelineMessages.value.filter((item) => item.pinnedToBackground && !item.compressed),
 )
 const pendingUserMessage = computed(() => chatState.value.pendingUserMessage)
 const streamingReply = computed(() => chatState.value.streamingReply)
 const hasCompressedSummary = computed(() => Boolean(session.value?.compressedSummary?.trim()))
+const panelDisabled = computed(() => props.disabled || !props.chapterId)
 
 watch(
   () => props.chapterId,
   async (chapterId) => {
+    resetEditorState()
     if (!chapterId) {
       return
     }
@@ -56,32 +64,81 @@ watch(
 )
 
 async function sendMessage() {
-  if (!props.chapterId || !draftMessage.value.trim() || props.disabled) {
+  if (panelDisabled.value || !draftMessage.value.trim()) {
     return
   }
   const content = draftMessage.value.trim()
   draftMessage.value = ''
   try {
-    await writingChatStore.sendMessage(props.chapterId, {
+    await writingChatStore.sendMessage(props.chapterId!, {
       content,
       selectedProviderId: props.selectedProviderId ?? null,
       selectedModel: props.selectedModel || '',
       entryPoint: props.entryPoint,
     })
   } catch {
-    // 错误状态已经写入 store，这里不再重复抛出
+    draftMessage.value = content
+  }
+}
+
+async function addBackgroundNote() {
+  if (panelDisabled.value || !backgroundDraft.value.trim()) {
+    return
+  }
+  addingBackground.value = true
+  const content = backgroundDraft.value.trim()
+  try {
+    await writingChatStore.addBackgroundNote(props.chapterId!, content)
+    backgroundDraft.value = ''
+  } finally {
+    addingBackground.value = false
   }
 }
 
 async function toggleBackground(message: AIWritingChatMessage) {
-  if (!props.chapterId) {
+  if (panelDisabled.value) {
     return
   }
   await writingChatStore.setMessageBackground(
-    props.chapterId,
+    props.chapterId!,
     message.id,
     !message.pinnedToBackground,
   )
+  if (editingMessageId.value === message.id) {
+    resetEditorState()
+  }
+}
+
+function startEdit(message: AIWritingChatMessage) {
+  editingMessageId.value = message.id
+  editingContent.value = message.content
+}
+
+function cancelEdit() {
+  resetEditorState()
+}
+
+async function saveEdit() {
+  if (panelDisabled.value || !editingMessageId.value || !editingContent.value.trim()) {
+    return
+  }
+  savingBackgroundId.value = editingMessageId.value
+  try {
+    await writingChatStore.updateBackgroundNote(
+      props.chapterId!,
+      editingMessageId.value,
+      editingContent.value.trim(),
+    )
+    resetEditorState()
+  } finally {
+    savingBackgroundId.value = null
+  }
+}
+
+function resetEditorState() {
+  editingMessageId.value = null
+  editingContent.value = ''
+  savingBackgroundId.value = null
 }
 
 function handleComposerKeydown(event: KeyboardEvent) {
@@ -99,150 +156,297 @@ function roleLabel(role: string) {
 </script>
 
 <template>
-  <v-card class="soft-panel">
+  <v-card class="chat-panel">
     <v-card-title>{{ title }}</v-card-title>
     <v-card-subtitle>
-      在这里先讨论背景设定、场景方向和人物要求；生成初稿时，固定背景、聊天摘要和最近对话会先归纳整理，再参与后续写作上下文构建。
+      先在这里讨论设定、人物和场景目标。生成初稿时，固定背景、历史摘要和最近对话会先归纳整理，再参与写作上下文构建。
     </v-card-subtitle>
-    <v-card-text class="pt-4">
+
+    <v-card-text class="chat-panel__body">
       <v-alert v-if="chatState.error" type="error" variant="tonal" class="mb-4">
         {{ chatState.error }}
       </v-alert>
 
-      <div class="chat-status-bar mb-4">
+      <div class="chat-panel__meta">
         <v-chip size="small" color="primary" variant="tonal">
-          已固定背景 {{ backgroundMessages.length }}
+          固定背景 {{ backgroundMessages.length }}
         </v-chip>
         <v-chip v-if="hasCompressedSummary" size="small" color="secondary" variant="tonal">
-          已启用历史摘要压缩
+          已启用历史压缩摘要
         </v-chip>
         <div class="text-caption text-medium-emphasis">
           活动窗口：{{ session?.activeWindowChars || 0 }} / {{ session?.maxWindowChars || 0 }}
         </div>
       </div>
 
-      <div ref="historyRef" class="chat-history">
-        <div
-          v-for="message in session?.messages || []"
-          :key="message.id"
-          class="chat-row"
-          :class="`chat-row--${message.role}`"
-        >
-          <div class="chat-bubble" :class="`chat-bubble--${message.role}`">
-            <div class="d-flex justify-space-between align-start ga-3">
-              <div class="chat-bubble__content">
-                <div class="text-caption text-medium-emphasis">
-                  {{ roleLabel(message.role) }}
-                  <span v-if="message.compressed"> | 已压缩</span>
-                  <span v-if="message.segmentNo"> | 分段 {{ message.segmentNo }}</span>
-                </div>
-                <div class="text-body-2 bubble-text">{{ message.content }}</div>
-              </div>
-              <v-btn
-                v-if="message.role !== 'system'"
-                size="x-small"
-                variant="text"
-                class="chat-pin-btn"
-                @click="toggleBackground(message)"
-              >
-                {{ message.pinnedToBackground ? '取消固定' : '固定到背景' }}
-              </v-btn>
-            </div>
-          </div>
-        </div>
-
-        <div v-if="pendingUserMessage" class="chat-row chat-row--user">
-          <div class="chat-bubble chat-bubble--user chat-bubble--pending">
-            <div class="text-caption text-medium-emphasis">你 | 正在发送</div>
-            <div class="text-body-2 bubble-text">{{ pendingUserMessage }}</div>
-          </div>
-        </div>
-
-        <div v-if="chatState.sending" class="chat-row chat-row--assistant">
-          <div class="chat-bubble chat-bubble--assistant chat-bubble--streaming">
-            <div class="text-caption text-medium-emphasis">
-              助手 | 正在回复
-            </div>
-            <div v-if="streamingReply" class="text-body-2 bubble-text">{{ streamingReply }}</div>
-            <div v-else class="chat-typing">
-              <span class="chat-typing-dot" />
-              <span class="chat-typing-dot" />
-              <span class="chat-typing-dot" />
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div v-if="backgroundMessages.length" class="background-memory mt-4">
-        <div class="text-subtitle-2 font-weight-medium mb-2">已固定背景速览</div>
-        <div class="d-flex flex-column ga-2">
-          <div v-for="message in backgroundMessages" :key="`bg-${message.id}`" class="memory-item">
-            <div class="text-caption text-medium-emphasis">{{ roleLabel(message.role) }}</div>
-            <div class="text-body-2 bubble-text">{{ message.content }}</div>
-          </div>
-        </div>
-      </div>
-
-      <div class="chat-composer mt-4">
-        <v-textarea
-          v-model="draftMessage"
-          rows="4"
-          auto-grow
-          hide-details
-          label="背景聊天消息"
-          placeholder="可以讨论场景目标、世界观补充、人物口吻，或任何值得沉淀到背景信息里的内容。按 Enter 发送，Shift + Enter 换行。"
-          :disabled="disabled || chatState.sending"
-          @keydown="handleComposerKeydown"
-        />
-
-        <div class="d-flex justify-space-between align-center ga-3 mt-3">
+      <section class="panel-section">
+        <div class="panel-section__header">
+          <div class="text-subtitle-1 font-weight-medium">固定背景</div>
           <div class="text-caption text-medium-emphasis">
-            长文本回复现在会走流式输出，避免等待太久时像卡住。
+            可以直接手动补充稳定设定，也可以从聊天消息中固定。
           </div>
-          <v-btn color="primary" :loading="chatState.sending" :disabled="disabled" @click="sendMessage">
-            发送到背景聊天
-          </v-btn>
         </div>
-      </div>
+
+        <div class="background-composer">
+          <v-textarea
+            v-model="backgroundDraft"
+            rows="3"
+            auto-grow
+            hide-details
+            label="新增固定背景"
+            placeholder="例如：女主此时仍然不知道玉佩来自太子；本章不要提前揭示幕后身份。"
+            :disabled="panelDisabled || addingBackground"
+          />
+          <div class="background-composer__actions">
+            <div class="text-caption text-medium-emphasis">
+              这里适合写稳定设定、硬性限制和明确偏好。
+            </div>
+            <v-btn
+              color="primary"
+              variant="flat"
+              :loading="addingBackground"
+              :disabled="panelDisabled"
+              @click="addBackgroundNote"
+            >
+              添加到固定背景
+            </v-btn>
+          </div>
+        </div>
+
+        <div v-if="backgroundMessages.length" class="background-list">
+          <article v-for="message in backgroundMessages" :key="`bg-${message.id}`" class="background-item">
+            <div class="background-item__meta">
+              <span>{{ roleLabel(message.role) }}</span>
+              <span v-if="message.segmentNo">分段 {{ message.segmentNo }}</span>
+            </div>
+
+            <div v-if="editingMessageId === message.id" class="background-item__editor">
+              <v-textarea
+                v-model="editingContent"
+                rows="3"
+                auto-grow
+                hide-details
+                :disabled="savingBackgroundId === message.id"
+              />
+              <div class="background-item__actions">
+                <v-btn
+                  color="primary"
+                  variant="flat"
+                  size="small"
+                  :loading="savingBackgroundId === message.id"
+                  @click="saveEdit"
+                >
+                  保存修改
+                </v-btn>
+                <v-btn variant="text" size="small" @click="cancelEdit">取消</v-btn>
+              </div>
+            </div>
+
+            <template v-else>
+              <div class="background-item__content">{{ message.content }}</div>
+              <div class="background-item__actions">
+                <v-btn variant="text" size="small" @click="startEdit(message)">编辑</v-btn>
+                <v-btn variant="text" size="small" @click="toggleBackground(message)">
+                  移出固定背景
+                </v-btn>
+              </div>
+            </template>
+          </article>
+        </div>
+
+        <div v-else class="empty-note">
+          还没有固定背景。可以先发起聊天，再把有价值的消息固定下来；也可以直接在上方手动添加。
+        </div>
+      </section>
+
+      <section class="panel-section">
+        <div class="panel-section__header">
+          <div class="text-subtitle-1 font-weight-medium">聊天讨论</div>
+          <div class="text-caption text-medium-emphasis">
+            长文本回复会流式显示，避免等待时像卡住。
+          </div>
+        </div>
+
+        <div ref="historyRef" class="chat-history">
+          <div
+            v-if="!timelineMessages.length && !pendingUserMessage && !streamingReply"
+            class="empty-note empty-note--history"
+          >
+            这里会保留你和助手围绕本章的讨论记录。
+          </div>
+
+          <div
+            v-for="message in timelineMessages"
+            :key="message.id"
+            class="chat-row"
+            :class="`chat-row--${message.role}`"
+          >
+            <div class="chat-bubble" :class="`chat-bubble--${message.role}`">
+              <div class="chat-bubble__meta">
+                <span>{{ roleLabel(message.role) }}</span>
+                <span v-if="message.compressed">已压缩</span>
+                <span v-if="message.pinnedToBackground">已固定到背景</span>
+              </div>
+              <div class="bubble-text">{{ message.content }}</div>
+              <div v-if="message.role !== 'system'" class="chat-bubble__actions">
+                <v-btn variant="text" size="small" @click="toggleBackground(message)">
+                  {{ message.pinnedToBackground ? '移出固定背景' : '固定到背景' }}
+                </v-btn>
+              </div>
+            </div>
+          </div>
+
+          <div v-if="pendingUserMessage" class="chat-row chat-row--user">
+            <div class="chat-bubble chat-bubble--user chat-bubble--pending">
+              <div class="chat-bubble__meta">
+                <span>你</span>
+                <span>发送中</span>
+              </div>
+              <div class="bubble-text">{{ pendingUserMessage }}</div>
+            </div>
+          </div>
+
+          <div v-if="chatState.sending" class="chat-row chat-row--assistant">
+            <div class="chat-bubble chat-bubble--assistant chat-bubble--streaming">
+              <div class="chat-bubble__meta">
+                <span>助手</span>
+                <span>回复中</span>
+              </div>
+              <div v-if="streamingReply" class="bubble-text">{{ streamingReply }}</div>
+              <div v-else class="chat-typing">
+                <span class="chat-typing-dot" />
+                <span class="chat-typing-dot" />
+                <span class="chat-typing-dot" />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="chat-composer">
+          <v-textarea
+            v-model="draftMessage"
+            rows="4"
+            auto-grow
+            hide-details
+            label="发送聊天消息"
+            placeholder="可以讨论本章目标、人物动机、世界观补充或表达风格。按 Enter 发送，Shift + Enter 换行。"
+            :disabled="panelDisabled || chatState.sending"
+            @keydown="handleComposerKeydown"
+          />
+          <div class="chat-composer__actions">
+            <div class="text-caption text-medium-emphasis">
+              从聊天中固定下来的内容，会优先参与后续上下文整理。
+            </div>
+            <v-btn
+              color="primary"
+              variant="flat"
+              :loading="chatState.sending"
+              :disabled="panelDisabled"
+              @click="sendMessage"
+            >
+              发送消息
+            </v-btn>
+          </div>
+        </div>
+      </section>
     </v-card-text>
   </v-card>
 </template>
 
 <style scoped>
-.background-memory,
-.chat-history,
-.chat-composer {
+.chat-panel__body {
+  display: grid;
+  gap: 20px;
+}
+
+.chat-panel__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+
+.panel-section {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid rgba(var(--v-theme-outline), 0.18);
+  border-radius: 18px;
+  background: rgba(var(--v-theme-surface-variant), 0.08);
+}
+
+.panel-section__header {
+  display: grid;
+  gap: 4px;
+}
+
+.background-composer,
+.chat-composer,
+.background-list {
   display: grid;
   gap: 12px;
 }
 
-.chat-status-bar {
+.background-composer,
+.chat-composer {
+  padding: 14px;
+  border-radius: 16px;
+  background: rgba(var(--v-theme-surface), 0.88);
+  border: 1px solid rgba(var(--v-theme-outline), 0.14);
+}
+
+.background-composer__actions,
+.chat-composer__actions,
+.background-item__actions {
   display: flex;
   flex-wrap: wrap;
   justify-content: space-between;
-  gap: 12px;
   align-items: center;
+  gap: 10px;
 }
 
-.background-memory {
-  padding: 12px;
+.background-list {
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+}
+
+.background-item {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
   border-radius: 16px;
-  background: rgba(var(--v-theme-primary), 0.05);
+  border: 1px solid rgba(var(--v-theme-outline), 0.16);
+  background: rgba(var(--v-theme-surface), 0.95);
 }
 
-.memory-item {
-  padding: 12px;
-  border-radius: 14px;
-  background: rgba(var(--v-theme-surface-variant), 0.24);
+.background-item__meta,
+.chat-bubble__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  font-size: 12px;
+  color: rgba(var(--v-theme-on-surface), 0.68);
+}
+
+.background-item__content,
+.bubble-text {
+  white-space: pre-wrap;
+  line-height: 1.75;
+}
+
+.background-item__editor {
+  display: grid;
+  gap: 10px;
 }
 
 .chat-history {
+  display: grid;
+  gap: 10px;
   max-height: 420px;
   overflow: auto;
-  padding: 8px 4px;
-  border-radius: 18px;
-  background:
-    linear-gradient(180deg, rgba(var(--v-theme-surface-variant), 0.22), rgba(var(--v-theme-surface), 0.18));
+  padding: 14px;
+  border-radius: 16px;
+  border: 1px solid rgba(var(--v-theme-outline), 0.14);
+  background: rgba(var(--v-theme-surface), 0.96);
 }
 
 .chat-row {
@@ -262,64 +466,50 @@ function roleLabel(role: string) {
 }
 
 .chat-bubble {
-  max-width: min(88%, 640px);
+  display: grid;
+  gap: 8px;
+  max-width: min(88%, 680px);
   padding: 12px 14px;
-  border-radius: 18px;
-  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.06);
+  border-radius: 16px;
+  border: 1px solid rgba(var(--v-theme-outline), 0.14);
+  background: rgba(var(--v-theme-surface-variant), 0.12);
 }
 
 .chat-bubble--assistant {
-  background: rgba(var(--v-theme-primary), 0.08);
-  border-top-left-radius: 6px;
+  background: rgba(var(--v-theme-primary), 0.07);
 }
 
 .chat-bubble--user {
-  background: rgba(var(--v-theme-secondary), 0.1);
-  border-top-right-radius: 6px;
+  background: rgba(var(--v-theme-secondary), 0.08);
 }
 
 .chat-bubble--system {
-  max-width: 90%;
-  background: rgba(var(--v-theme-warning), 0.1);
-  border-radius: 14px;
+  max-width: 92%;
+  background: rgba(var(--v-theme-warning), 0.08);
 }
 
 .chat-bubble--pending,
 .chat-bubble--streaming {
-  outline: 1px dashed rgba(var(--v-theme-primary), 0.3);
+  border-style: dashed;
 }
 
-.chat-bubble__content {
-  min-width: 0;
-}
-
-.bubble-text {
-  white-space: pre-wrap;
-  line-height: 1.75;
-}
-
-.chat-pin-btn {
-  flex-shrink: 0;
-}
-
-.chat-composer {
-  padding: 14px;
-  border-radius: 18px;
-  background: rgba(var(--v-theme-surface-variant), 0.18);
+.chat-bubble__actions {
+  display: flex;
+  justify-content: flex-end;
 }
 
 .chat-typing {
   display: inline-flex;
-  align-items: center;
   gap: 6px;
-  min-height: 28px;
+  align-items: center;
+  min-height: 24px;
 }
 
 .chat-typing-dot {
   width: 8px;
   height: 8px;
   border-radius: 999px;
-  background: rgba(var(--v-theme-primary), 0.7);
+  background: rgba(var(--v-theme-primary), 0.72);
   animation: typing-pulse 1.2s infinite ease-in-out;
 }
 
@@ -329,6 +519,22 @@ function roleLabel(role: string) {
 
 .chat-typing-dot:nth-child(3) {
   animation-delay: 0.3s;
+}
+
+.empty-note {
+  padding: 14px;
+  border-radius: 14px;
+  border: 1px dashed rgba(var(--v-theme-outline), 0.24);
+  color: rgba(var(--v-theme-on-surface), 0.68);
+  background: rgba(var(--v-theme-surface), 0.72);
+}
+
+.empty-note--history {
+  min-height: 96px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
 }
 
 @keyframes typing-pulse {

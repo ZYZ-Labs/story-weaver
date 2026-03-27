@@ -100,6 +100,14 @@ export function setWritingChatMessageBackground(messageId: number, pinned: boole
   return http.post<never, AIWritingChatSession>(`/ai-writing/chat/messages/${messageId}/background`, { pinned })
 }
 
+export function addWritingChatBackgroundNote(chapterId: number, content: string) {
+  return http.post<never, AIWritingChatSession>(`/ai-writing/chat/${chapterId}/background-notes`, { content })
+}
+
+export function updateWritingChatBackgroundNote(messageId: number, content: string) {
+  return http.post<never, AIWritingChatSession>(`/ai-writing/chat/messages/${messageId}/content`, { content })
+}
+
 function parseSseEvent(rawEvent: string) {
   const lines = rawEvent.split('\n')
   let eventName = 'message'
