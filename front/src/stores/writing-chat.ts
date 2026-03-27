@@ -38,7 +38,7 @@ export const useWritingChatStore = defineStore('writing-chat', () => {
       state.session = await writingChatApi.getWritingChatSession(chapterId)
       return state.session
     } catch (error) {
-      state.error = error instanceof Error ? error.message : 'Failed to load writing chat'
+      state.error = error instanceof Error ? error.message : '加载背景聊天失败'
       throw error
     } finally {
       state.loading = false
@@ -53,7 +53,7 @@ export const useWritingChatStore = defineStore('writing-chat', () => {
       state.session = await writingChatApi.sendWritingChatMessage(chapterId, payload)
       return state.session
     } catch (error) {
-      state.error = error instanceof Error ? error.message : 'Failed to send writing chat message'
+      state.error = error instanceof Error ? error.message : '发送背景聊天消息失败'
       throw error
     } finally {
       state.sending = false
@@ -67,7 +67,7 @@ export const useWritingChatStore = defineStore('writing-chat', () => {
       state.session = await writingChatApi.setWritingChatMessageBackground(messageId, pinned)
       return state.session
     } catch (error) {
-      state.error = error instanceof Error ? error.message : 'Failed to update background memory'
+      state.error = error instanceof Error ? error.message : '更新背景信息失败'
       throw error
     }
   }

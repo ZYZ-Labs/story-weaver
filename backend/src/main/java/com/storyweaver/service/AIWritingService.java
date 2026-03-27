@@ -23,5 +23,5 @@ public interface AIWritingService extends IService<AIWritingRecord> {
 
     AIWritingResponseVO acceptGeneratedContent(Long id);
 
-    void rejectGeneratedContent(Long id);
+    AIWritingResponseVO rejectGeneratedContent(Long id);
 }

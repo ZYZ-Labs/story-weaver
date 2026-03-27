@@ -92,18 +92,18 @@ const promptForm = reactive<Record<PromptFormKey, string>>({
 })
 
 const promptTemplateMeta: Array<{ key: PromptFormKey; configKey: string; title: string }> = [
-  { key: 'draft', configKey: 'prompt.draft', title: 'Draft' },
-  { key: 'continue', configKey: 'prompt.continue', title: 'Continue' },
-  { key: 'expand', configKey: 'prompt.expand', title: 'Expand' },
-  { key: 'rewrite', configKey: 'prompt.rewrite', title: 'Rewrite' },
-  { key: 'polish', configKey: 'prompt.polish', title: 'Polish' },
-  { key: 'plot', configKey: 'prompt.plot', title: 'Plot' },
-  { key: 'causality', configKey: 'prompt.causality', title: 'Causality' },
-  { key: 'ragQuery', configKey: 'prompt.rag_query', title: 'RAG Query' },
-  { key: 'knowledgeExtract', configKey: 'prompt.knowledge_extract', title: 'Knowledge Extract' },
-  { key: 'namingChapter', configKey: 'prompt.naming.chapter', title: 'Chapter Naming' },
-  { key: 'namingCharacter', configKey: 'prompt.naming.character', title: 'Character Naming' },
-  { key: 'characterAttributes', configKey: 'prompt.character_attributes', title: 'Character Attributes' },
+  { key: 'draft', configKey: 'prompt.draft', title: '初稿提示词' },
+  { key: 'continue', configKey: 'prompt.continue', title: '续写提示词' },
+  { key: 'expand', configKey: 'prompt.expand', title: '扩写提示词' },
+  { key: 'rewrite', configKey: 'prompt.rewrite', title: '重写提示词' },
+  { key: 'polish', configKey: 'prompt.polish', title: '润色提示词' },
+  { key: 'plot', configKey: 'prompt.plot', title: '剧情提示词' },
+  { key: 'causality', configKey: 'prompt.causality', title: '因果提示词' },
+  { key: 'ragQuery', configKey: 'prompt.rag_query', title: '检索提示词' },
+  { key: 'knowledgeExtract', configKey: 'prompt.knowledge_extract', title: '知识抽取提示词' },
+  { key: 'namingChapter', configKey: 'prompt.naming.chapter', title: '章节命名提示词' },
+  { key: 'namingCharacter', configKey: 'prompt.naming.character', title: '人物命名提示词' },
+  { key: 'characterAttributes', configKey: 'prompt.character_attributes', title: '人物属性提示词' },
 ]
 
 const selectedProviders = computed(() => ({
@@ -137,8 +137,8 @@ function getPreferredProviderId() {
 
 function hydrateForms() {
   const preferredProviderId = getPreferredProviderId()
-  form.siteName = settingsStore.getConfigValue('site_name', 'Story Weaver')
-  form.siteDescription = settingsStore.getConfigValue('site_description', 'AI fiction workspace')
+  form.siteName = settingsStore.getConfigValue('site_name', '织文者')
+  form.siteDescription = settingsStore.getConfigValue('site_description', 'AI 长篇创作工作台')
   form.defaultAiProviderId = settingsStore.getNumberValue('default_ai_provider_id', preferredProviderId)
   form.defaultAiModel = settingsStore.getConfigValue('default_ai_model', 'qwen2.5:14b')
   form.defaultEmbeddingProviderId = settingsStore.getNumberValue('default_embedding_provider_id', preferredProviderId)
@@ -223,59 +223,69 @@ async function refreshModelOptions(target: ModelTarget, silent = false) {
         setModelValue(target, provider.modelName || modelOptions[target][0] || getModelValue(target))
       }
       if (!silent) {
-        saveMessage.value = `Refreshed ${target} models.`
+        saveMessage.value = `已刷新${resolveTargetLabel(target)}模型列表`
         errorMessage.value = ''
       }
     } else if (!silent) {
-      errorMessage.value = result.message || 'Refresh failed.'
+      errorMessage.value = result.message || '刷新模型列表失败'
     }
   } catch (error) {
     if (!silent) {
-      errorMessage.value = error instanceof Error ? error.message : 'Refresh failed.'
+      errorMessage.value = error instanceof Error ? error.message : '刷新模型列表失败'
     }
   } finally {
     refreshing[target] = false
   }
 }
 
+function resolveTargetLabel(target: ModelTarget) {
+  const mapping: Record<ModelTarget, string> = {
+    default: '默认',
+    draft: '初稿',
+    writing: '写作中心',
+    naming: '命名',
+  }
+  return mapping[target]
+}
+
 function buildPayload(): SystemConfig[] {
   return [
-    { configKey: 'site_name', configValue: form.siteName, description: 'Site name' },
-    { configKey: 'site_description', configValue: form.siteDescription, description: 'Site description' },
-    { configKey: 'default_ai_provider_id', configValue: String(form.defaultAiProviderId ?? ''), description: 'Default provider' },
-    { configKey: 'default_ai_model', configValue: form.defaultAiModel, description: 'Default model' },
-    { configKey: 'default_embedding_provider_id', configValue: String(form.defaultEmbeddingProviderId ?? ''), description: 'Default embedding provider' },
-    { configKey: 'draft_ai_provider_id', configValue: String(form.draftAiProviderId ?? ''), description: 'Draft provider' },
-    { configKey: 'draft_ai_model', configValue: form.draftAiModel, description: 'Draft model' },
-    { configKey: 'writing_ai_provider_id', configValue: String(form.writingAiProviderId ?? ''), description: 'Writing center provider' },
-    { configKey: 'writing_ai_model', configValue: form.writingAiModel, description: 'Writing center model' },
-    { configKey: 'naming_ai_provider_id', configValue: String(form.namingAiProviderId ?? ''), description: 'Naming provider' },
-    { configKey: 'naming_ai_model', configValue: form.namingAiModel, description: 'Naming model' },
-    { configKey: 'max_chapter_length', configValue: String(form.maxChapterLength), description: 'Max chapter length' },
-    { configKey: 'auto_save_interval', configValue: String(form.autoSaveInterval), description: 'Auto-save interval' },
-    { configKey: 'rag_enabled', configValue: String(form.ragEnabled), description: 'Enable retrieval' },
-    { configKey: 'registration_enabled', configValue: String(form.registrationEnabled), description: 'Allow registration' },
-    { configKey: 'auth.max_failed_attempts', configValue: String(form.maxFailedAttempts), description: 'Max failed logins' },
-    { configKey: 'auth.lock_minutes', configValue: String(form.lockMinutes), description: 'Login lock minutes' },
-    { configKey: 'default_theme', configValue: form.defaultTheme, description: 'Theme' },
-    { configKey: 'ai.workflow.max_plan_rounds', configValue: String(form.workflowMaxPlanRounds), description: 'Plan rounds' },
-    { configKey: 'ai.workflow.max_check_rounds', configValue: String(form.workflowMaxCheckRounds), description: 'Check rounds' },
-    { configKey: 'ai.workflow.max_revision_rounds', configValue: String(form.workflowMaxRevisionRounds), description: 'Revision rounds' },
-    { configKey: 'ai.workflow.max_tool_calls', configValue: String(form.workflowMaxToolCalls), description: 'Tool calls' },
-    { configKey: 'ai.chat.max_active_chars', configValue: String(form.chatMaxActiveChars), description: 'Chat active chars' },
-    { configKey: 'ai.chat.keep_recent_messages', configValue: String(form.chatKeepRecentMessages), description: 'Chat recent messages' },
-    { configKey: 'prompt.draft', configValue: promptForm.draft, description: 'Draft prompt' },
-    { configKey: 'prompt.continue', configValue: promptForm.continue, description: 'Continue prompt' },
-    { configKey: 'prompt.expand', configValue: promptForm.expand, description: 'Expand prompt' },
-    { configKey: 'prompt.rewrite', configValue: promptForm.rewrite, description: 'Rewrite prompt' },
-    { configKey: 'prompt.polish', configValue: promptForm.polish, description: 'Polish prompt' },
-    { configKey: 'prompt.plot', configValue: promptForm.plot, description: 'Plot prompt' },
-    { configKey: 'prompt.causality', configValue: promptForm.causality, description: 'Causality prompt' },
-    { configKey: 'prompt.rag_query', configValue: promptForm.ragQuery, description: 'RAG query prompt' },
-    { configKey: 'prompt.knowledge_extract', configValue: promptForm.knowledgeExtract, description: 'Knowledge extract prompt' },
-    { configKey: 'prompt.naming.chapter', configValue: promptForm.namingChapter, description: 'Chapter naming prompt' },
-    { configKey: 'prompt.naming.character', configValue: promptForm.namingCharacter, description: 'Character naming prompt' },
-    { configKey: 'prompt.character_attributes', configValue: promptForm.characterAttributes, description: 'Character attributes prompt' },
+    { configKey: 'site_name', configValue: form.siteName, description: '站点名称' },
+    { configKey: 'site_description', configValue: form.siteDescription, description: '站点描述' },
+    { configKey: 'default_ai_provider_id', configValue: String(form.defaultAiProviderId ?? ''), description: '默认模型服务' },
+    { configKey: 'default_ai_model', configValue: form.defaultAiModel, description: '默认对话模型' },
+    { configKey: 'default_embedding_provider_id', configValue: String(form.defaultEmbeddingProviderId ?? ''), description: '默认向量服务' },
+    { configKey: 'draft_ai_provider_id', configValue: String(form.draftAiProviderId ?? ''), description: '初稿模型服务' },
+    { configKey: 'draft_ai_model', configValue: form.draftAiModel, description: '初稿模型' },
+    { configKey: 'writing_ai_provider_id', configValue: String(form.writingAiProviderId ?? ''), description: '写作中心模型服务' },
+    { configKey: 'writing_ai_model', configValue: form.writingAiModel, description: '写作中心模型' },
+    { configKey: 'naming_ai_provider_id', configValue: String(form.namingAiProviderId ?? ''), description: '命名模型服务' },
+    { configKey: 'naming_ai_model', configValue: form.namingAiModel, description: '命名模型' },
+    { configKey: 'max_chapter_length', configValue: String(form.maxChapterLength), description: '章节最大字数' },
+    { configKey: 'auto_save_interval', configValue: String(form.autoSaveInterval), description: '自动保存间隔' },
+    { configKey: 'rag_enabled', configValue: String(form.ragEnabled), description: '是否启用检索' },
+    { configKey: 'registration_enabled', configValue: String(form.registrationEnabled), description: '是否允许注册' },
+    { configKey: 'auth.max_failed_attempts', configValue: String(form.maxFailedAttempts), description: '最大登录失败次数' },
+    { configKey: 'auth.lock_minutes', configValue: String(form.lockMinutes), description: '锁定分钟数' },
+    { configKey: 'default_theme', configValue: form.defaultTheme, description: '默认主题' },
+    { configKey: 'ai.workflow.max_plan_rounds', configValue: String(form.workflowMaxPlanRounds), description: '规划轮次' },
+    { configKey: 'ai.workflow.max_check_rounds', configValue: String(form.workflowMaxCheckRounds), description: '检查轮次' },
+    { configKey: 'ai.workflow.max_revision_rounds', configValue: String(form.workflowMaxRevisionRounds), description: '修订轮次' },
+    { configKey: 'ai.workflow.max_tool_calls', configValue: String(form.workflowMaxToolCalls), description: '工具调用上限' },
+    { configKey: 'ai.chat.max_active_chars', configValue: String(form.chatMaxActiveChars), description: '聊天活动窗口字符数' },
+    { configKey: 'ai.chat.keep_recent_messages', configValue: String(form.chatKeepRecentMessages), description: '聊天保留最近消息数' },
+    { configKey: 'prompt.draft', configValue: promptForm.draft, description: '初稿提示词' },
+    { configKey: 'prompt.continue', configValue: promptForm.continue, description: '续写提示词' },
+    { configKey: 'prompt.expand', configValue: promptForm.expand, description: '扩写提示词' },
+    { configKey: 'prompt.rewrite', configValue: promptForm.rewrite, description: '重写提示词' },
+    { configKey: 'prompt.polish', configValue: promptForm.polish, description: '润色提示词' },
+    { configKey: 'prompt.plot', configValue: promptForm.plot, description: '剧情提示词' },
+    { configKey: 'prompt.causality', configValue: promptForm.causality, description: '因果提示词' },
+    { configKey: 'prompt.rag_query', configValue: promptForm.ragQuery, description: '检索提示词' },
+    { configKey: 'prompt.knowledge_extract', configValue: promptForm.knowledgeExtract, description: '知识抽取提示词' },
+    { configKey: 'prompt.naming.chapter', configValue: promptForm.namingChapter, description: '章节命名提示词' },
+    { configKey: 'prompt.naming.character', configValue: promptForm.namingCharacter, description: '人物命名提示词' },
+    { configKey: 'prompt.character_attributes', configValue: promptForm.characterAttributes, description: '人物属性提示词' },
   ]
 }
 
@@ -286,9 +296,9 @@ async function saveSettings() {
   try {
     await settingsStore.saveAll(buildPayload())
     hydrateForms()
-    saveMessage.value = 'Settings saved.'
+    saveMessage.value = '设置已保存'
   } catch (error) {
-    errorMessage.value = error instanceof Error ? error.message : 'Save failed.'
+    errorMessage.value = error instanceof Error ? error.message : '保存设置失败'
   } finally {
     saving.value = false
   }
@@ -297,11 +307,11 @@ async function saveSettings() {
 
 <template>
   <PageContainer
-    title="System Settings"
-    description="Configure global defaults, draft defaults, writing-center defaults, workflow caps, and chat compression."
+    title="系统设置"
+    description="统一配置全局默认模型、章节初稿默认、写作中心默认、工作流上限和聊天压缩策略。"
   >
     <template #actions>
-      <v-btn color="primary" :loading="saving" @click="saveSettings">Save settings</v-btn>
+      <v-btn color="primary" :loading="saving" @click="saveSettings">保存设置</v-btn>
     </template>
 
     <div class="settings-stack">
@@ -310,64 +320,64 @@ async function saveSettings() {
 
       <div class="settings-grid">
         <v-card class="soft-panel">
-          <v-card-title>Base</v-card-title>
+          <v-card-title>基础设置</v-card-title>
           <v-card-text>
             <v-row>
-              <v-col cols="12"><v-text-field v-model="form.siteName" label="Site name" /></v-col>
-              <v-col cols="12"><v-text-field v-model="form.siteDescription" label="Site description" /></v-col>
+              <v-col cols="12"><v-text-field v-model="form.siteName" label="站点名称" /></v-col>
+              <v-col cols="12"><v-text-field v-model="form.siteDescription" label="站点描述" /></v-col>
               <v-col cols="12" md="6">
-                <v-select v-model="form.defaultAiProviderId" label="Default provider" :items="providerStore.providers" item-title="name" item-value="id" clearable />
+                <v-select v-model="form.defaultAiProviderId" label="默认模型服务" :items="providerStore.providers" item-title="name" item-value="id" clearable />
               </v-col>
               <v-col cols="12" md="6">
                 <div class="d-flex ga-2 align-start">
-                  <v-combobox v-model="form.defaultAiModel" class="flex-grow-1" label="Default model" :items="modelOptions.default" clearable />
-                  <v-btn class="mt-2" variant="outlined" :loading="refreshing.default" @click="refreshModelOptions('default')">Refresh</v-btn>
+                  <v-combobox v-model="form.defaultAiModel" class="flex-grow-1" label="默认对话模型" :items="modelOptions.default" clearable />
+                  <v-btn class="mt-2" variant="outlined" :loading="refreshing.default" @click="refreshModelOptions('default')">刷新</v-btn>
                 </div>
               </v-col>
               <v-col cols="12" md="6">
-                <v-select v-model="form.defaultEmbeddingProviderId" label="Embedding provider" :items="providerStore.providers" item-title="name" item-value="id" clearable />
+                <v-select v-model="form.defaultEmbeddingProviderId" label="默认向量服务" :items="providerStore.providers" item-title="name" item-value="id" clearable />
               </v-col>
               <v-col cols="12" md="6">
                 <v-select
                   v-model="form.defaultTheme"
-                  label="Theme"
-                  :items="[{ title: 'Light', value: 'light' }, { title: 'Dark', value: 'dark' }]"
+                  label="默认主题"
+                  :items="[{ title: '浅色', value: 'light' }, { title: '深色', value: 'dark' }]"
                   item-title="title"
                   item-value="value"
                 />
               </v-col>
-              <v-col cols="12" md="6"><v-text-field v-model="form.maxChapterLength" label="Max chapter length" type="number" /></v-col>
-              <v-col cols="12" md="6"><v-text-field v-model="form.autoSaveInterval" label="Auto-save seconds" type="number" /></v-col>
-              <v-col cols="12" md="6"><v-switch v-model="form.ragEnabled" color="primary" label="Enable retrieval" inset /></v-col>
-              <v-col cols="12" md="6"><v-switch v-model="form.registrationEnabled" color="primary" label="Allow registration" inset /></v-col>
+              <v-col cols="12" md="6"><v-text-field v-model="form.maxChapterLength" label="章节最大字数" type="number" /></v-col>
+              <v-col cols="12" md="6"><v-text-field v-model="form.autoSaveInterval" label="自动保存间隔（秒）" type="number" /></v-col>
+              <v-col cols="12" md="6"><v-switch v-model="form.ragEnabled" color="primary" label="启用知识检索" inset /></v-col>
+              <v-col cols="12" md="6"><v-switch v-model="form.registrationEnabled" color="primary" label="允许公开注册" inset /></v-col>
             </v-row>
           </v-card-text>
         </v-card>
 
         <v-card class="soft-panel">
-          <v-card-title>Model Routing</v-card-title>
+          <v-card-title>入口模型路由</v-card-title>
           <v-card-text>
             <v-row>
               <v-col cols="12" md="6">
-                <v-select v-model="form.draftAiProviderId" label="Draft provider" :items="providerStore.providers" item-title="name" item-value="id" clearable />
+                <v-select v-model="form.draftAiProviderId" label="初稿模型服务" :items="providerStore.providers" item-title="name" item-value="id" clearable />
               </v-col>
               <v-col cols="12" md="6">
                 <div class="d-flex ga-2 align-start">
-                  <v-combobox v-model="form.draftAiModel" class="flex-grow-1" label="Draft model" :items="modelOptions.draft" clearable />
-                  <v-btn class="mt-2" variant="outlined" :loading="refreshing.draft" @click="refreshModelOptions('draft')">Refresh</v-btn>
+                  <v-combobox v-model="form.draftAiModel" class="flex-grow-1" label="初稿模型" :items="modelOptions.draft" clearable />
+                  <v-btn class="mt-2" variant="outlined" :loading="refreshing.draft" @click="refreshModelOptions('draft')">刷新</v-btn>
                 </div>
               </v-col>
               <v-col cols="12" md="6">
-                <v-select v-model="form.writingAiProviderId" label="Writing center provider" :items="providerStore.providers" item-title="name" item-value="id" clearable />
+                <v-select v-model="form.writingAiProviderId" label="写作中心模型服务" :items="providerStore.providers" item-title="name" item-value="id" clearable />
               </v-col>
               <v-col cols="12" md="6">
                 <div class="d-flex ga-2 align-start">
-                  <v-combobox v-model="form.writingAiModel" class="flex-grow-1" label="Writing center model" :items="modelOptions.writing" clearable />
-                  <v-btn class="mt-2" variant="outlined" :loading="refreshing.writing" @click="refreshModelOptions('writing')">Refresh</v-btn>
+                  <v-combobox v-model="form.writingAiModel" class="flex-grow-1" label="写作中心模型" :items="modelOptions.writing" clearable />
+                  <v-btn class="mt-2" variant="outlined" :loading="refreshing.writing" @click="refreshModelOptions('writing')">刷新</v-btn>
                 </div>
               </v-col>
               <v-col cols="12">
-                <v-alert type="info" variant="tonal">Recommended: draft on a smaller model, writing center on a stronger model.</v-alert>
+                <v-alert type="info" variant="tonal">建议把章节初稿放在更轻量的模型上，把写作中心放在更强的模型上。</v-alert>
               </v-col>
             </v-row>
           </v-card-text>
@@ -376,23 +386,23 @@ async function saveSettings() {
 
       <div class="settings-grid">
         <v-card class="soft-panel">
-          <v-card-title>Workflow</v-card-title>
+          <v-card-title>工作流限制</v-card-title>
           <v-card-text>
             <v-row>
-              <v-col cols="12" md="6"><v-text-field v-model="form.workflowMaxPlanRounds" label="Plan rounds" type="number" /></v-col>
-              <v-col cols="12" md="6"><v-text-field v-model="form.workflowMaxCheckRounds" label="Check rounds" type="number" /></v-col>
-              <v-col cols="12" md="6"><v-text-field v-model="form.workflowMaxRevisionRounds" label="Revision rounds" type="number" /></v-col>
-              <v-col cols="12" md="6"><v-text-field v-model="form.workflowMaxToolCalls" label="Tool calls" type="number" /></v-col>
+              <v-col cols="12" md="6"><v-text-field v-model="form.workflowMaxPlanRounds" label="规划轮次" type="number" /></v-col>
+              <v-col cols="12" md="6"><v-text-field v-model="form.workflowMaxCheckRounds" label="检查轮次" type="number" /></v-col>
+              <v-col cols="12" md="6"><v-text-field v-model="form.workflowMaxRevisionRounds" label="修订轮次" type="number" /></v-col>
+              <v-col cols="12" md="6"><v-text-field v-model="form.workflowMaxToolCalls" label="工具调用上限" type="number" /></v-col>
             </v-row>
           </v-card-text>
         </v-card>
 
         <v-card class="soft-panel">
-          <v-card-title>Chat Compression</v-card-title>
+          <v-card-title>聊天压缩</v-card-title>
           <v-card-text>
             <v-row>
-              <v-col cols="12" md="6"><v-text-field v-model="form.chatMaxActiveChars" label="Max active chars" type="number" /></v-col>
-              <v-col cols="12" md="6"><v-text-field v-model="form.chatKeepRecentMessages" label="Keep recent messages" type="number" /></v-col>
+              <v-col cols="12" md="6"><v-text-field v-model="form.chatMaxActiveChars" label="活动窗口最大字符数" type="number" /></v-col>
+              <v-col cols="12" md="6"><v-text-field v-model="form.chatKeepRecentMessages" label="保留最近消息数" type="number" /></v-col>
             </v-row>
           </v-card-text>
         </v-card>
@@ -400,26 +410,26 @@ async function saveSettings() {
 
       <div class="settings-grid">
         <v-card class="soft-panel">
-          <v-card-title>Login Security</v-card-title>
+          <v-card-title>登录安全</v-card-title>
           <v-card-text>
             <v-row>
-              <v-col cols="12" md="6"><v-text-field v-model="form.maxFailedAttempts" label="Max failed attempts" type="number" /></v-col>
-              <v-col cols="12" md="6"><v-text-field v-model="form.lockMinutes" label="Lock minutes" type="number" /></v-col>
+              <v-col cols="12" md="6"><v-text-field v-model="form.maxFailedAttempts" label="最大失败次数" type="number" /></v-col>
+              <v-col cols="12" md="6"><v-text-field v-model="form.lockMinutes" label="锁定分钟数" type="number" /></v-col>
             </v-row>
           </v-card-text>
         </v-card>
 
         <v-card class="soft-panel">
-          <v-card-title>Naming Model</v-card-title>
+          <v-card-title>命名模型</v-card-title>
           <v-card-text>
             <v-row>
               <v-col cols="12">
-                <v-select v-model="form.namingAiProviderId" label="Naming provider" :items="providerStore.providers" item-title="name" item-value="id" clearable />
+                <v-select v-model="form.namingAiProviderId" label="命名模型服务" :items="providerStore.providers" item-title="name" item-value="id" clearable />
               </v-col>
               <v-col cols="12">
                 <div class="d-flex ga-2 align-start">
-                  <v-combobox v-model="form.namingAiModel" class="flex-grow-1" label="Naming model" :items="modelOptions.naming" clearable />
-                  <v-btn class="mt-2" variant="outlined" :loading="refreshing.naming" @click="refreshModelOptions('naming')">Refresh</v-btn>
+                  <v-combobox v-model="form.namingAiModel" class="flex-grow-1" label="命名模型" :items="modelOptions.naming" clearable />
+                  <v-btn class="mt-2" variant="outlined" :loading="refreshing.naming" @click="refreshModelOptions('naming')">刷新</v-btn>
                 </div>
               </v-col>
             </v-row>
@@ -428,7 +438,7 @@ async function saveSettings() {
       </div>
 
       <v-card class="soft-panel">
-        <v-card-title>Prompt Templates</v-card-title>
+        <v-card-title>提示词模板</v-card-title>
         <v-card-text class="pt-4">
           <v-row>
             <v-col v-for="template in promptTemplateMeta" :key="template.configKey" cols="12" md="6">

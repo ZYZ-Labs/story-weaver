@@ -521,7 +521,7 @@ async function confirmDelete() {
                         v-else
                         v-model="form.causeEntityId"
                         label="手动输入对象标识"
-                        placeholder="例如：battle-trigger 或 custom-node"
+                        placeholder="例如：决战导火索 或 自定义节点"
                       />
                     </v-col>
                     <v-col v-if="causeEntityMeta" cols="12">
@@ -577,7 +577,7 @@ async function confirmDelete() {
                         v-else
                         v-model="form.effectEntityId"
                         label="手动输入对象标识"
-                        placeholder="例如：battle-outcome 或 custom-target"
+                        placeholder="例如：决战结果 或 自定义目标"
                       />
                     </v-col>
                     <v-col v-if="effectEntityMeta" cols="12">

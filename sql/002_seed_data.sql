@@ -55,7 +55,7 @@ INSERT INTO ai_writing_record (chapter_id, original_content, generated_content, 
 
 -- 插入系统配置
 INSERT INTO system_config (config_key, config_value, description) VALUES
-('site_name', '织文者 Story Weaver', '网站名称'),
+('site_name', '织文者', '网站名称'),
 ('site_description', 'AI 长篇创作工作台', '网站描述'),
 ('default_ai_model', 'qwen2.5:14b', '默认对话模型'),
 ('default_ai_provider_id', '1', '默认模型服务'),

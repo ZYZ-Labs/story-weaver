@@ -15,6 +15,7 @@ import com.storyweaver.service.AIProviderService;
 import com.storyweaver.service.AIWritingChatService;
 import com.storyweaver.service.ChapterService;
 import com.storyweaver.service.SystemConfigService;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -65,7 +66,7 @@ public class AIWritingChatServiceImpl implements AIWritingChatService {
         Chapter chapter = requireChapter(chapterId, userId);
         String content = normalizeText(requestDTO.getContent());
         if (!StringUtils.hasText(content)) {
-            throw new IllegalArgumentException("Message content cannot be empty");
+            throw new IllegalArgumentException("消息内容不能为空");
         }
 
         AIWritingSession session = ensureSession(chapter, userId);
@@ -99,7 +100,7 @@ public class AIWritingChatServiceImpl implements AIWritingChatService {
     public AIWritingChatSessionVO setMessagePinnedToBackground(Long userId, Long messageId, boolean pinned) {
         AIWritingChatMessage message = messageMapper.selectById(messageId);
         if (message == null || Integer.valueOf(1).equals(message.getDeleted())) {
-            throw new IllegalArgumentException("Message does not exist");
+            throw new IllegalArgumentException("消息不存在");
         }
 
         Chapter chapter = requireChapter(message.getChapterId(), userId);
@@ -127,7 +128,7 @@ public class AIWritingChatServiceImpl implements AIWritingChatService {
         StringBuilder builder = new StringBuilder();
 
         if (StringUtils.hasText(session.getCompressedSummary())) {
-            builder.append("[Chat Summary]\n")
+            builder.append("[聊天摘要]\n")
                     .append(session.getCompressedSummary().trim())
                     .append("\n\n");
         }
@@ -136,7 +137,7 @@ public class AIWritingChatServiceImpl implements AIWritingChatService {
                 .filter(item -> Integer.valueOf(1).equals(item.getPinnedToBackground()))
                 .toList();
         if (!backgroundMessages.isEmpty()) {
-            builder.append("[Pinned Background]\n");
+            builder.append("[已置顶背景信息]\n");
             for (AIWritingChatMessage message : backgroundMessages) {
                 builder.append("- ")
                         .append(resolveRoleLabel(message.getRole()))
@@ -149,7 +150,7 @@ public class AIWritingChatServiceImpl implements AIWritingChatService {
 
         List<AIWritingChatMessage> recentMessages = recentActiveMessages(messages, 6);
         if (!recentMessages.isEmpty()) {
-            builder.append("[Recent Chat]\n");
+            builder.append("[最近对话]\n");
             for (AIWritingChatMessage message : recentMessages) {
                 builder.append("- ")
                         .append(resolveRoleLabel(message.getRole()))
@@ -165,7 +166,7 @@ public class AIWritingChatServiceImpl implements AIWritingChatService {
     private Chapter requireChapter(Long chapterId, Long userId) {
         Chapter chapter = chapterService.getChapterWithAuth(chapterId, userId);
         if (chapter == null) {
-            throw new IllegalArgumentException("Chapter does not exist or access is denied");
+            throw new IllegalArgumentException("章节不存在或无权访问");
         }
         return chapter;
     }
@@ -183,8 +184,16 @@ public class AIWritingChatServiceImpl implements AIWritingChatService {
         created.setActiveSegmentNo(1);
         created.setActiveWindowChars(0);
         created.setCompressedSummary("");
-        sessionMapper.insert(created);
-        return created;
+        try {
+            sessionMapper.insert(created);
+            return created.getId() != null ? created : findSession(chapter.getId(), userId);
+        } catch (DataIntegrityViolationException exception) {
+            AIWritingSession existing = findSession(chapter.getId(), userId);
+            if (existing != null) {
+                return existing;
+            }
+            throw exception;
+        }
     }
 
     private AIWritingSession findSession(Long chapterId, Long userId) {
@@ -240,9 +249,9 @@ public class AIWritingChatServiceImpl implements AIWritingChatService {
                 provider,
                 model,
                 """
-                You summarize older creative-writing chat context.
-                Output a compact reusable summary in Chinese.
-                Keep only stable facts, decisions, style constraints, and open questions.
+                你负责压缩较早的创作聊天上下文。
+                请输出一段简洁、可复用的中文摘要。
+                只保留稳定事实、已确认决策、风格约束和待解决问题。
                 """,
                 buildCompressionPrompt(chapter, session.getCompressedSummary(), archivedMessages),
                 null,
@@ -263,33 +272,33 @@ public class AIWritingChatServiceImpl implements AIWritingChatService {
 
         session.setActiveSegmentNo(nextSegmentNo);
         sessionMapper.updateById(session);
-        appendMessage(session, chapter.getId(), "system", "System summarized older chat into reusable background context.");
+        appendMessage(session, chapter.getId(), "system", "系统已将较早对话压缩为可复用的背景信息。");
         syncActiveWindowChars(session);
     }
 
     private String buildChatSystemPrompt(Chapter chapter) {
         return """
-                You are a collaborative Chinese fiction-writing assistant.
-                Help the user discuss worldbuilding, character choices, scene goals, and chapter direction.
-                Reply in Chinese, stay practical, and do not pretend you already edited the chapter text.
-                Current chapter title: %s
-                """.formatted(safe(chapter.getTitle(), "Untitled chapter"));
+                你是一名协作式中文小说写作助手。
+                你的任务是帮助用户讨论世界观、人物选择、场景目标与章节走向。
+                请始终使用中文回复，给出直接、务实的建议，不要假装自己已经改写过章节正文。
+                当前章节标题：%s
+                """.formatted(safe(chapter.getTitle(), "未命名章节"));
     }
 
     private String buildChatUserPrompt(Chapter chapter, AIWritingSession session, List<AIWritingChatMessage> messages) {
         StringBuilder builder = new StringBuilder();
-        builder.append("Reply to the latest user message in Chinese.\n");
-        builder.append("[Current Chapter]\n");
-        builder.append("Title: ").append(safe(chapter.getTitle(), "Untitled chapter")).append('\n');
+        builder.append("请用中文回复用户最新一条消息。\n");
+        builder.append("[当前章节]\n");
+        builder.append("标题：").append(safe(chapter.getTitle(), "未命名章节")).append('\n');
         if (chapter.getOrderNum() != null) {
-            builder.append("Order: Chapter ").append(chapter.getOrderNum()).append('\n');
+            builder.append("章节顺序：第 ").append(chapter.getOrderNum()).append(" 章\n");
         }
         if (StringUtils.hasText(chapter.getContent())) {
-            builder.append("Current prose excerpt: ").append(limit(chapter.getContent(), 1000)).append("\n\n");
+            builder.append("当前正文摘录：").append(limit(chapter.getContent(), 1000)).append("\n\n");
         }
 
         if (StringUtils.hasText(session.getCompressedSummary())) {
-            builder.append("[Compressed Chat Summary]\n")
+            builder.append("[压缩后的聊天摘要]\n")
                     .append(session.getCompressedSummary().trim())
                     .append("\n\n");
         }
@@ -298,7 +307,7 @@ public class AIWritingChatServiceImpl implements AIWritingChatService {
                 .filter(item -> Integer.valueOf(1).equals(item.getPinnedToBackground()))
                 .toList();
         if (!pinnedMessages.isEmpty()) {
-            builder.append("[Pinned Background]\n");
+            builder.append("[已置顶背景信息]\n");
             for (AIWritingChatMessage message : pinnedMessages) {
                 builder.append("- ")
                         .append(resolveRoleLabel(message.getRole()))
@@ -309,27 +318,27 @@ public class AIWritingChatServiceImpl implements AIWritingChatService {
             builder.append('\n');
         }
 
-        builder.append("[Recent Chat]\n");
+        builder.append("[最近对话]\n");
         for (AIWritingChatMessage message : recentActiveMessages(messages, 8)) {
             builder.append(resolveRoleLabel(message.getRole()))
                     .append(": ")
                     .append(limit(message.getContent(), 320))
                     .append('\n');
         }
-        builder.append("\nGive a direct, helpful reply to the latest user message.");
+        builder.append("\n请直接、有帮助地回应用户最新一条消息。");
         return builder.toString();
     }
 
     private String buildCompressionPrompt(Chapter chapter, String existingSummary, List<AIWritingChatMessage> archivedMessages) {
         StringBuilder builder = new StringBuilder();
-        builder.append("Summarize these older writing-chat messages into reusable Chinese memory.\n");
-        builder.append("Keep stable facts, confirmed decisions, style preferences, forbidden items, and open questions.\n");
-        builder.append("Do not invent anything that was not stated.\n\n");
-        builder.append("Chapter: ").append(safe(chapter.getTitle(), "Untitled chapter")).append("\n\n");
+        builder.append("请把这些较早的写作聊天消息压缩成可复用的中文记忆。\n");
+        builder.append("保留稳定事实、已确认决策、风格偏好、禁止改动项和待解决问题。\n");
+        builder.append("不要编造任何原对话中没有提到的内容。\n\n");
+        builder.append("章节：").append(safe(chapter.getTitle(), "未命名章节")).append("\n\n");
         if (StringUtils.hasText(existingSummary)) {
-            builder.append("[Existing Summary]\n").append(existingSummary.trim()).append("\n\n");
+            builder.append("[已有摘要]\n").append(existingSummary.trim()).append("\n\n");
         }
-        builder.append("[Messages To Compress]\n");
+        builder.append("[待压缩消息]\n");
         for (AIWritingChatMessage message : archivedMessages) {
             builder.append(resolveRoleLabel(message.getRole()))
                     .append(": ")
@@ -426,9 +435,9 @@ public class AIWritingChatServiceImpl implements AIWritingChatService {
 
     private String resolveRoleLabel(String role) {
         return switch (safe(role, "assistant")) {
-            case "user" -> "User";
-            case "system" -> "System";
-            default -> "Assistant";
+            case "user" -> "用户";
+            case "system" -> "系统";
+            default -> "助手";
         };
     }
 }

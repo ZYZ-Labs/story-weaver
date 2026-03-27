@@ -141,7 +141,7 @@ public class AIWritingController {
     }
 
     @PostMapping("/{id}/reject")
-    public ResponseEntity<Void> rejectGeneratedContent(
+    public ResponseEntity<AIWritingResponseVO> rejectGeneratedContent(
             @PathVariable Long id,
             @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
             Authentication authentication) {
@@ -151,8 +151,11 @@ public class AIWritingController {
         }
         SecurityUtils.getCurrentUserId(authentication);
 
-        aiWritingService.rejectGeneratedContent(id);
-        return ResponseEntity.ok().build();
+        AIWritingResponseVO record = aiWritingService.rejectGeneratedContent(id);
+        if (record == null) {
+            return ResponseEntity.notFound().build();
+        }
+        return ResponseEntity.ok(record);
     }
 
     private void sendStreamEvent(SseEmitter emitter, AIWritingStreamEventVO event) {

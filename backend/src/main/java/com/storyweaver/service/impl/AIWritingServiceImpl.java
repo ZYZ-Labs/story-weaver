@@ -162,12 +162,14 @@ public class AIWritingServiceImpl extends ServiceImpl<AIWritingRecordMapper, AIW
     }
 
     @Override
-    public void rejectGeneratedContent(Long id) {
+    public AIWritingResponseVO rejectGeneratedContent(Long id) {
         AIWritingRecord record = getById(id);
         if (record != null && !Integer.valueOf(1).equals(record.getDeleted())) {
             record.setStatus("rejected");
             updateById(record);
+            return convertToVO(record);
         }
+        return null;
     }
 
     private PreparedGenerationContext prepareGeneration(Long userId, AIWritingRequestDTO requestDTO) {
@@ -546,24 +548,24 @@ public class AIWritingServiceImpl extends ServiceImpl<AIWritingRecordMapper, AIW
         String content;
 
         if (settings.maxPlanRounds() > 0) {
-            emitStage(eventConsumer, "plan", "started", "Building chapter plan");
+            emitStage(eventConsumer, "plan", "started", "正在整理本章写作计划");
             plan = aiProviderService.generateText(
                     context.provider(),
                     context.selectedModel(),
                     """
-                    You are a Chinese fiction planning assistant.
-                    Produce a short, actionable chapter plan in Chinese.
-                    Do not write the final prose.
+                    你是一名中文小说章节规划助手。
+                    请输出一份简短、可执行的中文写作计划。
+                    不要直接产出最终正文。
                     """,
                     buildPlanningPrompt(context),
                     null,
                     800
             );
             emitLog(eventConsumer, "plan", limit(plan, 280));
-            emitStage(eventConsumer, "plan", "completed", "Chapter plan ready");
+            emitStage(eventConsumer, "plan", "completed", "本章计划已生成");
         }
 
-        emitStage(eventConsumer, "write", "started", "Generating chapter prose");
+        emitStage(eventConsumer, "write", "started", "正在生成章节正文");
         if (streamWriteStage) {
             StringBuilder builder = new StringBuilder();
             aiProviderService.streamText(
@@ -592,25 +594,25 @@ public class AIWritingServiceImpl extends ServiceImpl<AIWritingRecordMapper, AIW
                     context.maxTokens()
             );
         }
-        emitStage(eventConsumer, "write", "completed", "Draft prose ready");
+        emitStage(eventConsumer, "write", "completed", "正文初稿已生成");
 
         if (settings.maxCheckRounds() <= 0) {
             return new WorkflowResult(content);
         }
 
-        emitStage(eventConsumer, "check", "started", "Checking continuity and constraints");
+        emitStage(eventConsumer, "check", "started", "正在检查连贯性与约束条件");
         String checkReport = aiProviderService.generateText(
                 context.provider(),
                 context.selectedModel(),
                 """
-                You are a Chinese fiction reviewer.
-                Check whether the chapter follows the provided context.
-                Return the result using this exact format:
-                RESULT: PASS 或 REVISE
-                SUMMARY: one short sentence in Chinese
-                ISSUES:
-                - issue 1
-                - issue 2
+                你是一名中文小说审校助手。
+                请检查章节正文是否遵循给定上下文和约束。
+                请严格按照以下格式返回：
+                结论：通过 或 修订
+                摘要：一句中文简述
+                问题：
+                - 问题 1
+                - 问题 2
                 """,
                 buildCheckPrompt(context, plan, content),
                 null,
@@ -618,13 +620,13 @@ public class AIWritingServiceImpl extends ServiceImpl<AIWritingRecordMapper, AIW
         );
         WritingCheckResult checkResult = parseCheckResult(checkReport);
         emitLog(eventConsumer, "check", checkResult.summary());
-        emitStage(eventConsumer, "check", "completed", checkResult.requiresRevision() ? "Revision suggested" : "Check passed");
+        emitStage(eventConsumer, "check", "completed", checkResult.requiresRevision() ? "建议进行修订" : "检查通过");
 
         if (!checkResult.requiresRevision() || settings.maxRevisionRounds() <= 0) {
             return new WorkflowResult(content);
         }
 
-        emitStage(eventConsumer, "revise", "started", "Revising prose from review");
+        emitStage(eventConsumer, "revise", "started", "正在根据审校意见修订正文");
         String revisedContent = aiProviderService.generateText(
                 context.provider(),
                 context.selectedModel(),
@@ -633,11 +635,11 @@ public class AIWritingServiceImpl extends ServiceImpl<AIWritingRecordMapper, AIW
                 null,
                 context.maxTokens()
         );
-        emitLog(eventConsumer, "revise", "Auto revision completed");
+        emitLog(eventConsumer, "revise", "已根据审校意见自动完成修订");
         if (eventConsumer != null) {
             eventConsumer.accept(AIWritingStreamEventVO.replace(revisedContent));
         }
-        emitStage(eventConsumer, "revise", "completed", "Revision applied");
+        emitStage(eventConsumer, "revise", "completed", "修订结果已应用");
         return new WorkflowResult(revisedContent);
     }
 
@@ -651,12 +653,12 @@ public class AIWritingServiceImpl extends ServiceImpl<AIWritingRecordMapper, AIW
 
     private String buildPlanningPrompt(PreparedGenerationContext context) {
         return """
-                Based on the following writing context, produce a short chapter plan in Chinese.
-                Include:
-                1. Chapter goal
-                2. Conflict progression
-                3. Suggested scene order
-                4. Character and setting constraints
+                请根据以下写作上下文，生成一份简短的中文章节计划。
+                需要包含：
+                1. 本章目标
+                2. 冲突推进方式
+                3. 建议的场景顺序
+                4. 人物与设定约束
 
                 %s
                 """.formatted(context.userPrompt());
@@ -671,40 +673,54 @@ public class AIWritingServiceImpl extends ServiceImpl<AIWritingRecordMapper, AIW
 
     private String buildCheckPrompt(PreparedGenerationContext context, String plan, String content) {
         StringBuilder builder = new StringBuilder();
-        builder.append("Check whether this chapter prose follows the context and constraints.\n");
+        builder.append("请检查这段章节正文是否遵循上下文与约束条件。\n");
         if (StringUtils.hasText(plan)) {
-            builder.append("[Plan]\n").append(plan.trim()).append("\n\n");
+            builder.append("[写作计划]\n").append(plan.trim()).append("\n\n");
         }
-        builder.append("[Context]\n").append(context.userPrompt()).append("\n\n");
-        builder.append("[Draft]\n").append(content == null ? "" : content.trim()).append('\n');
+        builder.append("[上下文]\n").append(context.userPrompt()).append("\n\n");
+        builder.append("[正文草稿]\n").append(content == null ? "" : content.trim()).append('\n');
         return builder.toString();
     }
 
     private String buildRevisionPrompt(PreparedGenerationContext context, String plan, String content, String checkReport) {
         StringBuilder builder = new StringBuilder();
-        builder.append("Revise the following chapter prose based on the review notes.\n");
-        builder.append("Requirements:\n");
-        builder.append("1. Output full revised prose only.\n");
-        builder.append("2. Keep correct plot facts and voice.\n");
-        builder.append("3. Prioritize continuity, setting consistency, and chapter goal alignment.\n\n");
+        builder.append("请根据以下审校意见修订章节正文。\n");
+        builder.append("要求：\n");
+        builder.append("1. 只输出完整修订后的正文。\n");
+        builder.append("2. 保留正确的剧情事实和叙事口吻。\n");
+        builder.append("3. 优先修复连贯性、设定一致性和章节目标偏差。\n\n");
         if (StringUtils.hasText(plan)) {
-            builder.append("[Plan]\n").append(plan.trim()).append("\n\n");
+            builder.append("[写作计划]\n").append(plan.trim()).append("\n\n");
         }
-        builder.append("[Context]\n").append(context.userPrompt()).append("\n\n");
-        builder.append("[Review]\n").append(checkReport.trim()).append("\n\n");
-        builder.append("[Original Draft]\n").append(content == null ? "" : content.trim());
+        builder.append("[上下文]\n").append(context.userPrompt()).append("\n\n");
+        builder.append("[审校意见]\n").append(checkReport.trim()).append("\n\n");
+        builder.append("[原始草稿]\n").append(content == null ? "" : content.trim());
         return builder.toString();
     }
 
     private WritingCheckResult parseCheckResult(String checkReport) {
         String normalized = normalizeText(checkReport);
-        boolean requiresRevision = normalized.toUpperCase(Locale.ROOT).contains("RESULT: REVISE")
+        String upperCaseNormalized = normalized.toUpperCase(Locale.ROOT);
+        boolean requiresRevision = upperCaseNormalized.contains("RESULT: REVISE")
+                || upperCaseNormalized.contains("结论：修订".toUpperCase(Locale.ROOT))
+                || upperCaseNormalized.contains("结论: 修订".toUpperCase(Locale.ROOT))
                 || normalized.toLowerCase(Locale.ROOT).contains("revise")
                 || normalized.contains("修订");
         String summary = normalized.lines()
-                .filter(line -> line.toUpperCase(Locale.ROOT).startsWith("SUMMARY:"))
+                .filter(line -> line.toUpperCase(Locale.ROOT).startsWith("SUMMARY:")
+                        || line.startsWith("摘要：")
+                        || line.startsWith("摘要:"))
                 .findFirst()
-                .map(line -> line.substring("SUMMARY:".length()).trim())
+                .map(line -> {
+                    if (line.toUpperCase(Locale.ROOT).startsWith("SUMMARY:")) {
+                        return line.substring("SUMMARY:".length()).trim();
+                    }
+                    int splitIndex = line.indexOf('：');
+                    if (splitIndex < 0) {
+                        splitIndex = line.indexOf(':');
+                    }
+                    return splitIndex >= 0 ? line.substring(splitIndex + 1).trim() : line.trim();
+                })
                 .orElse(limit(normalized, 220));
         return new WritingCheckResult(requiresRevision, summary, normalized);
     }
@@ -754,7 +770,7 @@ public class AIWritingServiceImpl extends ServiceImpl<AIWritingRecordMapper, AIW
 
     private String buildSummary(String content) {
         if (!StringUtils.hasText(content)) {
-            return "Accepted AI writing synchronized to RAG.";
+            return "已采纳的 AI 正文已同步到知识检索。";
         }
         String normalized = content.replaceAll("\\s+", " ").trim();
         return normalized.length() <= 160 ? normalized : normalized.substring(0, 160);

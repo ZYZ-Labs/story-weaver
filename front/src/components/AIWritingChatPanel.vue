@@ -19,7 +19,7 @@ const props = withDefaults(
     selectedModel: '',
     entryPoint: 'writing-center',
     disabled: false,
-    title: 'Background Chat',
+    title: '背景聊天',
   },
 )
 
@@ -69,9 +69,9 @@ async function toggleBackground(message: AIWritingChatMessage) {
 }
 
 function roleLabel(role: string) {
-  if (role === 'user') return 'You'
-  if (role === 'system') return 'System'
-  return 'Assistant'
+  if (role === 'user') return '你'
+  if (role === 'system') return '系统'
+  return '助手'
 }
 </script>
 
@@ -79,7 +79,7 @@ function roleLabel(role: string) {
   <v-card class="soft-panel">
     <v-card-title>{{ title }}</v-card-title>
     <v-card-subtitle>
-      Chat here to build background context, then pin any useful message into reusable memory.
+      在这里先讨论背景设定、场景方向和人物要求，再把有用的信息固定成可复用背景。
     </v-card-subtitle>
     <v-card-text class="pt-4">
       <v-alert v-if="chatState.error" type="error" variant="tonal" class="mb-4">
@@ -87,7 +87,7 @@ function roleLabel(role: string) {
       </v-alert>
 
       <div v-if="backgroundMessages.length" class="background-memory mb-4">
-        <div class="text-subtitle-2 font-weight-medium mb-2">Pinned Background</div>
+        <div class="text-subtitle-2 font-weight-medium mb-2">已固定背景</div>
         <div class="d-flex flex-column ga-2">
           <div v-for="message in backgroundMessages" :key="`bg-${message.id}`" class="memory-item">
             <div class="text-caption text-medium-emphasis">{{ roleLabel(message.role) }}</div>
@@ -107,8 +107,8 @@ function roleLabel(role: string) {
             <div>
               <div class="text-caption text-medium-emphasis">
                 {{ roleLabel(message.role) }}
-                <span v-if="message.compressed"> · compressed</span>
-                <span v-if="message.segmentNo"> · segment {{ message.segmentNo }}</span>
+                <span v-if="message.compressed"> | 已压缩</span>
+                <span v-if="message.segmentNo"> | 分段 {{ message.segmentNo }}</span>
               </div>
               <div class="text-body-2">{{ message.content }}</div>
             </div>
@@ -118,7 +118,7 @@ function roleLabel(role: string) {
               variant="text"
               @click="toggleBackground(message)"
             >
-              {{ message.pinnedToBackground ? 'Unpin' : 'Pin as Background' }}
+              {{ message.pinnedToBackground ? '取消固定' : '固定到背景' }}
             </v-btn>
           </div>
         </div>
@@ -128,17 +128,17 @@ function roleLabel(role: string) {
         v-model="draftMessage"
         class="mt-4"
         rows="4"
-        label="Chat Message"
-        placeholder="Ask for scene direction, worldbuilding refinement, character voice, or anything worth saving into background context."
+        label="背景聊天消息"
+        placeholder="可以讨论场景目标、世界观补充、人物口吻，或任何值得沉淀到背景信息里的内容。"
         :disabled="disabled"
       />
 
       <div class="d-flex justify-space-between align-center ga-3">
         <div class="text-caption text-medium-emphasis">
-          Active window: {{ session?.activeWindowChars || 0 }} / {{ session?.maxWindowChars || 0 }}
+          活动窗口：{{ session?.activeWindowChars || 0 }} / {{ session?.maxWindowChars || 0 }}
         </div>
         <v-btn color="primary" :loading="chatState.sending" :disabled="disabled" @click="sendMessage">
-          Send to Background Chat
+          发送到背景聊天
         </v-btn>
       </div>
     </v-card-text>

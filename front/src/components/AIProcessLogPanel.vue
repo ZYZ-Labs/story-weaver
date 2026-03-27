@@ -12,20 +12,27 @@ const props = withDefaults(
   {
     logs: () => [],
     loading: false,
-    title: 'Process Log',
+    title: '过程日志',
   },
 )
 
 const displayLogs = computed(() => props.logs || [])
 
 function formatStage(item: AIWritingStreamLogItem) {
-  if (!item.stage) {
-    return item.type.toUpperCase()
+  const stageMap: Record<string, string> = {
+    plan: '规划',
+    write: '写作',
+    check: '检查',
+    revise: '修订',
   }
-  if (!item.stageStatus) {
-    return item.stage.toUpperCase()
+  const statusMap: Record<string, string> = {
+    started: '开始',
+    completed: '完成',
   }
-  return `${item.stage.toUpperCase()} · ${item.stageStatus}`
+
+  const stageLabel = item.stage ? stageMap[item.stage] || item.stage : '日志'
+  const statusLabel = item.stageStatus ? statusMap[item.stageStatus] || item.stageStatus : ''
+  return statusLabel ? `${stageLabel} | ${statusLabel}` : stageLabel
 }
 </script>
 
@@ -38,11 +45,11 @@ function formatStage(item: AIWritingStreamLogItem) {
       <div v-if="displayLogs.length" class="log-list">
         <div v-for="item in displayLogs" :key="item.id" class="log-item">
           <div class="text-caption text-medium-emphasis">{{ formatStage(item) }}</div>
-          <div class="text-body-2">{{ item.message || 'Working...' }}</div>
+          <div class="text-body-2">{{ item.message || '处理中...' }}</div>
         </div>
       </div>
       <div v-else class="text-medium-emphasis">
-        Stage updates will appear here while the model is planning, writing, checking, and revising.
+        模型在规划、写作、自检和修订时，阶段更新会显示在这里。
       </div>
     </v-card-text>
   </v-card>

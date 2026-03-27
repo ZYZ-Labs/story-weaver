@@ -133,7 +133,7 @@ router.beforeEach((to) => {
   }
 
   if (typeof to.meta.title === 'string') {
-    document.title = `${to.meta.title} | 织文者 Story Weaver`
+    document.title = `${to.meta.title} | 织文者`
   }
 
   return true

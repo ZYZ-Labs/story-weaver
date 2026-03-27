@@ -39,7 +39,7 @@ export const useWritingStore = defineStore('writing', () => {
   async function fetchByChapter(chapterId: number) {
     loading.value = true
     try {
-      records.value = await writingApi.getWritingRecords(chapterId)
+      records.value = filterPendingRecords(await writingApi.getWritingRecords(chapterId))
     } finally {
       loading.value = false
     }
@@ -93,7 +93,7 @@ export const useWritingStore = defineStore('writing', () => {
             currentState.content = event.content || ''
           } else if (event.type === 'error') {
             currentState.generating = false
-            currentState.error = event.message || 'AI generation failed'
+            currentState.error = event.message || 'AI 生成失败'
             currentState.logs.push(toLogItem(event))
           } else if (event.type === 'complete' && event.record) {
             currentState.generating = false
@@ -118,7 +118,7 @@ export const useWritingStore = defineStore('writing', () => {
       const currentState = streamStates.value[payload.chapterId]
       if (currentState?.requestId === requestId) {
         currentState.generating = false
-        currentState.error = error instanceof Error ? error.message : 'AI generation failed'
+        currentState.error = error instanceof Error ? error.message : 'AI 生成失败'
       }
       throw error
     }
@@ -127,7 +127,7 @@ export const useWritingStore = defineStore('writing', () => {
   async function fetchByProject(projectId: number) {
     loading.value = true
     try {
-      projectRecords.value = await writingApi.getProjectWritingRecords(projectId)
+      projectRecords.value = filterPendingRecords(await writingApi.getProjectWritingRecords(projectId))
     } finally {
       loading.value = false
     }
@@ -135,28 +135,30 @@ export const useWritingStore = defineStore('writing', () => {
 
   async function accept(id: number) {
     const updated = await writingApi.acceptWriting(id)
-    const target = records.value.find((item) => item.id === id)
-    const projectTarget = projectRecords.value.find((item) => item.id === id)
-    if (target) {
-      Object.assign(target, updated)
-    }
-    if (projectTarget) {
-      Object.assign(projectTarget, updated)
-    }
+    removeResolvedRecord(updated)
     return updated
   }
 
   async function reject(id: number) {
-    await writingApi.rejectWriting(id)
-    const target = records.value.find((item) => item.id === id)
-    const projectTarget = projectRecords.value.find((item) => item.id === id)
-    if (target) {
-      target.status = 'rejected'
+    const updated = await writingApi.rejectWriting(id)
+    removeResolvedRecord(updated)
+    return updated
+  }
+
+  function filterPendingRecords(items: AIWritingRecord[]) {
+    return (items || []).filter((item) => item.status !== 'accepted' && item.status !== 'rejected')
+  }
+
+  function removeResolvedRecord(record: AIWritingRecord) {
+    records.value = records.value.filter((item) => item.id !== record.id)
+    projectRecords.value = projectRecords.value.filter((item) => item.id !== record.id)
+
+    if (record.chapterId) {
+      const streamState = streamStates.value[record.chapterId]
+      if (streamState?.lastRecord?.id === record.id) {
+        streamState.lastRecord = records.value.find((item) => item.chapterId === record.chapterId) || null
+      }
     }
-    if (projectTarget) {
-      projectTarget.status = 'rejected'
-    }
-    return 'rejected'
   }
 
   function toLogItem(event: AIWritingStreamEvent): AIWritingStreamLogItem {

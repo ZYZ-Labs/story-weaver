@@ -64,13 +64,13 @@ public class ProjectController {
         if (project == null) {
             return ResponseEntity.ok(Map.of(
                     "code", 404,
-                    "message", "Project not found"
+                    "message", "项目不存在或无权访问"
             ));
         }
 
         return ResponseEntity.ok(Map.of(
                 "code", 200,
-                "message", "Success",
+                "message", "获取成功",
                 "data", project
         ));
     }

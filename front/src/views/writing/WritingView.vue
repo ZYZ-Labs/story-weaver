@@ -95,13 +95,13 @@ const outputProfile = computed(() =>
 )
 const generateButtonLabel = computed(() => {
   const mapping: Record<string, string> = {
-    draft: 'Generate Draft',
-    continue: 'Continue Chapter',
-    expand: 'Expand Chapter',
-    polish: 'Polish Chapter',
-    rewrite: 'Rewrite Chapter',
+    draft: '生成初稿',
+    continue: '继续写作',
+    expand: '扩写正文',
+    polish: '润色正文',
+    rewrite: '重写正文',
   }
-  return mapping[resolvedWritingType.value] || 'Generate'
+  return mapping[resolvedWritingType.value] || '发起生成'
 })
 const currentWordCount = computed(
   () => chapterStore.currentChapter?.wordCount || chapterStore.currentChapter?.content?.length || 0,
@@ -266,11 +266,11 @@ function buildInstruction() {
   const parts = [buildPromptSnapshot()]
 
   if (currentRequiredCharacters.value.length) {
-    parts.push(`Required characters: ${currentRequiredCharacters.value.join(', ')}`)
+    parts.push(`本章必出人物：${currentRequiredCharacters.value.join('、')}`)
   }
 
   if (draftForm.userInstruction.trim()) {
-    parts.push(`Additional requirements:\n${draftForm.userInstruction.trim()}`)
+    parts.push(`补充要求：\n${draftForm.userInstruction.trim()}`)
   }
 
   return parts.filter(Boolean).join('\n\n')
@@ -278,26 +278,26 @@ function buildInstruction() {
 
 function getWritingTypeLabel(value: string) {
   const mapping: Record<string, string> = {
-    draft: 'Draft',
-    continue: 'Continue',
-    polish: 'Polish',
-    expand: 'Expand',
-    rewrite: 'Rewrite',
+    draft: '初稿',
+    continue: '续写',
+    polish: '润色',
+    expand: '扩写',
+    rewrite: '重写',
   }
   return mapping[value] || value
 }
 
 function getRecordStatusLabel(value?: string) {
   const mapping: Record<string, string> = {
-    draft: 'Draft',
-    accepted: 'Accepted',
-    rejected: 'Rejected',
+    draft: '草稿',
+    accepted: '已采纳',
+    rejected: '已拒绝',
   }
-  return mapping[value || ''] || value || 'Draft'
+  return mapping[value || ''] || value || '草稿'
 }
 
 function getProviderName(providerId?: number | null) {
-  return providerStore.providers.find((item) => item.id === providerId)?.name || 'Auto'
+  return providerStore.providers.find((item) => item.id === providerId)?.name || '自动选择'
 }
 
 async function generate() {
@@ -334,7 +334,7 @@ async function generate() {
     lastGeneratedRecord.value = record
     streamingContent.value = record.generatedContent
   } catch (error) {
-    errorMessage.value = error instanceof Error ? error.message : 'AI generation failed.'
+    errorMessage.value = error instanceof Error ? error.message : 'AI 生成失败'
   } finally {
     generating.value = false
   }
@@ -354,6 +354,7 @@ async function saveCurrentChapter() {
 
 async function acceptRecord(record: AIWritingRecord) {
   await writingStore.accept(record.id)
+  lastGeneratedRecord.value = writingStore.records[0] || null
   if (projectId.value && chapterStore.currentChapter?.id === record.chapterId) {
     await chapterStore.fetchDetail(projectId.value, record.chapterId).catch(() => undefined)
   }
@@ -361,27 +362,28 @@ async function acceptRecord(record: AIWritingRecord) {
 
 async function rejectRecord(record: AIWritingRecord) {
   await writingStore.reject(record.id)
+  lastGeneratedRecord.value = writingStore.records[0] || null
 }
 </script>
 
 <template>
   <PageContainer
-    title="Writing Center"
-    description="Generate prose with a controlled workflow, live process logs, and reusable background chat."
+    title="写作中心"
+    description="在这里发起受控写作流程，并通过过程日志和背景聊天持续补充上下文。"
   >
     <EmptyState
       v-if="!projectId"
-      title="Select a project first"
-      description="The writing center needs the current project and chapter before generation can start."
+      title="请先选择项目"
+      description="写作中心需要先确定当前项目和章节，才能开始生成。"
     />
 
     <div v-else class="writing-layout">
       <div class="writing-main-stack">
         <v-card class="soft-panel">
-          <v-card-title>Chapter Editor</v-card-title>
+          <v-card-title>章节编辑</v-card-title>
           <v-card-text>
             <v-select
-              label="Current chapter"
+              label="当前章节"
               item-title="title"
               item-value="id"
               :items="chapterStore.chapters"
@@ -402,36 +404,36 @@ async function rejectRecord(record: AIWritingRecord) {
                 color="secondary"
                 variant="tonal"
               >
-                Required: {{ name }}
+                必出：{{ name }}
               </v-chip>
             </div>
 
             <div class="mt-4">
               <MarkdownEditor
                 v-model="currentChapterContent"
-                label="Chapter content"
+                label="章节正文"
                 :rows="18"
                 :disabled="!chapterStore.currentChapter"
-                preview-empty-text="No chapter content yet."
+                preview-empty-text="当前还没有正文内容。"
               />
             </div>
 
             <div class="d-flex justify-space-between align-center mt-4">
-              <div class="text-body-2 text-medium-emphasis">Word count: {{ currentWordCount }}</div>
+              <div class="text-body-2 text-medium-emphasis">当前字数：{{ currentWordCount }}</div>
               <v-btn
                 color="primary"
                 variant="outlined"
                 :disabled="!projectId || !chapterStore.currentChapter?.id"
                 @click="saveCurrentChapter"
               >
-                Save chapter
+                保存正文
               </v-btn>
             </div>
           </v-card-text>
         </v-card>
 
         <v-card class="soft-panel">
-          <v-card-title>Generation Preview</v-card-title>
+          <v-card-title>生成预览</v-card-title>
           <v-card-text>
             <v-progress-linear
               v-if="displayGenerating"
@@ -441,20 +443,20 @@ async function rejectRecord(record: AIWritingRecord) {
             />
 
             <div v-if="displayStreamingContent" class="stream-preview">
-              <MarkdownContent :source="displayStreamingContent" empty-text="No generated content yet." />
+              <MarkdownContent :source="displayStreamingContent" empty-text="暂时还没有生成内容。" />
             </div>
             <div v-else class="text-medium-emphasis">
-              Final prose appears here. The workflow log on the right will keep updating while the model plans, writes, checks, and revises.
+              最终正文会显示在这里。右侧过程日志会先展示规划、写作、自检和修订进度，不会让页面看起来像卡住。
             </div>
 
             <div v-if="displayLastGeneratedRecord" class="text-caption text-medium-emphasis mt-3">
-              Last generation: {{ formatDateTime(displayLastGeneratedRecord.createTime) }}
+              最近一次生成：{{ formatDateTime(displayLastGeneratedRecord.createTime) }}
             </div>
           </v-card-text>
         </v-card>
 
         <v-card class="soft-panel">
-          <v-card-title>Recent Generations</v-card-title>
+          <v-card-title>最近生成记录</v-card-title>
           <v-list v-if="writingStore.records.length" lines="three">
             <v-list-item
               v-for="record in writingStore.records"
@@ -463,7 +465,7 @@ async function rejectRecord(record: AIWritingRecord) {
             >
               <template #subtitle>
                 <div class="mt-2">
-                  <MarkdownContent :source="record.generatedContent" empty-text="No generated content." compact />
+                  <MarkdownContent :source="record.generatedContent" empty-text="暂无生成内容。" compact />
                 </div>
               </template>
               <template #append>
@@ -471,7 +473,7 @@ async function rejectRecord(record: AIWritingRecord) {
                   <div class="d-flex ga-2">
                     <v-chip size="small" variant="tonal">{{ getProviderName(record.selectedProviderId) }}</v-chip>
                     <v-chip size="small" color="primary" variant="tonal">
-                      {{ record.selectedModel || 'Auto' }}
+                      {{ record.selectedModel || '自动选择' }}
                     </v-chip>
                   </div>
                   <span class="text-caption text-medium-emphasis">
@@ -479,10 +481,10 @@ async function rejectRecord(record: AIWritingRecord) {
                   </span>
                   <div class="d-flex ga-2">
                     <v-btn size="small" color="primary" variant="text" @click="acceptRecord(record)">
-                      Accept
+                      采纳
                     </v-btn>
                     <v-btn size="small" color="error" variant="text" @click="rejectRecord(record)">
-                      Reject
+                      拒绝
                     </v-btn>
                   </div>
                 </div>
@@ -490,24 +492,24 @@ async function rejectRecord(record: AIWritingRecord) {
             </v-list-item>
           </v-list>
           <v-card-text v-else class="text-medium-emphasis">
-            No AI generations yet.
+            还没有 AI 生成记录。
           </v-card-text>
         </v-card>
       </div>
 
       <div class="writing-side-stack">
         <v-card class="soft-panel">
-          <v-card-title>Generation Settings</v-card-title>
+          <v-card-title>生成设置</v-card-title>
           <v-card-text>
             <v-select
               v-model="draftForm.writingType"
-              label="Task"
+              label="任务类型"
               :items="[
-                { title: 'Draft', value: 'draft' },
-                { title: 'Continue', value: 'continue' },
-                { title: 'Polish', value: 'polish' },
-                { title: 'Expand', value: 'expand' },
-                { title: 'Rewrite', value: 'rewrite' },
+                { title: '生成初稿', value: 'draft' },
+                { title: '续写正文', value: 'continue' },
+                { title: '润色正文', value: 'polish' },
+                { title: '扩写正文', value: 'expand' },
+                { title: '重写正文', value: 'rewrite' },
               ]"
               item-title="title"
               item-value="value"
@@ -517,7 +519,7 @@ async function rejectRecord(record: AIWritingRecord) {
               <v-col cols="12" md="6">
                 <v-select
                   v-model="draftForm.selectedProviderId"
-                  label="Provider"
+                  label="模型服务"
                   :items="enabledProviders"
                   item-title="name"
                   item-value="id"
@@ -526,7 +528,7 @@ async function rejectRecord(record: AIWritingRecord) {
               <v-col cols="12" md="6">
                 <v-combobox
                   v-model="draftForm.selectedModel"
-                  label="Model"
+                  label="对话模型"
                   :items="providerModelOptions"
                   clearable
                 />
@@ -536,9 +538,9 @@ async function rejectRecord(record: AIWritingRecord) {
             <div class="mt-4">
               <div class="d-flex justify-space-between align-center ga-3">
                 <div>
-                  <div class="text-subtitle-2 font-weight-medium">Output length</div>
+                  <div class="text-subtitle-2 font-weight-medium">输出长度</div>
                   <div class="text-caption text-medium-emphasis">
-                    {{ outputProfile.description }}, recommended {{ outputProfile.recommended }}
+                    {{ outputProfile.description }}，推荐值 {{ outputProfile.recommended }}
                   </div>
                 </div>
                 <v-chip color="primary" variant="tonal">{{ draftForm.maxTokens }}</v-chip>
@@ -555,33 +557,33 @@ async function rejectRecord(record: AIWritingRecord) {
               />
 
               <div class="d-flex justify-space-between text-caption text-medium-emphasis">
-                <span>Short: {{ outputProfile.min }}</span>
-                <span>Recommended: {{ outputProfile.recommended }}</span>
-                <span>Long: {{ outputProfile.max }}</span>
+                <span>短：{{ outputProfile.min }}</span>
+                <span>推荐：{{ outputProfile.recommended }}</span>
+                <span>长：{{ outputProfile.max }}</span>
               </div>
             </div>
 
             <v-alert type="info" variant="tonal" class="mt-4">
-              Provider: {{ selectedProvider?.name || 'Not selected' }} | Model:
-              {{ draftForm.selectedModel || 'Not selected' }}
+              当前服务：{{ selectedProvider?.name || '未选择' }} | 当前模型：
+              {{ draftForm.selectedModel || '未选择' }}
             </v-alert>
 
             <v-alert v-if="isCurrentChapterEmpty" type="info" variant="tonal" class="mt-4">
-              This chapter is still empty, so continue and expand will automatically fall back to draft mode.
+              当前章节还是空的，所以续写和扩写会自动回退成初稿模式。
             </v-alert>
 
             <v-alert v-if="currentRequiredCharacters.length" type="info" variant="tonal" class="mt-4">
-              Required characters will automatically be included in the generation context.
+              本章必出人物会自动带入生成上下文。
             </v-alert>
 
             <v-alert v-if="isOllamaSelected" type="success" variant="tonal" class="mt-4">
-              Ollama is selected. Streamed prose should appear progressively while generation is running.
+              当前使用 Ollama，生成过程中会优先以流式方式逐步显示正文。
             </v-alert>
 
             <v-textarea
               :model-value="currentPromptTemplate"
               rows="5"
-              label="Resolved prompt template"
+              label="当前提示词模板"
               class="mt-4"
               readonly
             />
@@ -589,9 +591,9 @@ async function rejectRecord(record: AIWritingRecord) {
             <v-textarea
               v-model="draftForm.userInstruction"
               rows="5"
-              label="Additional requirements"
+              label="补充要求"
               class="mt-4"
-              placeholder="Scene direction, tone, POV, pacing, or any other constraint."
+              placeholder="可以补充场景目标、语气、视角、节奏或其他约束。"
             />
 
             <v-alert v-if="displayErrorMessage" type="error" variant="tonal" class="mt-4">
@@ -615,7 +617,7 @@ async function rejectRecord(record: AIWritingRecord) {
         <AIProcessLogPanel
           :logs="displayLogs"
           :loading="displayGenerating"
-          title="Workflow Log"
+          title="工作流日志"
         />
 
         <AIWritingChatPanel
@@ -624,7 +626,7 @@ async function rejectRecord(record: AIWritingRecord) {
           :selected-model="draftForm.selectedModel"
           entry-point="writing-center"
           :disabled="!chapterId"
-          title="Background Chat"
+          title="背景聊天"
         />
       </div>
     </div>

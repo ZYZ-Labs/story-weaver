@@ -37,7 +37,7 @@ onMounted(() => {
     <v-navigation-drawer v-model="drawer" width="296" class="border-e" elevation="0">
       <div class="pa-5">
         <div class="text-overline text-secondary">长篇创作工作台</div>
-        <div class="text-h5 font-weight-bold mt-1">织文者 Story Weaver</div>
+        <div class="text-h5 font-weight-bold mt-1">织文者</div>
         <div class="text-body-2 text-medium-emphasis mt-2">
           把项目、设定、因果和 AI 写作收拢到一个可持续演进的工作台。
         </div>

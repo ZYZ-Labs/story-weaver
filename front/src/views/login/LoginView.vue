@@ -107,7 +107,7 @@ onMounted(() => {
       <v-col cols="12" lg="5" class="d-flex align-center justify-center">
         <v-card width="100%" max-width="520" class="mx-4 soft-panel">
           <v-card-text class="pa-8">
-            <div class="text-h4 font-weight-bold">进入 Story Weaver</div>
+            <div class="text-h4 font-weight-bold">进入织文者</div>
             <div class="text-body-2 text-medium-emphasis mt-2">
               请使用管理员分配的账号登录，页面不再预填任何默认账号或密码。
             </div>

@@ -106,7 +106,7 @@ public class SystemConfigServiceImpl extends ServiceImpl<SystemConfigMapper, Sys
 
     private static Map<String, SystemConfig> buildDefaultConfigs() {
         Map<String, SystemConfig> defaults = new LinkedHashMap<>();
-        defaults.put("site_name", createDefault("site_name", "织文者 Story Weaver", "站点名称"));
+        defaults.put("site_name", createDefault("site_name", "织文者", "站点名称"));
         defaults.put("site_description", createDefault("site_description", "AI 长篇创作工作台", "站点描述"));
         defaults.put("default_ai_model", createDefault("default_ai_model", "qwen2.5:14b", "默认对话模型"));
         defaults.put("default_ai_provider_id", createDefault("default_ai_provider_id", "1", "默认模型服务"));

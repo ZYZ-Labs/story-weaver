@@ -99,13 +99,13 @@ const chapterAiProfile = computed(() =>
 )
 
 const tableHeaders = [
-  { title: 'Order', key: 'orderNum', width: 88 },
-  { title: 'Title', key: 'title' },
-  { title: 'Words', key: 'wordCount', width: 100 },
-  { title: 'Actions', key: 'actions', sortable: false, width: 188 },
+  { title: '顺序', key: 'orderNum', width: 88 },
+  { title: '标题', key: 'title' },
+  { title: '字数', key: 'wordCount', width: 100 },
+  { title: '操作', key: 'actions', sortable: false, width: 188 },
 ]
 
-const toneOptions = ['Tense', 'Casual', 'Mystery', 'Intense', 'Melancholy', 'Epic']
+const toneOptions = ['紧张压迫', '轻松日常', '神秘悬疑', '高压推进', '克制伤感', '史诗宏大']
 
 const form = reactive({
   title: '',
@@ -308,22 +308,22 @@ function getWordCount(chapter: Chapter) {
 
 function getWritingTypeLabel(value?: string) {
   const mapping: Record<string, string> = {
-    draft: 'Draft',
-    continue: 'Continue',
-    expand: 'Expand',
-    rewrite: 'Rewrite',
-    polish: 'Polish',
+    draft: '初稿',
+    continue: '续写',
+    expand: '扩写',
+    rewrite: '重写',
+    polish: '润色',
   }
-  return mapping[value || ''] || value || 'Draft'
+  return mapping[value || ''] || value || '初稿'
 }
 
 function getStatusLabel(value?: string) {
   const mapping: Record<string, string> = {
-    draft: 'Draft',
-    accepted: 'Accepted',
-    rejected: 'Rejected',
+    draft: '草稿',
+    accepted: '已采纳',
+    rejected: '已拒绝',
   }
-  return mapping[value || ''] || value || 'Draft'
+  return mapping[value || ''] || value || '草稿'
 }
 
 function fillLatestRecordFromStore() {
@@ -364,12 +364,12 @@ async function generateTitleSuggestions() {
       brief:
         form.content.trim() ||
         form.title.trim() ||
-        'Generate a strong chapter title for the current project.',
-      extraRequirements: `Current order: chapter ${Number(form.orderNum) || 1}. Return titles that fit long-form Chinese serial fiction.`,
+        '请结合当前项目风格，为这个章节生成更贴合连载小说语境的标题。',
+      extraRequirements: `当前章节顺序为第 ${Number(form.orderNum) || 1} 章，请返回适合中文长篇连载的章节标题候选。`,
       count: 6,
     })
     nameSuggestions.value = result.suggestions || []
-    nameSuggestionSourceLabel.value = `Model: ${result.providerName || 'Unknown provider'} / ${result.modelName || 'Unknown model'}`
+    nameSuggestionSourceLabel.value = `生成模型：${result.providerName || '未知服务'} / ${result.modelName || '未知模型'}`
   } finally {
     nameSuggestionLoading.value = false
   }
@@ -382,18 +382,18 @@ function applySuggestedTitle(value: string) {
 
 function buildChapterAiInstruction(action: 'draft' | 'continue' | 'expand') {
   const lines = [
-    chapterAiForm.sceneGoal.trim() && `Scene goal: ${chapterAiForm.sceneGoal.trim()}`,
-    chapterAiForm.tone.trim() && `Tone: ${chapterAiForm.tone.trim()}`,
-    chapterAiForm.characterVoice.trim() && `Character voice: ${chapterAiForm.characterVoice.trim()}`,
-    chapterAiForm.extraInstruction.trim() && `Extra notes: ${chapterAiForm.extraInstruction.trim()}`,
+    chapterAiForm.sceneGoal.trim() && `场景目标：${chapterAiForm.sceneGoal.trim()}`,
+    chapterAiForm.tone.trim() && `情绪氛围：${chapterAiForm.tone.trim()}`,
+    chapterAiForm.characterVoice.trim() && `人物口吻：${chapterAiForm.characterVoice.trim()}`,
+    chapterAiForm.extraInstruction.trim() && `补充要求：${chapterAiForm.extraInstruction.trim()}`,
     currentPreview.value?.requiredCharacterNames?.length &&
-      `Required characters: ${currentPreview.value.requiredCharacterNames.join(', ')}`,
+      `本章必出人物：${currentPreview.value.requiredCharacterNames.join('、')}`,
   ].filter(Boolean)
 
   const actionInstruction: Record<typeof action, string> = {
-    draft: 'Create a workable first draft for this chapter.',
-    continue: 'Continue naturally from the current prose without repeating earlier content.',
-    expand: 'Expand the current prose while preserving established facts and events.',
+    draft: '请先生成一版可继续扩写的章节初稿。',
+    continue: '请顺着当前正文自然续写，不要重复已经写过的内容。',
+    expand: '请在不改变既有事实的前提下，把当前正文扩写得更完整饱满。',
   }
 
   lines.unshift(actionInstruction[action])
@@ -445,7 +445,7 @@ async function generateChapterAiContent(action: 'draft' | 'continue' | 'expand')
     chapterAiLatestRecord.value = record
     chapterAiStreamingContent.value = record.generatedContent
   } catch (error) {
-    chapterAiError.value = error instanceof Error ? error.message : 'AI draft generation failed.'
+    chapterAiError.value = error instanceof Error ? error.message : 'AI 初稿生成失败'
   } finally {
     chapterAiGenerating.value = false
   }
@@ -456,8 +456,8 @@ async function acceptLatestAiRecord() {
     return
   }
 
-  const updated = await writingStore.accept(displayChapterAiLatestRecord.value.id)
-  chapterAiLatestRecord.value = updated
+  await writingStore.accept(displayChapterAiLatestRecord.value.id)
+  chapterAiLatestRecord.value = writingStore.records[0] || null
   await chapterStore.fetchDetail(currentProjectId.value, currentPreview.value.id)
   fillLatestRecordFromStore()
 }
@@ -468,6 +468,7 @@ async function rejectLatestAiRecord() {
   }
 
   await writingStore.reject(displayChapterAiLatestRecord.value.id)
+  chapterAiLatestRecord.value = writingStore.records[0] || null
   fillLatestRecordFromStore()
 }
 
@@ -484,32 +485,32 @@ async function confirmDelete() {
 
 <template>
   <PageContainer
-    title="Chapter Management"
-    description="Manage chapter order and prose, then generate a first draft with its own model defaults, live workflow log, and reusable background chat."
+    title="章节管理"
+    description="维护章节顺序和正文内容，并在右侧直接生成初稿、查看过程日志、沉淀背景聊天。"
   >
     <template #actions>
       <v-btn color="primary" prepend-icon="mdi-plus" :disabled="!currentProjectId" @click="openCreate">
-        New chapter
+        新建章节
       </v-btn>
     </template>
 
     <EmptyState
       v-if="!currentProjectId"
-      title="Select a project first"
-      description="Chapters load after a project is selected from the left-side project switcher."
+      title="请先选择项目"
+      description="选择项目后，这里会自动加载该项目下的章节。"
     />
 
     <EmptyState
       v-else-if="!chapterStore.chapters.length"
-      title="No chapters yet"
-      description="Create the first chapter to start writing, plotting, and AI-assisted drafting."
+      title="当前还没有章节"
+      description="先创建第一章，后续的剧情推进和 AI 初稿都会围绕章节展开。"
     >
-      <v-btn color="primary" prepend-icon="mdi-plus" @click="openCreate">Create chapter</v-btn>
+      <v-btn color="primary" prepend-icon="mdi-plus" @click="openCreate">创建章节</v-btn>
     </EmptyState>
 
     <div v-else class="chapter-layout">
       <v-card class="soft-panel chapter-list-card">
-        <v-card-title>Chapter List</v-card-title>
+        <v-card-title>章节列表</v-card-title>
         <v-data-table
           class="chapter-table"
           :headers="tableHeaders"
@@ -530,9 +531,9 @@ async function confirmDelete() {
 
           <template #[`item.actions`]="{ item }">
             <div class="d-flex ga-2 justify-end">
-              <v-btn size="small" variant="text" @click.stop="selectChapter(item)">Preview</v-btn>
-              <v-btn size="small" variant="text" @click.stop="openEdit(item)">Edit</v-btn>
-              <v-btn size="small" color="error" variant="text" @click.stop="requestDelete(item)">Delete</v-btn>
+              <v-btn size="small" variant="text" @click.stop="selectChapter(item)">预览</v-btn>
+              <v-btn size="small" variant="text" @click.stop="openEdit(item)">编辑</v-btn>
+              <v-btn size="small" color="error" variant="text" @click.stop="requestDelete(item)">删除</v-btn>
             </div>
           </template>
         </v-data-table>
@@ -540,11 +541,11 @@ async function confirmDelete() {
 
       <div class="chapter-preview-stack">
         <v-card class="soft-panel chapter-preview-card">
-          <v-card-title>Chapter Preview</v-card-title>
+          <v-card-title>章节预览</v-card-title>
           <v-card-text v-if="currentPreview" class="chapter-preview-body">
             <div class="text-h6">{{ currentPreview.title }}</div>
             <div class="text-body-2 text-medium-emphasis mt-2">
-              Order: {{ currentPreview.orderNum || '-' }} | Words: {{ getWordCount(currentPreview) }}
+              顺序：{{ currentPreview.orderNum || '-' }} | 字数：{{ getWordCount(currentPreview) }}
             </div>
             <div v-if="currentPreview.requiredCharacterNames?.length" class="d-flex flex-wrap ga-2 mt-3">
               <v-chip
@@ -554,34 +555,34 @@ async function confirmDelete() {
                 color="secondary"
                 variant="tonal"
               >
-                Required: {{ name }}
+                必出：{{ name }}
               </v-chip>
             </div>
             <v-divider class="my-4" />
             <div class="chapter-preview-content">
               <MarkdownContent
                 :source="currentPreview.content"
-                empty-text="No prose yet. Use the assistant below to generate a first draft."
+                empty-text="当前还没有正文，可以直接在下方让 AI 先生成一版初稿。"
               />
             </div>
           </v-card-text>
           <v-card-text v-else class="text-medium-emphasis">
-            Select a chapter to preview its content.
+            请选择一个章节查看内容。
           </v-card-text>
         </v-card>
 
         <v-card v-if="currentPreview" class="soft-panel">
-          <v-card-title>Draft Assistant</v-card-title>
+          <v-card-title>初稿助手</v-card-title>
           <v-card-subtitle>
-            Provider: {{ selectedDraftProvider?.name || 'Not selected' }} | Model:
-            {{ chapterAiForm.selectedModel || 'Not selected' }}
+            当前服务：{{ selectedDraftProvider?.name || '未选择' }} | 当前模型：
+            {{ chapterAiForm.selectedModel || '未选择' }}
           </v-card-subtitle>
           <v-card-text class="pt-4">
             <v-row>
               <v-col cols="12" md="6">
                 <v-select
                   v-model="chapterAiForm.selectedProviderId"
-                  label="Provider"
+                  label="模型服务"
                   :items="enabledProviders"
                   item-title="name"
                   item-value="id"
@@ -590,7 +591,7 @@ async function confirmDelete() {
               <v-col cols="12" md="6">
                 <v-combobox
                   v-model="chapterAiForm.selectedModel"
-                  label="Model"
+                  label="对话模型"
                   :items="providerModelOptions"
                   clearable
                 />
@@ -598,39 +599,39 @@ async function confirmDelete() {
               <v-col cols="12" md="6">
                 <v-text-field
                   v-model="chapterAiForm.sceneGoal"
-                  label="Scene goal"
-                  placeholder="For example: reveal the key clue for the first time."
+                  label="场景目标"
+                  placeholder="例如：让主角第一次确认关键线索。"
                 />
               </v-col>
               <v-col cols="12" md="6">
                 <v-select
                   v-model="chapterAiForm.tone"
                   :items="toneOptions"
-                  label="Tone"
+                  label="情绪氛围"
                   clearable
                 />
               </v-col>
               <v-col cols="12">
                 <v-text-field
                   v-model="chapterAiForm.characterVoice"
-                  label="Character voice"
-                  placeholder="For example: controlled but sharp, calm and observant."
+                  label="人物口吻"
+                  placeholder="例如：主角冷静克制，配角说话更直接。"
                 />
               </v-col>
               <v-col cols="12">
                 <v-textarea
                   v-model="chapterAiForm.extraInstruction"
                   rows="4"
-                  label="Extra requirements"
-                  placeholder="Pacing, POV, foreshadowing, scene constraints, or style notes."
+                  label="补充要求"
+                  placeholder="可以补充节奏、视角、伏笔、场景约束或写法要求。"
                 />
               </v-col>
               <v-col cols="12">
                 <div class="d-flex justify-space-between align-center ga-3">
                   <div>
-                    <div class="text-subtitle-2 font-weight-medium">Output length</div>
+                    <div class="text-subtitle-2 font-weight-medium">输出长度</div>
                     <div class="text-caption text-medium-emphasis">
-                      {{ chapterAiProfile.description }}, recommended {{ chapterAiProfile.recommended }}
+                      {{ chapterAiProfile.description }}，推荐值 {{ chapterAiProfile.recommended }}
                     </div>
                   </div>
                   <v-chip color="primary" variant="tonal">{{ chapterAiForm.maxTokens }}</v-chip>
@@ -645,9 +646,9 @@ async function confirmDelete() {
                   :step="chapterAiProfile.step"
                 />
                 <div class="d-flex justify-space-between text-caption text-medium-emphasis">
-                  <span>Short: {{ chapterAiProfile.min }}</span>
-                  <span>Recommended: {{ chapterAiProfile.recommended }}</span>
-                  <span>Long: {{ chapterAiProfile.max }}</span>
+                  <span>短：{{ chapterAiProfile.min }}</span>
+                  <span>推荐：{{ chapterAiProfile.recommended }}</span>
+                  <span>长：{{ chapterAiProfile.max }}</span>
                 </div>
               </v-col>
               <v-col cols="12" class="d-flex flex-wrap align-end ga-2">
@@ -656,27 +657,27 @@ async function confirmDelete() {
                   :loading="displayChapterAiGenerating"
                   @click="generateChapterAiContent('draft')"
                 >
-                  Generate draft
+                  生成初稿
                 </v-btn>
                 <v-btn
                   variant="outlined"
                   :loading="displayChapterAiGenerating"
                   @click="generateChapterAiContent('continue')"
                 >
-                  {{ currentPreviewHasContent ? 'Continue prose' : 'Fallback to draft' }}
+                  {{ currentPreviewHasContent ? '续写正文' : '自动回退初稿' }}
                 </v-btn>
                 <v-btn
                   variant="outlined"
                   :loading="displayChapterAiGenerating"
                   @click="generateChapterAiContent('expand')"
                 >
-                  {{ currentPreviewHasContent ? 'Expand prose' : 'Generate expandable draft' }}
+                  {{ currentPreviewHasContent ? '扩写正文' : '先生成可扩写版本' }}
                 </v-btn>
               </v-col>
             </v-row>
 
             <v-alert v-if="!currentPreviewHasContent" type="info" variant="tonal" class="mt-4">
-              This chapter is empty, so continue and expand will automatically fall back to draft mode.
+              当前章节正文为空，所以续写和扩写会自动回退成初稿模式。
             </v-alert>
 
             <v-alert v-if="displayChapterAiError" type="error" variant="tonal" class="mt-4">
@@ -692,10 +693,10 @@ async function confirmDelete() {
               />
 
               <div v-if="displayChapterAiStreamingContent" class="chapter-ai-result">
-                <MarkdownContent :source="displayChapterAiStreamingContent" empty-text="No generated content." />
+                <MarkdownContent :source="displayChapterAiStreamingContent" empty-text="暂时还没有生成内容。" />
               </div>
               <div v-else class="text-medium-emphasis">
-                Generated prose will appear here. The workflow log stays visible even before the final text arrives, so the page feels responsive instead of stuck.
+                生成中的正文会显示在这里。右侧过程日志会先持续刷新，不会让页面看起来像卡住。
               </div>
             </div>
 
@@ -703,7 +704,7 @@ async function confirmDelete() {
               <div class="d-flex justify-space-between align-center ga-3">
                 <div>
                   <div class="text-subtitle-2 font-weight-medium">
-                    Latest result: {{ getWritingTypeLabel(displayChapterAiLatestRecord.writingType) }}
+                    最新结果：{{ getWritingTypeLabel(displayChapterAiLatestRecord.writingType) }}
                   </div>
                   <div class="text-caption text-medium-emphasis mt-1">
                     {{ formatDateTime(displayChapterAiLatestRecord.createTime) }} |
@@ -718,7 +719,7 @@ async function confirmDelete() {
                     :disabled="displayChapterAiLatestRecord.status === 'accepted'"
                     @click="acceptLatestAiRecord"
                   >
-                    Accept into chapter
+                    采纳到正文
                   </v-btn>
                   <v-btn
                     size="small"
@@ -727,7 +728,7 @@ async function confirmDelete() {
                     :disabled="displayChapterAiLatestRecord.status === 'rejected'"
                     @click="rejectLatestAiRecord"
                   >
-                    Reject
+                    拒绝
                   </v-btn>
                 </div>
               </div>
@@ -739,7 +740,7 @@ async function confirmDelete() {
           v-if="currentPreview"
           :logs="displayChapterAiLogs"
           :loading="displayChapterAiGenerating"
-          title="Draft Workflow Log"
+          title="初稿工作流日志"
         />
 
         <AIWritingChatPanel
@@ -749,39 +750,39 @@ async function confirmDelete() {
           :selected-model="chapterAiForm.selectedModel"
           entry-point="draft"
           :disabled="!currentPreview"
-          title="Draft Background Chat"
+          title="初稿背景聊天"
         />
       </div>
     </div>
 
     <v-dialog v-model="dialog" max-width="760">
       <v-card>
-        <v-card-title>{{ editingId ? 'Edit chapter' : 'Create chapter' }}</v-card-title>
+        <v-card-title>{{ editingId ? '编辑章节' : '新建章节' }}</v-card-title>
         <v-card-text class="pt-4">
           <v-row>
             <v-col cols="12" md="8">
               <div class="d-flex ga-2 align-start">
-                <v-text-field v-model="form.title" class="flex-grow-1" label="Chapter title" />
+                <v-text-field v-model="form.title" class="flex-grow-1" label="章节标题" />
                 <v-btn class="mt-2" variant="outlined" @click="generateTitleSuggestions">
-                  AI title ideas
+                  AI 标题建议
                 </v-btn>
               </div>
             </v-col>
             <v-col cols="12" md="4">
-              <v-text-field v-model="form.orderNum" type="number" label="Chapter order" />
+              <v-text-field v-model="form.orderNum" type="number" label="章节顺序" />
             </v-col>
             <v-col cols="12">
               <MarkdownEditor
                 v-model="form.content"
-                label="Chapter content"
+                label="章节正文"
                 :rows="10"
-                preview-empty-text="No prose yet."
+                preview-empty-text="当前还没有正文。"
               />
             </v-col>
             <v-col cols="12">
               <v-select
                 v-model="form.requiredCharacterIds"
-                label="Required characters for this chapter"
+                label="本章必出人物"
                 :items="characterStore.characters"
                 item-title="name"
                 item-value="id"
@@ -789,33 +790,33 @@ async function confirmDelete() {
                 chips
                 closable-chips
                 clearable
-                hint="These characters will be injected as hard constraints during AI generation."
+                hint="这些人物会被当作硬约束自动带入 AI 生成上下文。"
                 persistent-hint
               />
             </v-col>
           </v-row>
         </v-card-text>
         <v-card-actions class="justify-end">
-          <v-btn variant="text" @click="dialog = false">Cancel</v-btn>
-          <v-btn color="primary" @click="submit">Save</v-btn>
+          <v-btn variant="text" @click="dialog = false">取消</v-btn>
+          <v-btn color="primary" @click="submit">保存</v-btn>
         </v-card-actions>
       </v-card>
     </v-dialog>
 
     <ConfirmDialog
       v-model="confirmVisible"
-      title="Delete chapter"
-      text="Are you sure you want to delete this chapter? It will disappear from both chapter management and the writing center."
+      title="删除章节"
+      text="确认删除这个章节吗？删除后，它会同时从章节管理和写作中心中消失。"
       @confirm="confirmDelete"
     />
 
     <NameSuggestionDialog
       v-model="nameSuggestionDialog"
-      title="Choose a chapter title"
+      title="选择章节标题"
       :loading="nameSuggestionLoading"
       :suggestions="nameSuggestions"
       :source-label="nameSuggestionSourceLabel"
-      empty-text="No title suggestions came back this time. Try again with a stronger content brief."
+      empty-text="这次没有拿到合适的标题，可以补充更多上下文后再试一次。"
       @refresh="generateTitleSuggestions"
       @select="applySuggestedTitle"
     />

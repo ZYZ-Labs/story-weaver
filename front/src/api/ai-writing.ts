@@ -97,7 +97,7 @@ export function acceptWriting(id: number) {
 }
 
 export function rejectWriting(id: number) {
-  return http.post(`/ai-writing/${id}/reject`)
+  return http.post<never, AIWritingRecord>(`/ai-writing/${id}/reject`)
 }
 
 function parseSseEvent(rawEvent: string) {
