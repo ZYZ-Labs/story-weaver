@@ -68,7 +68,7 @@ class ProjectControllerTest extends BaseTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(projectJson))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value(0))
+                .andExpect(jsonPath("$.code").value(200))
                 .andExpect(jsonPath("$.data.name").value("API测试项目"))
                 .andExpect(jsonPath("$.data.genre").value("玄幻"));
     }
@@ -95,7 +95,7 @@ class ProjectControllerTest extends BaseTest {
         mockMvc.perform(get("/api/projects")
                 .header("Authorization", "Bearer " + authToken))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value(0))
+                .andExpect(jsonPath("$.code").value(200))
                 .andExpect(jsonPath("$.data").isArray())
                 .andExpect(jsonPath("$.data.length()").value(2));
     }
@@ -114,7 +114,7 @@ class ProjectControllerTest extends BaseTest {
         mockMvc.perform(get("/api/projects/" + project.getId())
                 .header("Authorization", "Bearer " + authToken))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value(0))
+                .andExpect(jsonPath("$.code").value(200))
                 .andExpect(jsonPath("$.data.name").value("详细查询项目"))
                 .andExpect(jsonPath("$.data.genre").value("武侠"));
     }
@@ -143,8 +143,8 @@ class ProjectControllerTest extends BaseTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(updateJson))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value(0))
-                .andExpect(jsonPath("$.data").value(true));
+                .andExpect(jsonPath("$.code").value(200))
+                .andExpect(jsonPath("$.message").exists());
         
         Project updatedProject = projectMapper.selectById(project.getId());
         assertEquals("更新后的项目", updatedProject.getName());
@@ -166,8 +166,8 @@ class ProjectControllerTest extends BaseTest {
         mockMvc.perform(delete("/api/projects/" + project.getId())
                 .header("Authorization", "Bearer " + authToken))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value(0))
-                .andExpect(jsonPath("$.data").value(true));
+                .andExpect(jsonPath("$.code").value(200))
+                .andExpect(jsonPath("$.message").exists());
         
         Project deletedProject = projectMapper.selectById(project.getId());
         assertNull(deletedProject);

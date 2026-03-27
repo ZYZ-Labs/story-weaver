@@ -2,6 +2,8 @@ export const storageKeys = {
   token: 'story-weaver:token',
   user: 'story-weaver:user',
   projectId: 'story-weaver:project-id',
+  writingCenterModelPreference: 'story-weaver:writing-center-model-preference',
+  chapterDraftModelPreference: 'story-weaver:chapter-draft-model-preference',
 }
 
 export function readStorage<T>(key: string, fallback: T): T {

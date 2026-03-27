@@ -46,6 +46,35 @@ public class ProjectController {
         return ResponseEntity.ok(result);
     }
 
+    @GetMapping("/{id}")
+    public ResponseEntity<Map<String, Object>> getProjectById(
+            @PathVariable Long id,
+            @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
+            Authentication authentication) {
+        if (!AuthHeaderSupport.hasValidBearerToken(authorizationHeader)) {
+            return AuthHeaderSupport.unauthorizedResponse();
+        }
+        Long userId = SecurityUtils.getCurrentUserId(authentication);
+
+        Project project = projectService.getUserProjects(userId).stream()
+                .filter(item -> item != null && id.equals(item.getId()))
+                .findFirst()
+                .orElse(null);
+
+        if (project == null) {
+            return ResponseEntity.ok(Map.of(
+                    "code", 404,
+                    "message", "Project not found"
+            ));
+        }
+
+        return ResponseEntity.ok(Map.of(
+                "code", 200,
+                "message", "Success",
+                "data", project
+        ));
+    }
+
     @PostMapping
     public ResponseEntity<Map<String, Object>> createProject(
             @RequestBody ProjectRequestDTO requestDTO,

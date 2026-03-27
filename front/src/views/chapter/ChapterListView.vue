@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 
+import AIProcessLogPanel from '@/components/AIProcessLogPanel.vue'
+import AIWritingChatPanel from '@/components/AIWritingChatPanel.vue'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import EmptyState from '@/components/EmptyState.vue'
 import MarkdownContent from '@/components/MarkdownContent.vue'
@@ -17,6 +19,13 @@ import { useWritingStore } from '@/stores/writing'
 import type { AIWritingRecord, Chapter } from '@/types'
 import { resolveOutputLengthProfile } from '@/utils/ai-model'
 import { formatDateTime } from '@/utils/format'
+import { readStorage, storageKeys, writeStorage } from '@/utils/storage'
+
+const providerModelLibrary: Record<string, string[]> = {
+  ollama: ['qwen3.5:9b', 'qwen2.5:14b', 'qwen2.5:7b', 'llama3.1:8b', 'deepseek-r1:14b'],
+  'openai-compatible': ['gpt-4.1', 'gpt-4o-mini', 'gpt-4.1-mini'],
+  deepseek: ['deepseek-chat', 'deepseek-reasoner'],
+}
 
 const projectStore = useProjectStore()
 const chapterStore = useChapterStore()
@@ -50,38 +59,53 @@ const displayChapterAiError = computed(() => currentChapterStreamState.value.err
 const displayChapterAiStreamingContent = computed(
   () => currentChapterStreamState.value.content || chapterAiStreamingContent.value,
 )
+const displayChapterAiLogs = computed(() => currentChapterStreamState.value.logs || [])
 const displayChapterAiLatestRecord = computed<AIWritingRecord | null>(
   () => currentChapterStreamState.value.lastRecord || chapterAiLatestRecord.value || writingStore.records[0] || null,
 )
 const enabledProviders = computed(() => providerStore.providers.filter((item) => item.enabled === 1))
-const defaultProvider = computed(() => {
-  const configuredId = settingsStore.getNumberValue('default_ai_provider_id', null)
-  if (configuredId) {
-    const matched = enabledProviders.value.find((item) => item.id === configuredId)
-    if (matched) {
-      return matched
+const selectedDraftProvider = computed(
+  () => enabledProviders.value.find((item) => item.id === chapterAiForm.selectedProviderId) || null,
+)
+const providerModelOptions = computed(() => {
+  const values = new Set<string>()
+  const provider = selectedDraftProvider.value
+  if (provider?.providerType && providerModelLibrary[provider.providerType]) {
+    for (const item of providerModelLibrary[provider.providerType]) {
+      values.add(item)
     }
   }
-  return (
-    enabledProviders.value.find((item) => item.isDefault === 1) ||
-    enabledProviders.value.find((item) => item.providerType === 'ollama') ||
-    enabledProviders.value[0] ||
-    null
-  )
+  if (provider?.modelName) {
+    values.add(provider.modelName)
+  }
+  const draftModel = settingsStore.getConfigValue('draft_ai_model')
+  if (draftModel) {
+    values.add(draftModel)
+  }
+  const defaultModel = settingsStore.getConfigValue('default_ai_model')
+  if (defaultModel) {
+    values.add(defaultModel)
+  }
+  if (chapterAiForm.selectedModel) {
+    values.add(chapterAiForm.selectedModel)
+  }
+  return Array.from(values)
 })
-const defaultModelName = computed(
-  () => defaultProvider.value?.modelName || settingsStore.getConfigValue('default_ai_model', '由默认 Provider 决定'),
+const chapterAiProfile = computed(() =>
+  resolveOutputLengthProfile(
+    selectedDraftProvider.value,
+    chapterAiForm.selectedModel || selectedDraftProvider.value?.modelName,
+  ),
 )
-const chapterAiProfile = computed(() => resolveOutputLengthProfile(defaultProvider.value, defaultModelName.value))
 
 const tableHeaders = [
-  { title: '顺序', key: 'orderNum', width: 88 },
-  { title: '标题', key: 'title' },
-  { title: '字数', key: 'wordCount', width: 100 },
-  { title: '操作', key: 'actions', sortable: false, width: 188 },
+  { title: 'Order', key: 'orderNum', width: 88 },
+  { title: 'Title', key: 'title' },
+  { title: 'Words', key: 'wordCount', width: 100 },
+  { title: 'Actions', key: 'actions', sortable: false, width: 188 },
 ]
 
-const toneOptions = ['紧张压迫', '轻松日常', '神秘悬疑', '热血推进', '伤感克制', '史诗宏大']
+const toneOptions = ['Tense', 'Casual', 'Mystery', 'Intense', 'Melancholy', 'Epic']
 
 const form = reactive({
   title: '',
@@ -96,6 +120,8 @@ const chapterAiForm = reactive({
   characterVoice: '',
   extraInstruction: '',
   maxTokens: 900,
+  selectedProviderId: null as number | null,
+  selectedModel: '',
 })
 
 watch(
@@ -130,21 +156,43 @@ watch(
 )
 
 watch(
-  [defaultProvider, defaultModelName],
+  [() => settingsStore.configs.length, () => providerStore.providers.length],
   () => {
-    const profile = chapterAiProfile.value
-    const signature = `${defaultProvider.value?.id || 0}:${defaultModelName.value}:${profile.max}`
-    if (signature !== lastChapterAiModelSignature.value) {
-      lastChapterAiModelSignature.value = signature
-      chapterAiForm.maxTokens = profile.recommended
-      return
-    }
-    chapterAiForm.maxTokens = Math.min(
-      Math.max(chapterAiForm.maxTokens || profile.recommended, profile.min),
-      profile.max,
-    )
+    applyDraftProviderDefaults()
   },
   { immediate: true },
+)
+
+watch(
+  [selectedDraftProvider, () => chapterAiForm.selectedModel],
+  () => {
+    syncDraftMaxTokens()
+  },
+  { immediate: true },
+)
+
+watch(
+  () => chapterAiForm.selectedProviderId,
+  () => {
+    const provider = selectedDraftProvider.value
+    const fallbackModel =
+      provider?.modelName ||
+      settingsStore.getConfigValue('draft_ai_model') ||
+      settingsStore.getConfigValue('default_ai_model', 'qwen3.5:9b')
+    if (!chapterAiForm.selectedModel || !providerModelOptions.value.includes(chapterAiForm.selectedModel)) {
+      chapterAiForm.selectedModel = fallbackModel
+    }
+  },
+)
+
+watch(
+  [() => chapterAiForm.selectedProviderId, () => chapterAiForm.selectedModel],
+  () => {
+    writeStorage(storageKeys.chapterDraftModelPreference, {
+      selectedProviderId: chapterAiForm.selectedProviderId,
+      selectedModel: chapterAiForm.selectedModel,
+    })
+  },
 )
 
 onMounted(async () => {
@@ -152,6 +200,7 @@ onMounted(async () => {
     await projectStore.fetchProjects().catch(() => undefined)
   }
   await Promise.allSettled([settingsStore.fetchAll(), providerStore.fetchAll()])
+  applyDraftProviderDefaults()
 })
 
 function fillForm(chapter?: Chapter | null) {
@@ -161,6 +210,69 @@ function fillForm(chapter?: Chapter | null) {
     orderNum: chapter?.orderNum || chapterStore.chapters.length + 1,
     requiredCharacterIds: [...(chapter?.requiredCharacterIds || [])],
   })
+}
+
+function getPreferredDraftProviderId() {
+  const configuredId =
+    settingsStore.getNumberValue('draft_ai_provider_id', null) ||
+    settingsStore.getNumberValue('default_ai_provider_id', null)
+  if (configuredId && enabledProviders.value.some((item) => item.id === configuredId)) {
+    return configuredId
+  }
+
+  const defaultProvider = enabledProviders.value.find((item) => item.isDefault === 1)
+  const ollamaProvider = enabledProviders.value.find((item) => item.providerType === 'ollama')
+  return ollamaProvider?.id ?? defaultProvider?.id ?? enabledProviders.value[0]?.id ?? null
+}
+
+function applyDraftProviderDefaults() {
+  if (!enabledProviders.value.length) {
+    return
+  }
+
+  const persistedPreference = readStorage<{
+    selectedProviderId: number | null
+    selectedModel: string
+  }>(storageKeys.chapterDraftModelPreference, {
+    selectedProviderId: null,
+    selectedModel: '',
+  })
+
+  if (
+    !chapterAiForm.selectedProviderId ||
+    !enabledProviders.value.some((item) => item.id === chapterAiForm.selectedProviderId)
+  ) {
+    const persistedProviderId = persistedPreference.selectedProviderId
+    chapterAiForm.selectedProviderId =
+      persistedProviderId && enabledProviders.value.some((item) => item.id === persistedProviderId)
+        ? persistedProviderId
+        : getPreferredDraftProviderId()
+  }
+
+  if (
+    !chapterAiForm.selectedModel ||
+    !providerModelOptions.value.includes(chapterAiForm.selectedModel)
+  ) {
+    chapterAiForm.selectedModel =
+      persistedPreference.selectedModel ||
+      selectedDraftProvider.value?.modelName ||
+      settingsStore.getConfigValue('draft_ai_model') ||
+      settingsStore.getConfigValue('default_ai_model', 'qwen3.5:9b')
+  }
+}
+
+function syncDraftMaxTokens() {
+  const profile = chapterAiProfile.value
+  const signature = `${selectedDraftProvider.value?.id || 0}:${chapterAiForm.selectedModel || selectedDraftProvider.value?.modelName || ''}:${profile.max}`
+  if (signature !== lastChapterAiModelSignature.value) {
+    lastChapterAiModelSignature.value = signature
+    chapterAiForm.maxTokens = profile.recommended
+    return
+  }
+  chapterAiForm.maxTokens = Math.min(
+    Math.max(chapterAiForm.maxTokens || profile.recommended, profile.min),
+    profile.max,
+  )
 }
 
 function openCreate() {
@@ -196,22 +308,22 @@ function getWordCount(chapter: Chapter) {
 
 function getWritingTypeLabel(value?: string) {
   const mapping: Record<string, string> = {
-    draft: '拟生成',
-    continue: '续写',
-    expand: '扩写',
-    rewrite: '重写',
-    polish: '润色',
+    draft: 'Draft',
+    continue: 'Continue',
+    expand: 'Expand',
+    rewrite: 'Rewrite',
+    polish: 'Polish',
   }
-  return mapping[value || ''] || value || '拟生成'
+  return mapping[value || ''] || value || 'Draft'
 }
 
 function getStatusLabel(value?: string) {
   const mapping: Record<string, string> = {
-    draft: '草稿',
-    accepted: '已采纳',
-    rejected: '已拒绝',
+    draft: 'Draft',
+    accepted: 'Accepted',
+    rejected: 'Rejected',
   }
-  return mapping[value || ''] || value || '草稿'
+  return mapping[value || ''] || value || 'Draft'
 }
 
 function fillLatestRecordFromStore() {
@@ -249,12 +361,15 @@ async function generateTitleSuggestions() {
   try {
     const result = await generateNameSuggestions(currentProjectId.value, {
       entityType: 'chapter',
-      brief: form.content.trim() || form.title.trim() || '请根据当前项目风格生成一个章节标题。',
-      extraRequirements: `当前章节顺序：第 ${Number(form.orderNum) || 1} 章。标题要适合中文长篇连载。`,
+      brief:
+        form.content.trim() ||
+        form.title.trim() ||
+        'Generate a strong chapter title for the current project.',
+      extraRequirements: `Current order: chapter ${Number(form.orderNum) || 1}. Return titles that fit long-form Chinese serial fiction.`,
       count: 6,
     })
     nameSuggestions.value = result.suggestions || []
-    nameSuggestionSourceLabel.value = `生成模型：${result.providerName || '未命名服务'} / ${result.modelName || '未命名模型'}`
+    nameSuggestionSourceLabel.value = `Model: ${result.providerName || 'Unknown provider'} / ${result.modelName || 'Unknown model'}`
   } finally {
     nameSuggestionLoading.value = false
   }
@@ -267,18 +382,18 @@ function applySuggestedTitle(value: string) {
 
 function buildChapterAiInstruction(action: 'draft' | 'continue' | 'expand') {
   const lines = [
-    chapterAiForm.sceneGoal.trim() && `场景目标：${chapterAiForm.sceneGoal.trim()}`,
-    chapterAiForm.tone.trim() && `情绪氛围：${chapterAiForm.tone.trim()}`,
-    chapterAiForm.characterVoice.trim() && `人物性格 / 口吻要求：${chapterAiForm.characterVoice.trim()}`,
-    chapterAiForm.extraInstruction.trim() && `额外补充：${chapterAiForm.extraInstruction.trim()}`,
+    chapterAiForm.sceneGoal.trim() && `Scene goal: ${chapterAiForm.sceneGoal.trim()}`,
+    chapterAiForm.tone.trim() && `Tone: ${chapterAiForm.tone.trim()}`,
+    chapterAiForm.characterVoice.trim() && `Character voice: ${chapterAiForm.characterVoice.trim()}`,
+    chapterAiForm.extraInstruction.trim() && `Extra notes: ${chapterAiForm.extraInstruction.trim()}`,
     currentPreview.value?.requiredCharacterNames?.length &&
-      `本章必须出现人物：${currentPreview.value.requiredCharacterNames.join('、')}`,
+      `Required characters: ${currentPreview.value.requiredCharacterNames.join(', ')}`,
   ].filter(Boolean)
 
   const actionInstruction: Record<typeof action, string> = {
-    draft: '请先搭出一版能继续往下写的章节正文初稿。',
-    continue: '请承接当前最后一段往后推进，不要重复已经写过的内容。',
-    expand: '请在保留已有情节事实的前提下，把当前正文扩成更饱满的版本。',
+    draft: 'Create a workable first draft for this chapter.',
+    continue: 'Continue naturally from the current prose without repeating earlier content.',
+    expand: 'Expand the current prose while preserving established facts and events.',
   }
 
   lines.unshift(actionInstruction[action])
@@ -314,9 +429,10 @@ async function generateChapterAiContent(action: 'draft' | 'continue' | 'expand')
         userInstruction: buildChapterAiInstruction(action),
         writingType,
         maxTokens: chapterAiForm.maxTokens,
-        selectedProviderId: defaultProvider.value?.id || settingsStore.getNumberValue('default_ai_provider_id', null),
-        selectedModel: defaultModelName.value === '由默认 Provider 决定' ? '' : defaultModelName.value,
+        selectedProviderId: chapterAiForm.selectedProviderId,
+        selectedModel: chapterAiForm.selectedModel,
         promptSnapshot: settingsStore.getPromptTemplateByWritingType(writingType),
+        entryPoint: 'draft',
       },
       {
         onEvent: (event) => {
@@ -329,7 +445,7 @@ async function generateChapterAiContent(action: 'draft' | 'continue' | 'expand')
     chapterAiLatestRecord.value = record
     chapterAiStreamingContent.value = record.generatedContent
   } catch (error) {
-    chapterAiError.value = error instanceof Error ? error.message : 'AI 正文生成失败。'
+    chapterAiError.value = error instanceof Error ? error.message : 'AI draft generation failed.'
   } finally {
     chapterAiGenerating.value = false
   }
@@ -368,32 +484,32 @@ async function confirmDelete() {
 
 <template>
   <PageContainer
-    title="章节管理"
-    description="维护当前项目的章节顺序、标题和正文内容。现在可以为章节直接勾选必出人物，右侧 AI 助手也会保留跨页面的进行中内容。"
+    title="Chapter Management"
+    description="Manage chapter order and prose, then generate a first draft with its own model defaults, live workflow log, and reusable background chat."
   >
     <template #actions>
       <v-btn color="primary" prepend-icon="mdi-plus" :disabled="!currentProjectId" @click="openCreate">
-        新建章节
+        New chapter
       </v-btn>
     </template>
 
     <EmptyState
       v-if="!currentProjectId"
-      title="先选择一个项目"
-      description="左侧项目切换后，这里会自动加载该项目的章节。"
+      title="Select a project first"
+      description="Chapters load after a project is selected from the left-side project switcher."
     />
 
     <EmptyState
       v-else-if="!chapterStore.chapters.length"
-      title="还没有章节"
-      description="先创建第一章，后续人物、剧情和 AI 写作都会围绕它展开。"
+      title="No chapters yet"
+      description="Create the first chapter to start writing, plotting, and AI-assisted drafting."
     >
-      <v-btn color="primary" prepend-icon="mdi-plus" @click="openCreate">创建章节</v-btn>
+      <v-btn color="primary" prepend-icon="mdi-plus" @click="openCreate">Create chapter</v-btn>
     </EmptyState>
 
     <div v-else class="chapter-layout">
       <v-card class="soft-panel chapter-list-card">
-        <v-card-title>章节列表</v-card-title>
+        <v-card-title>Chapter List</v-card-title>
         <v-data-table
           class="chapter-table"
           :headers="tableHeaders"
@@ -414,9 +530,9 @@ async function confirmDelete() {
 
           <template #[`item.actions`]="{ item }">
             <div class="d-flex ga-2 justify-end">
-              <v-btn size="small" variant="text" @click.stop="selectChapter(item)">预览</v-btn>
-              <v-btn size="small" variant="text" @click.stop="openEdit(item)">编辑</v-btn>
-              <v-btn size="small" color="error" variant="text" @click.stop="requestDelete(item)">删除</v-btn>
+              <v-btn size="small" variant="text" @click.stop="selectChapter(item)">Preview</v-btn>
+              <v-btn size="small" variant="text" @click.stop="openEdit(item)">Edit</v-btn>
+              <v-btn size="small" color="error" variant="text" @click.stop="requestDelete(item)">Delete</v-btn>
             </div>
           </template>
         </v-data-table>
@@ -424,11 +540,11 @@ async function confirmDelete() {
 
       <div class="chapter-preview-stack">
         <v-card class="soft-panel chapter-preview-card">
-          <v-card-title>章节预览</v-card-title>
+          <v-card-title>Chapter Preview</v-card-title>
           <v-card-text v-if="currentPreview" class="chapter-preview-body">
             <div class="text-h6">{{ currentPreview.title }}</div>
             <div class="text-body-2 text-medium-emphasis mt-2">
-              章节顺序：{{ currentPreview.orderNum || '-' }} · 字数：{{ getWordCount(currentPreview) }}
+              Order: {{ currentPreview.orderNum || '-' }} | Words: {{ getWordCount(currentPreview) }}
             </div>
             <div v-if="currentPreview.requiredCharacterNames?.length" class="d-flex flex-wrap ga-2 mt-3">
               <v-chip
@@ -438,65 +554,83 @@ async function confirmDelete() {
                 color="secondary"
                 variant="tonal"
               >
-                必读人物：{{ name }}
+                Required: {{ name }}
               </v-chip>
             </div>
             <v-divider class="my-4" />
             <div class="chapter-preview-content">
               <MarkdownContent
                 :source="currentPreview.content"
-                empty-text="暂无正文。可以直接在下方让 AI 先帮你拟一版初稿。"
+                empty-text="No prose yet. Use the assistant below to generate a first draft."
               />
             </div>
           </v-card-text>
           <v-card-text v-else class="text-medium-emphasis">
-            选择一章后会在这里预览内容。
+            Select a chapter to preview its content.
           </v-card-text>
         </v-card>
 
         <v-card v-if="currentPreview" class="soft-panel">
-          <v-card-title>AI 正文助手</v-card-title>
+          <v-card-title>Draft Assistant</v-card-title>
           <v-card-subtitle>
-            默认模型：{{ defaultModelName }}<span v-if="defaultProvider"> · {{ defaultProvider.name }}</span>
+            Provider: {{ selectedDraftProvider?.name || 'Not selected' }} | Model:
+            {{ chapterAiForm.selectedModel || 'Not selected' }}
           </v-card-subtitle>
           <v-card-text class="pt-4">
             <v-row>
               <v-col cols="12" md="6">
+                <v-select
+                  v-model="chapterAiForm.selectedProviderId"
+                  label="Provider"
+                  :items="enabledProviders"
+                  item-title="name"
+                  item-value="id"
+                />
+              </v-col>
+              <v-col cols="12" md="6">
+                <v-combobox
+                  v-model="chapterAiForm.selectedModel"
+                  label="Model"
+                  :items="providerModelOptions"
+                  clearable
+                />
+              </v-col>
+              <v-col cols="12" md="6">
                 <v-text-field
                   v-model="chapterAiForm.sceneGoal"
-                  label="场景目标"
-                  placeholder="例如：让主角第一次发现关键线索"
+                  label="Scene goal"
+                  placeholder="For example: reveal the key clue for the first time."
                 />
               </v-col>
               <v-col cols="12" md="6">
                 <v-select
                   v-model="chapterAiForm.tone"
                   :items="toneOptions"
-                  label="情绪氛围"
+                  label="Tone"
                   clearable
                 />
               </v-col>
               <v-col cols="12">
                 <v-text-field
                   v-model="chapterAiForm.characterVoice"
-                  label="人物性格 / 口吻要求"
-                  placeholder="例如：主角嘴硬但克制，配角说话更冷静"
+                  label="Character voice"
+                  placeholder="For example: controlled but sharp, calm and observant."
                 />
               </v-col>
               <v-col cols="12">
                 <v-textarea
                   v-model="chapterAiForm.extraInstruction"
                   rows="4"
-                  label="补充要求"
-                  placeholder="例如：节奏不要太快，先把场景和人物关系铺开"
+                  label="Extra requirements"
+                  placeholder="Pacing, POV, foreshadowing, scene constraints, or style notes."
                 />
               </v-col>
               <v-col cols="12">
                 <div class="d-flex justify-space-between align-center ga-3">
                   <div>
-                    <div class="text-subtitle-2 font-weight-medium">目标输出长度</div>
+                    <div class="text-subtitle-2 font-weight-medium">Output length</div>
                     <div class="text-caption text-medium-emphasis">
-                      {{ chapterAiProfile.description }}，推荐值 {{ chapterAiProfile.recommended }}
+                      {{ chapterAiProfile.description }}, recommended {{ chapterAiProfile.recommended }}
                     </div>
                   </div>
                   <v-chip color="primary" variant="tonal">{{ chapterAiForm.maxTokens }}</v-chip>
@@ -511,9 +645,9 @@ async function confirmDelete() {
                   :step="chapterAiProfile.step"
                 />
                 <div class="d-flex justify-space-between text-caption text-medium-emphasis">
-                  <span>短：{{ chapterAiProfile.min }}</span>
-                  <span>推荐：{{ chapterAiProfile.recommended }}</span>
-                  <span>长：{{ chapterAiProfile.max }}</span>
+                  <span>Short: {{ chapterAiProfile.min }}</span>
+                  <span>Recommended: {{ chapterAiProfile.recommended }}</span>
+                  <span>Long: {{ chapterAiProfile.max }}</span>
                 </div>
               </v-col>
               <v-col cols="12" class="d-flex flex-wrap align-end ga-2">
@@ -522,27 +656,27 @@ async function confirmDelete() {
                   :loading="displayChapterAiGenerating"
                   @click="generateChapterAiContent('draft')"
                 >
-                  拟生成正文初稿
+                  Generate draft
                 </v-btn>
                 <v-btn
                   variant="outlined"
                   :loading="displayChapterAiGenerating"
                   @click="generateChapterAiContent('continue')"
                 >
-                  {{ currentPreviewHasContent ? '续写当前正文' : '根据设定起草正文' }}
+                  {{ currentPreviewHasContent ? 'Continue prose' : 'Fallback to draft' }}
                 </v-btn>
                 <v-btn
                   variant="outlined"
                   :loading="displayChapterAiGenerating"
                   @click="generateChapterAiContent('expand')"
                 >
-                  {{ currentPreviewHasContent ? '扩写当前正文' : '先生成可扩写版本' }}
+                  {{ currentPreviewHasContent ? 'Expand prose' : 'Generate expandable draft' }}
                 </v-btn>
               </v-col>
             </v-row>
 
             <v-alert v-if="!currentPreviewHasContent" type="info" variant="tonal" class="mt-4">
-              当前正文还是空的。点“拟生成正文初稿”最合适；如果直接点续写或扩写，也会自动按初稿模式处理。
+              This chapter is empty, so continue and expand will automatically fall back to draft mode.
             </v-alert>
 
             <v-alert v-if="displayChapterAiError" type="error" variant="tonal" class="mt-4">
@@ -558,10 +692,10 @@ async function confirmDelete() {
               />
 
               <div v-if="displayChapterAiStreamingContent" class="chapter-ai-result">
-                <MarkdownContent :source="displayChapterAiStreamingContent" empty-text="暂无生成内容" />
+                <MarkdownContent :source="displayChapterAiStreamingContent" empty-text="No generated content." />
               </div>
               <div v-else class="text-medium-emphasis">
-                这里会实时显示生成中的正文片段，生成完成后可直接采纳到当前章节。
+                Generated prose will appear here. The workflow log stays visible even before the final text arrives, so the page feels responsive instead of stuck.
               </div>
             </div>
 
@@ -569,10 +703,10 @@ async function confirmDelete() {
               <div class="d-flex justify-space-between align-center ga-3">
                 <div>
                   <div class="text-subtitle-2 font-weight-medium">
-                    最新 AI 结果：{{ getWritingTypeLabel(displayChapterAiLatestRecord.writingType) }}
+                    Latest result: {{ getWritingTypeLabel(displayChapterAiLatestRecord.writingType) }}
                   </div>
                   <div class="text-caption text-medium-emphasis mt-1">
-                    {{ formatDateTime(displayChapterAiLatestRecord.createTime) }} ·
+                    {{ formatDateTime(displayChapterAiLatestRecord.createTime) }} |
                     {{ getStatusLabel(displayChapterAiLatestRecord.status) }}
                   </div>
                 </div>
@@ -584,7 +718,7 @@ async function confirmDelete() {
                     :disabled="displayChapterAiLatestRecord.status === 'accepted'"
                     @click="acceptLatestAiRecord"
                   >
-                    采纳到正文
+                    Accept into chapter
                   </v-btn>
                   <v-btn
                     size="small"
@@ -593,44 +727,61 @@ async function confirmDelete() {
                     :disabled="displayChapterAiLatestRecord.status === 'rejected'"
                     @click="rejectLatestAiRecord"
                   >
-                    拒绝
+                    Reject
                   </v-btn>
                 </div>
               </div>
             </div>
           </v-card-text>
         </v-card>
+
+        <AIProcessLogPanel
+          v-if="currentPreview"
+          :logs="displayChapterAiLogs"
+          :loading="displayChapterAiGenerating"
+          title="Draft Workflow Log"
+        />
+
+        <AIWritingChatPanel
+          v-if="currentPreview"
+          :chapter-id="currentPreview.id"
+          :selected-provider-id="chapterAiForm.selectedProviderId"
+          :selected-model="chapterAiForm.selectedModel"
+          entry-point="draft"
+          :disabled="!currentPreview"
+          title="Draft Background Chat"
+        />
       </div>
     </div>
 
     <v-dialog v-model="dialog" max-width="760">
       <v-card>
-        <v-card-title>{{ editingId ? '编辑章节' : '新建章节' }}</v-card-title>
+        <v-card-title>{{ editingId ? 'Edit chapter' : 'Create chapter' }}</v-card-title>
         <v-card-text class="pt-4">
           <v-row>
             <v-col cols="12" md="8">
               <div class="d-flex ga-2 align-start">
-                <v-text-field v-model="form.title" class="flex-grow-1" label="章节标题" />
+                <v-text-field v-model="form.title" class="flex-grow-1" label="Chapter title" />
                 <v-btn class="mt-2" variant="outlined" @click="generateTitleSuggestions">
-                  AI 生成标题
+                  AI title ideas
                 </v-btn>
               </div>
             </v-col>
             <v-col cols="12" md="4">
-              <v-text-field v-model="form.orderNum" type="number" label="章节顺序" />
+              <v-text-field v-model="form.orderNum" type="number" label="Chapter order" />
             </v-col>
             <v-col cols="12">
               <MarkdownEditor
                 v-model="form.content"
-                label="正文内容"
+                label="Chapter content"
                 :rows="10"
-                preview-empty-text="暂无正文内容"
+                preview-empty-text="No prose yet."
               />
             </v-col>
             <v-col cols="12">
               <v-select
                 v-model="form.requiredCharacterIds"
-                label="本章必须出场人物"
+                label="Required characters for this chapter"
                 :items="characterStore.characters"
                 item-title="name"
                 item-value="id"
@@ -638,33 +789,33 @@ async function confirmDelete() {
                 chips
                 closable-chips
                 clearable
-                hint="先在人物管理里把角色关联到当前项目，这里就能直接勾选本章必须出现的人物。"
+                hint="These characters will be injected as hard constraints during AI generation."
                 persistent-hint
               />
             </v-col>
           </v-row>
         </v-card-text>
         <v-card-actions class="justify-end">
-          <v-btn variant="text" @click="dialog = false">取消</v-btn>
-          <v-btn color="primary" @click="submit">保存</v-btn>
+          <v-btn variant="text" @click="dialog = false">Cancel</v-btn>
+          <v-btn color="primary" @click="submit">Save</v-btn>
         </v-card-actions>
       </v-card>
     </v-dialog>
 
     <ConfirmDialog
       v-model="confirmVisible"
-      title="删除章节"
-      text="确认删除这一章吗？删除后它会从章节列表和写作中心中移除。"
+      title="Delete chapter"
+      text="Are you sure you want to delete this chapter? It will disappear from both chapter management and the writing center."
       @confirm="confirmDelete"
     />
 
     <NameSuggestionDialog
       v-model="nameSuggestionDialog"
-      title="选择章节标题"
+      title="Choose a chapter title"
       :loading="nameSuggestionLoading"
       :suggestions="nameSuggestions"
       :source-label="nameSuggestionSourceLabel"
-      empty-text="这次没有拿到合适的标题候选，可以再试一次。"
+      empty-text="No title suggestions came back this time. Try again with a stronger content brief."
       @refresh="generateTitleSuggestions"
       @select="applySuggestedTitle"
     />

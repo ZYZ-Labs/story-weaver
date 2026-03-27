@@ -2,7 +2,13 @@ import { ref } from 'vue'
 import { defineStore } from 'pinia'
 
 import * as writingApi from '@/api/ai-writing'
-import type { AIWritingRecord, AIWritingRequest, AIWritingStreamEvent, AIWritingStreamState } from '@/types'
+import type {
+  AIWritingRecord,
+  AIWritingRequest,
+  AIWritingStreamEvent,
+  AIWritingStreamLogItem,
+  AIWritingStreamState,
+} from '@/types'
 
 export const useWritingStore = defineStore('writing', () => {
   const records = ref<AIWritingRecord[]>([])
@@ -19,6 +25,7 @@ export const useWritingStore = defineStore('writing', () => {
       selectedProviderId: null,
       selectedModel: '',
       maxTokens: null,
+      logs: [],
     }
   }
 
@@ -62,6 +69,7 @@ export const useWritingStore = defineStore('writing', () => {
       selectedProviderId: payload.selectedProviderId ?? null,
       selectedModel: payload.selectedModel || '',
       maxTokens: payload.maxTokens ?? null,
+      logs: [],
     }
 
     try {
@@ -77,11 +85,16 @@ export const useWritingStore = defineStore('writing', () => {
             currentState.selectedProviderId = event.selectedProviderId ?? currentState.selectedProviderId ?? null
             currentState.selectedModel = event.selectedModel || currentState.selectedModel || ''
             currentState.maxTokens = event.maxTokens ?? currentState.maxTokens ?? null
+          } else if (event.type === 'stage' || event.type === 'log') {
+            currentState.logs.push(toLogItem(event))
           } else if (event.type === 'chunk' && event.delta) {
             currentState.content += event.delta
+          } else if (event.type === 'replace') {
+            currentState.content = event.content || ''
           } else if (event.type === 'error') {
             currentState.generating = false
-            currentState.error = event.message || 'AI 生成失败'
+            currentState.error = event.message || 'AI generation failed'
+            currentState.logs.push(toLogItem(event))
           } else if (event.type === 'complete' && event.record) {
             currentState.generating = false
             currentState.lastRecord = event.record
@@ -91,6 +104,7 @@ export const useWritingStore = defineStore('writing', () => {
           handlers.onEvent?.(event)
         },
       })
+
       records.value.unshift(record)
       projectRecords.value.unshift(record)
       const currentState = streamStates.value[payload.chapterId]
@@ -104,7 +118,7 @@ export const useWritingStore = defineStore('writing', () => {
       const currentState = streamStates.value[payload.chapterId]
       if (currentState?.requestId === requestId) {
         currentState.generating = false
-        currentState.error = error instanceof Error ? error.message : 'AI 生成失败'
+        currentState.error = error instanceof Error ? error.message : 'AI generation failed'
       }
       throw error
     }
@@ -143,6 +157,16 @@ export const useWritingStore = defineStore('writing', () => {
       projectTarget.status = 'rejected'
     }
     return 'rejected'
+  }
+
+  function toLogItem(event: AIWritingStreamEvent): AIWritingStreamLogItem {
+    return {
+      id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+      type: event.type,
+      stage: event.stage,
+      stageStatus: event.stageStatus,
+      message: event.message,
+    }
   }
 
   return {

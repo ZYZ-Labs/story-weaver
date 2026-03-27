@@ -23,6 +23,8 @@ public class AIWritingRequestDTO {
 
     private String promptSnapshot;
 
+    private String entryPoint;
+
     public Long getChapterId() {
         return chapterId;
     }
@@ -85,5 +87,13 @@ public class AIWritingRequestDTO {
 
     public void setPromptSnapshot(String promptSnapshot) {
         this.promptSnapshot = promptSnapshot;
+    }
+
+    public String getEntryPoint() {
+        return entryPoint;
+    }
+
+    public void setEntryPoint(String entryPoint) {
+        this.entryPoint = entryPoint;
     }
 }

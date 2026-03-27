@@ -16,7 +16,9 @@ import com.storyweaver.domain.vo.AIWritingResponseVO;
 import com.storyweaver.domain.vo.AIWritingStreamEventVO;
 import com.storyweaver.domain.vo.WorldSettingVO;
 import com.storyweaver.repository.AIWritingRecordMapper;
+import com.storyweaver.service.AIModelRoutingService;
 import com.storyweaver.service.AIProviderService;
+import com.storyweaver.service.AIWritingChatService;
 import com.storyweaver.service.AIWritingService;
 import com.storyweaver.service.CausalityService;
 import com.storyweaver.service.ChapterService;
@@ -52,6 +54,8 @@ public class AIWritingServiceImpl extends ServiceImpl<AIWritingRecordMapper, AIW
     private final PlotService plotService;
     private final CausalityService causalityService;
     private final WorldSettingService worldSettingService;
+    private final AIModelRoutingService aiModelRoutingService;
+    private final AIWritingChatService aiWritingChatService;
 
     public AIWritingServiceImpl(
             ChapterService chapterService,
@@ -62,7 +66,9 @@ public class AIWritingServiceImpl extends ServiceImpl<AIWritingRecordMapper, AIW
             OutlineService outlineService,
             PlotService plotService,
             CausalityService causalityService,
-            WorldSettingService worldSettingService) {
+            WorldSettingService worldSettingService,
+            AIModelRoutingService aiModelRoutingService,
+            AIWritingChatService aiWritingChatService) {
         this.chapterService = chapterService;
         this.knowledgeDocumentService = knowledgeDocumentService;
         this.aiProviderService = aiProviderService;
@@ -72,20 +78,15 @@ public class AIWritingServiceImpl extends ServiceImpl<AIWritingRecordMapper, AIW
         this.plotService = plotService;
         this.causalityService = causalityService;
         this.worldSettingService = worldSettingService;
+        this.aiModelRoutingService = aiModelRoutingService;
+        this.aiWritingChatService = aiWritingChatService;
     }
 
     @Override
     public AIWritingResponseVO generateContent(Long userId, AIWritingRequestDTO requestDTO) {
         PreparedGenerationContext context = prepareGeneration(userId, requestDTO);
-        String generatedContent = aiProviderService.generateText(
-                context.provider(),
-                context.selectedModel(),
-                context.systemPrompt(),
-                context.userPrompt(),
-                null,
-                context.maxTokens()
-        );
-        return persistGeneratedRecord(context, generatedContent);
+        WorkflowResult workflowResult = runWorkflow(context, null, false);
+        return persistGeneratedRecord(context, workflowResult.content());
     }
 
     @Override
@@ -99,24 +100,8 @@ public class AIWritingServiceImpl extends ServiceImpl<AIWritingRecordMapper, AIW
                 context.maxTokens()
         ));
 
-        StringBuilder contentBuilder = new StringBuilder();
-        aiProviderService.streamText(
-                context.provider(),
-                context.selectedModel(),
-                context.systemPrompt(),
-                context.userPrompt(),
-                null,
-                context.maxTokens(),
-                delta -> {
-                    if (!StringUtils.hasText(delta)) {
-                        return;
-                    }
-                    contentBuilder.append(delta);
-                    eventConsumer.accept(AIWritingStreamEventVO.chunk(delta));
-                }
-        );
-
-        AIWritingResponseVO response = persistGeneratedRecord(context, contentBuilder.toString());
+        WorkflowResult workflowResult = runWorkflow(context, eventConsumer, true);
+        AIWritingResponseVO response = persistGeneratedRecord(context, workflowResult.content());
         eventConsumer.accept(AIWritingStreamEventVO.complete(response));
     }
 
@@ -191,11 +176,18 @@ public class AIWritingServiceImpl extends ServiceImpl<AIWritingRecordMapper, AIW
             throw new IllegalArgumentException("章节不存在或无权访问");
         }
 
-        String currentContent = normalizeText(requestDTO.getCurrentContent());
+        String currentContent = normalizeText(
+                StringUtils.hasText(requestDTO.getCurrentContent()) ? requestDTO.getCurrentContent() : chapter.getContent()
+        );
         String writingType = normalizeWritingType(requestDTO.getWritingType(), currentContent);
         String userInstruction = normalizeText(requestDTO.getUserInstruction());
-        AIProvider provider = resolveProvider(requestDTO.getSelectedProviderId());
-        String selectedModel = resolveModelName(provider, requestDTO.getSelectedModel());
+        AIModelRoutingService.ResolvedModelSelection selection = aiModelRoutingService.resolve(
+                requestDTO.getSelectedProviderId(),
+                requestDTO.getSelectedModel(),
+                requestDTO.getEntryPoint()
+        );
+        AIProvider provider = selection.provider();
+        String selectedModel = selection.model();
         String promptSnapshot = resolvePromptSnapshot(requestDTO.getPromptSnapshot(), writingType);
         Project project = chapter.getProjectId() == null ? null : projectService.getById(chapter.getProjectId());
         WritingContextBundle contextBundle = buildContextBundle(userId, project, chapter, userInstruction);
@@ -261,6 +253,7 @@ public class AIWritingServiceImpl extends ServiceImpl<AIWritingRecordMapper, AIW
         List<KnowledgeDocument> knowledgeDocuments = StringUtils.hasText(retrievalQuery)
                 ? knowledgeDocumentService.queryDocuments(project.getId(), userId, retrievalQuery).stream().limit(3).toList()
                 : List.of();
+        String chatBackground = aiWritingChatService.buildBackgroundContext(userId, chapter.getId());
 
         return new WritingContextBundle(
                 currentOutline,
@@ -268,7 +261,8 @@ public class AIWritingServiceImpl extends ServiceImpl<AIWritingRecordMapper, AIW
                 relevantCausalities,
                 worldSettings,
                 knowledgeDocuments,
-                chapter.getRequiredCharacterNames() == null ? List.of() : chapter.getRequiredCharacterNames()
+                chapter.getRequiredCharacterNames() == null ? List.of() : chapter.getRequiredCharacterNames(),
+                chatBackground
         );
     }
 
@@ -401,6 +395,7 @@ public class AIWritingServiceImpl extends ServiceImpl<AIWritingRecordMapper, AIW
         appendCausalitySection(builder, contextBundle.causalities());
         appendWorldSettingSection(builder, contextBundle.worldSettings());
         appendKnowledgeSection(builder, contextBundle.knowledgeDocuments());
+        appendChatBackgroundSection(builder, contextBundle.chatBackground());
 
         builder.append("\n【当前正文】\n");
         if (StringUtils.hasText(currentContent)) {
@@ -522,6 +517,15 @@ public class AIWritingServiceImpl extends ServiceImpl<AIWritingRecordMapper, AIW
         }
     }
 
+    private void appendChatBackgroundSection(StringBuilder builder, String chatBackground) {
+        if (!StringUtils.hasText(chatBackground)) {
+            return;
+        }
+        builder.append("\n【聊天背景信息】\n")
+                .append(chatBackground.trim())
+                .append('\n');
+    }
+
     private String resolveWritingIntent(String writingType) {
         return switch (writingType) {
             case "draft" -> "任务要求：当前正文为空，请先拟生成一版可继续扩写的章节初稿。\n";
@@ -531,6 +535,190 @@ public class AIWritingServiceImpl extends ServiceImpl<AIWritingRecordMapper, AIW
             case "polish" -> "任务要求：保留剧情事实，对当前正文做语言润色与节奏优化。\n";
             default -> "任务要求：输出可直接放入章节中的小说正文。\n";
         };
+    }
+
+    private WorkflowResult runWorkflow(
+            PreparedGenerationContext context,
+            Consumer<AIWritingStreamEventVO> eventConsumer,
+            boolean streamWriteStage) {
+        WorkflowSettings settings = loadWorkflowSettings();
+        String plan = "";
+        String content;
+
+        if (settings.maxPlanRounds() > 0) {
+            emitStage(eventConsumer, "plan", "started", "Building chapter plan");
+            plan = aiProviderService.generateText(
+                    context.provider(),
+                    context.selectedModel(),
+                    """
+                    You are a Chinese fiction planning assistant.
+                    Produce a short, actionable chapter plan in Chinese.
+                    Do not write the final prose.
+                    """,
+                    buildPlanningPrompt(context),
+                    null,
+                    800
+            );
+            emitLog(eventConsumer, "plan", limit(plan, 280));
+            emitStage(eventConsumer, "plan", "completed", "Chapter plan ready");
+        }
+
+        emitStage(eventConsumer, "write", "started", "Generating chapter prose");
+        if (streamWriteStage) {
+            StringBuilder builder = new StringBuilder();
+            aiProviderService.streamText(
+                    context.provider(),
+                    context.selectedModel(),
+                    context.systemPrompt(),
+                    buildWriterPrompt(context, plan),
+                    null,
+                    context.maxTokens(),
+                    delta -> {
+                        if (!StringUtils.hasText(delta)) {
+                            return;
+                        }
+                        builder.append(delta);
+                        eventConsumer.accept(AIWritingStreamEventVO.chunk(delta));
+                    }
+            );
+            content = builder.toString();
+        } else {
+            content = aiProviderService.generateText(
+                    context.provider(),
+                    context.selectedModel(),
+                    context.systemPrompt(),
+                    buildWriterPrompt(context, plan),
+                    null,
+                    context.maxTokens()
+            );
+        }
+        emitStage(eventConsumer, "write", "completed", "Draft prose ready");
+
+        if (settings.maxCheckRounds() <= 0) {
+            return new WorkflowResult(content);
+        }
+
+        emitStage(eventConsumer, "check", "started", "Checking continuity and constraints");
+        String checkReport = aiProviderService.generateText(
+                context.provider(),
+                context.selectedModel(),
+                """
+                You are a Chinese fiction reviewer.
+                Check whether the chapter follows the provided context.
+                Return the result using this exact format:
+                RESULT: PASS 或 REVISE
+                SUMMARY: one short sentence in Chinese
+                ISSUES:
+                - issue 1
+                - issue 2
+                """,
+                buildCheckPrompt(context, plan, content),
+                null,
+                700
+        );
+        WritingCheckResult checkResult = parseCheckResult(checkReport);
+        emitLog(eventConsumer, "check", checkResult.summary());
+        emitStage(eventConsumer, "check", "completed", checkResult.requiresRevision() ? "Revision suggested" : "Check passed");
+
+        if (!checkResult.requiresRevision() || settings.maxRevisionRounds() <= 0) {
+            return new WorkflowResult(content);
+        }
+
+        emitStage(eventConsumer, "revise", "started", "Revising prose from review");
+        String revisedContent = aiProviderService.generateText(
+                context.provider(),
+                context.selectedModel(),
+                context.systemPrompt(),
+                buildRevisionPrompt(context, plan, content, checkResult.report()),
+                null,
+                context.maxTokens()
+        );
+        emitLog(eventConsumer, "revise", "Auto revision completed");
+        if (eventConsumer != null) {
+            eventConsumer.accept(AIWritingStreamEventVO.replace(revisedContent));
+        }
+        emitStage(eventConsumer, "revise", "completed", "Revision applied");
+        return new WorkflowResult(revisedContent);
+    }
+
+    private WorkflowSettings loadWorkflowSettings() {
+        return new WorkflowSettings(
+                getConfiguredInt("ai.workflow.max_plan_rounds", 1),
+                getConfiguredInt("ai.workflow.max_check_rounds", 1),
+                getConfiguredInt("ai.workflow.max_revision_rounds", 1)
+        );
+    }
+
+    private String buildPlanningPrompt(PreparedGenerationContext context) {
+        return """
+                Based on the following writing context, produce a short chapter plan in Chinese.
+                Include:
+                1. Chapter goal
+                2. Conflict progression
+                3. Suggested scene order
+                4. Character and setting constraints
+
+                %s
+                """.formatted(context.userPrompt());
+    }
+
+    private String buildWriterPrompt(PreparedGenerationContext context, String plan) {
+        if (!StringUtils.hasText(plan)) {
+            return context.userPrompt();
+        }
+        return context.userPrompt() + "\n\n【写作计划】\n" + plan.trim() + "\n";
+    }
+
+    private String buildCheckPrompt(PreparedGenerationContext context, String plan, String content) {
+        StringBuilder builder = new StringBuilder();
+        builder.append("Check whether this chapter prose follows the context and constraints.\n");
+        if (StringUtils.hasText(plan)) {
+            builder.append("[Plan]\n").append(plan.trim()).append("\n\n");
+        }
+        builder.append("[Context]\n").append(context.userPrompt()).append("\n\n");
+        builder.append("[Draft]\n").append(content == null ? "" : content.trim()).append('\n');
+        return builder.toString();
+    }
+
+    private String buildRevisionPrompt(PreparedGenerationContext context, String plan, String content, String checkReport) {
+        StringBuilder builder = new StringBuilder();
+        builder.append("Revise the following chapter prose based on the review notes.\n");
+        builder.append("Requirements:\n");
+        builder.append("1. Output full revised prose only.\n");
+        builder.append("2. Keep correct plot facts and voice.\n");
+        builder.append("3. Prioritize continuity, setting consistency, and chapter goal alignment.\n\n");
+        if (StringUtils.hasText(plan)) {
+            builder.append("[Plan]\n").append(plan.trim()).append("\n\n");
+        }
+        builder.append("[Context]\n").append(context.userPrompt()).append("\n\n");
+        builder.append("[Review]\n").append(checkReport.trim()).append("\n\n");
+        builder.append("[Original Draft]\n").append(content == null ? "" : content.trim());
+        return builder.toString();
+    }
+
+    private WritingCheckResult parseCheckResult(String checkReport) {
+        String normalized = normalizeText(checkReport);
+        boolean requiresRevision = normalized.toUpperCase(Locale.ROOT).contains("RESULT: REVISE")
+                || normalized.toLowerCase(Locale.ROOT).contains("revise")
+                || normalized.contains("修订");
+        String summary = normalized.lines()
+                .filter(line -> line.toUpperCase(Locale.ROOT).startsWith("SUMMARY:"))
+                .findFirst()
+                .map(line -> line.substring("SUMMARY:".length()).trim())
+                .orElse(limit(normalized, 220));
+        return new WritingCheckResult(requiresRevision, summary, normalized);
+    }
+
+    private void emitStage(Consumer<AIWritingStreamEventVO> eventConsumer, String stage, String status, String message) {
+        if (eventConsumer != null) {
+            eventConsumer.accept(AIWritingStreamEventVO.stage(stage, status, message));
+        }
+    }
+
+    private void emitLog(Consumer<AIWritingStreamEventVO> eventConsumer, String stage, String message) {
+        if (eventConsumer != null && StringUtils.hasText(message)) {
+            eventConsumer.accept(AIWritingStreamEventVO.log(stage, message));
+        }
     }
 
     private void syncKnowledgeDocument(Chapter chapter, AIWritingRecord record) {
@@ -593,6 +781,18 @@ public class AIWritingServiceImpl extends ServiceImpl<AIWritingRecordMapper, AIW
 
     private String normalizeText(String value) {
         return StringUtils.hasText(value) ? value.trim() : "";
+    }
+
+    private int getConfiguredInt(String key, int fallback) {
+        String value = systemConfigService.getConfigValue(key);
+        if (!StringUtils.hasText(value)) {
+            return fallback;
+        }
+        try {
+            return Integer.parseInt(value.trim());
+        } catch (NumberFormatException exception) {
+            return fallback;
+        }
     }
 
     private Long parseLong(String value) {
@@ -665,10 +865,26 @@ public class AIWritingServiceImpl extends ServiceImpl<AIWritingRecordMapper, AIW
             List<Causality> causalities,
             List<WorldSettingVO> worldSettings,
             List<KnowledgeDocument> knowledgeDocuments,
-            List<String> requiredCharacters) {
+            List<String> requiredCharacters,
+            String chatBackground) {
 
         private static WritingContextBundle empty() {
-            return new WritingContextBundle(null, List.of(), List.of(), List.of(), List.of(), List.of());
+            return new WritingContextBundle(null, List.of(), List.of(), List.of(), List.of(), List.of(), "");
         }
+    }
+
+    private record WorkflowResult(String content) {
+    }
+
+    private record WorkflowSettings(
+            int maxPlanRounds,
+            int maxCheckRounds,
+            int maxRevisionRounds) {
+    }
+
+    private record WritingCheckResult(
+            boolean requiresRevision,
+            String summary,
+            String report) {
     }
 }

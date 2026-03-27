@@ -98,12 +98,24 @@ export interface AIWritingRequest {
   selectedProviderId?: number | null
   selectedModel?: string
   promptSnapshot?: string
+  entryPoint?: string
+}
+
+export interface AIWritingStreamLogItem {
+  id: string
+  type: string
+  stage?: string
+  stageStatus?: string
+  message?: string
 }
 
 export interface AIWritingStreamEvent {
-  type: 'meta' | 'chunk' | 'complete' | 'error' | string
+  type: 'meta' | 'stage' | 'log' | 'chunk' | 'replace' | 'complete' | 'error' | string
   delta?: string
+  content?: string
   message?: string
+  stage?: string
+  stageStatus?: string
   writingType?: string
   selectedProviderId?: number | null
   selectedModel?: string
@@ -121,6 +133,7 @@ export interface AIWritingStreamState {
   selectedProviderId?: number | null
   selectedModel?: string
   maxTokens?: number | null
+  logs: AIWritingStreamLogItem[]
 }
 
 export interface AIWritingRecord {
@@ -135,6 +148,34 @@ export interface AIWritingRecord {
   promptSnapshot?: string
   status?: string
   createTime?: string
+}
+
+export interface AIWritingChatMessage {
+  id: number
+  role: 'user' | 'assistant' | 'system' | string
+  content: string
+  segmentNo?: number
+  pinnedToBackground?: boolean
+  compressed?: boolean
+  createTime?: string
+}
+
+export interface AIWritingChatSession {
+  sessionId?: number
+  projectId?: number
+  chapterId: number
+  activeSegmentNo?: number
+  activeWindowChars?: number
+  maxWindowChars?: number
+  compressedSummary?: string
+  messages: AIWritingChatMessage[]
+}
+
+export interface AIWritingChatMessageRequest {
+  content: string
+  selectedProviderId?: number | null
+  selectedModel?: string
+  entryPoint?: string
 }
 
 export interface MenuItem {

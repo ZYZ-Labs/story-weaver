@@ -9,7 +9,13 @@ public class AIWritingStreamEventVO {
 
     private String delta;
 
+    private String content;
+
     private String message;
+
+    private String stage;
+
+    private String stageStatus;
 
     private String writingType;
 
@@ -46,6 +52,30 @@ public class AIWritingStreamEventVO {
         AIWritingStreamEventVO event = new AIWritingStreamEventVO();
         event.setType("complete");
         event.setRecord(record);
+        return event;
+    }
+
+    public static AIWritingStreamEventVO stage(String stage, String stageStatus, String message) {
+        AIWritingStreamEventVO event = new AIWritingStreamEventVO();
+        event.setType("stage");
+        event.setStage(stage);
+        event.setStageStatus(stageStatus);
+        event.setMessage(message);
+        return event;
+    }
+
+    public static AIWritingStreamEventVO log(String stage, String message) {
+        AIWritingStreamEventVO event = new AIWritingStreamEventVO();
+        event.setType("log");
+        event.setStage(stage);
+        event.setMessage(message);
+        return event;
+    }
+
+    public static AIWritingStreamEventVO replace(String content) {
+        AIWritingStreamEventVO event = new AIWritingStreamEventVO();
+        event.setType("replace");
+        event.setContent(content);
         return event;
     }
 
