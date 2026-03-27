@@ -198,6 +198,22 @@ mysql -u root -p < sql/008_outline_module.sql
 ./scripts/deploy.sh
 ```
 
+镜像标签现在按版本号管理：
+
+- 默认读取根目录 `VERSION`，当前为 `1.0.0`
+- 发布脚本会拒绝 `latest`、`test` 这类漂移标签
+- 建议发布时显式使用版本号，例如 `1.0.1`、`1.0.1-beta.1`
+
+示例：
+
+```powershell
+.\scripts\deploy.bat -Tag 1.0.1
+```
+
+```bash
+./scripts/deploy.sh --tag=1.0.1
+```
+
 详细步骤见 [DEPLOYMENT.md](./DEPLOYMENT.md)。
 
 ## 常见说明

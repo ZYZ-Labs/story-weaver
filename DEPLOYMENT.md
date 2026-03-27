@@ -62,7 +62,7 @@
 指定标签：
 
 ```powershell
-.\scripts\deploy.bat -Tag v1.0.0
+.\scripts\deploy.bat -Tag 1.0.1
 ```
 
 重新配置：
@@ -89,7 +89,7 @@ chmod +x scripts/deploy.sh
 指定标签：
 
 ```bash
-./scripts/deploy.sh --tag=v1.0.0
+./scripts/deploy.sh --tag=1.0.1
 ```
 
 重新配置：
@@ -128,6 +128,12 @@ chmod +x scripts/deploy.sh
 ```text
 .deploy/registry.env.example
 ```
+
+版本标签说明：
+
+- 默认读取根目录 `VERSION`，当前为 `1.0.0`
+- 发布脚本会拒绝 `latest`、`test` 这类非版本标签
+- 建议使用 `1.0.1`、`1.0.1-beta.1` 这种明确版本号
 
 如果你直接沿用当前这套阿里云仓库，通常只需要改镜像标签，不需要再手填 host、namespace 和用户名。
 
@@ -215,8 +221,8 @@ cp .env.server.example .env
 至少需要确认这些配置：
 
 ```env
-BACKEND_IMAGE=your-registry/story-weaver-backend:latest
-FRONTEND_IMAGE=your-registry/story-weaver-front:latest
+BACKEND_IMAGE=your-registry/story-weaver-backend:1.0.0
+FRONTEND_IMAGE=your-registry/story-weaver-front:1.0.0
 
 BACKEND_PORT=8080
 HTTP_PORT=80

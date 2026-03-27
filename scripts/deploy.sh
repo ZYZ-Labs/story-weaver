@@ -4,6 +4,9 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+VERSION_FILE="$REPO_ROOT/VERSION"
+BACKEND_POM_PATH="$REPO_ROOT/backend/pom.xml"
+FRONT_PACKAGE_PATH="$REPO_ROOT/front/package.json"
 CONFIG_DIR="$REPO_ROOT/.deploy"
 CONFIG_PATH="$CONFIG_DIR/registry.env"
 LEGACY_CONFIG_PATH="$CONFIG_DIR/dockerhub.env"
@@ -80,6 +83,62 @@ get_config_or_default() {
     fi
 }
 
+get_project_version() {
+    if [ -f "$VERSION_FILE" ]; then
+        local version
+        version="$(tr -d '\r\n' < "$VERSION_FILE")"
+        if [ -n "$version" ]; then
+            printf '%s' "$version"
+            return
+        fi
+    fi
+
+    if [ -f "$BACKEND_POM_PATH" ]; then
+        local version
+        version="$(sed -n '0,/<version>/s|.*<version>\(.*\)</version>.*|\1|p' "$BACKEND_POM_PATH" | head -n 1 | tr -d '\r\n' || true)"
+        if [ -n "$version" ]; then
+            printf '%s' "$version"
+            return
+        fi
+    fi
+
+    if [ -f "$FRONT_PACKAGE_PATH" ]; then
+        local version
+        version="$(sed -n 's|.*"version":[[:space:]]*"\([^"]*\)".*|\1|p' "$FRONT_PACKAGE_PATH" | head -n 1 | tr -d '\r\n' || true)"
+        if [ -n "$version" ]; then
+            printf '%s' "$version"
+            return
+        fi
+    fi
+
+    printf '%s' "1.0.0"
+}
+
+get_default_image_tag() {
+    get_project_version
+}
+
+is_forbidden_image_tag() {
+    local value="${1:-}"
+    [ -z "$value" ] && return 0
+    [ "${value,,}" = "latest" ]
+}
+
+is_valid_version_tag() {
+    local value="${1:-}"
+    [[ "$value" =~ ^v?[0-9]+\.[0-9]+\.[0-9]+([._-][0-9A-Za-z.-]+)?$ ]]
+}
+
+get_version_tag_or_default() {
+    local candidate="${1:-}"
+    local fallback="${2:-}"
+    if [ -n "$candidate" ] && ! is_forbidden_image_tag "$candidate" && is_valid_version_tag "$candidate"; then
+        printf '%s' "$candidate"
+    else
+        printf '%s' "$fallback"
+    fi
+}
+
 load_config() {
     if [ -f "$CONFIG_PATH" ]; then
         # shellcheck disable=SC1090
@@ -96,6 +155,7 @@ load_config() {
         LOGIN_SERVER="docker.io"
         LOGIN_USERNAME="${DOCKERHUB_NAMESPACE:-}"
         REGISTRY_NAMESPACE="${DOCKERHUB_NAMESPACE:-}"
+        IMAGE_TAG="$(get_version_tag_or_default "${IMAGE_TAG:-}" "$(get_default_image_tag)")"
     fi
 }
 
@@ -143,6 +203,8 @@ choose_registry_provider() {
 
 collect_interactive_config() {
     local prompt_result=""
+    local default_image_tag
+    default_image_tag="$(get_default_image_tag)"
     choose_registry_provider "${REGISTRY_PROVIDER:-dockerhub}"
 
     case "$REGISTRY_PROVIDER" in
@@ -180,12 +242,16 @@ collect_interactive_config() {
     BACKEND_IMAGE_NAME="$(normalize_path_segment "$prompt_result")"
     prompt_value_into prompt_result 'Frontend repository name' "$(get_config_or_default "${FRONTEND_IMAGE_NAME:-}" "story-weaver-front")"
     FRONTEND_IMAGE_NAME="$(normalize_path_segment "$prompt_result")"
-    prompt_value_into prompt_result 'Image tag' "$(get_config_or_default "${IMAGE_TAG:-}" "latest")"
+    prompt_value_into prompt_result 'Image version tag' "$(get_version_tag_or_default "${IMAGE_TAG:-}" "$default_image_tag")"
     IMAGE_TAG="$prompt_result"
 }
 
 validate_config() {
     if [ -z "${REGISTRY_PROVIDER:-}" ] || [ -z "${BACKEND_IMAGE_NAME:-}" ] || [ -z "${FRONTEND_IMAGE_NAME:-}" ] || [ -z "${IMAGE_TAG:-}" ]; then
+        return 1
+    fi
+
+    if is_forbidden_image_tag "${IMAGE_TAG:-}" || ! is_valid_version_tag "${IMAGE_TAG:-}"; then
         return 1
     fi
 
@@ -377,6 +443,7 @@ EOF
 
 require_command docker
 load_config
+DEFAULT_IMAGE_TAG="$(get_default_image_tag)"
 
 RECONFIGURE=false
 SKIP_LOGIN=false
@@ -396,14 +463,32 @@ for arg in "$@"; do
     esac
 done
 
+if is_forbidden_image_tag "${IMAGE_TAG:-}" || [ -z "${IMAGE_TAG:-}" ]; then
+    IMAGE_TAG="$DEFAULT_IMAGE_TAG"
+    if [ -n "${REGISTRY_PROVIDER:-}" ] || [ -n "${REGISTRY_HOST:-}" ] || [ -n "${REGISTRY_NAMESPACE:-}" ]; then
+        print_warn "Image tag was missing or set to latest. Auto-migrated to version tag $DEFAULT_IMAGE_TAG."
+        if validate_config; then
+            save_config
+        fi
+    fi
+fi
+
 if [ "$RECONFIGURE" = true ] || ! validate_config; then
     print_info "Registry publish config is missing or incomplete. Starting interactive setup."
     collect_interactive_config
+    if is_forbidden_image_tag "$IMAGE_TAG" || ! is_valid_version_tag "$IMAGE_TAG"; then
+        print_error "Image version tag must look like 1.0.0 or v1.0.0-beta.1, and cannot be latest. Current value: $IMAGE_TAG"
+        exit 1
+    fi
     save_config
     print_info "Saved config to $CONFIG_PATH"
 fi
 
 if [ -n "$TAG_OVERRIDE" ]; then
+    if is_forbidden_image_tag "$TAG_OVERRIDE" || ! is_valid_version_tag "$TAG_OVERRIDE"; then
+        print_error "Tag must look like 1.0.0 or v1.0.0-beta.1, and cannot be latest. Current value: $TAG_OVERRIDE"
+        exit 1
+    fi
     IMAGE_TAG="$TAG_OVERRIDE"
     save_config
 fi

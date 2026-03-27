@@ -9,6 +9,9 @@ $ErrorActionPreference = 'Stop'
 
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $repoRoot = Split-Path -Parent $scriptDir
+$versionFilePath = Join-Path $repoRoot 'VERSION'
+$backendPomPath = Join-Path $repoRoot 'backend\pom.xml'
+$frontPackagePath = Join-Path $repoRoot 'front\package.json'
 $configDir = Join-Path $repoRoot '.deploy'
 $configPath = Join-Path $configDir 'registry.env'
 $legacyConfigPath = Join-Path $configDir 'dockerhub.env'
@@ -100,6 +103,63 @@ function Get-ConfigOrDefault([hashtable]$Values, [string]$Key, [string]$DefaultV
     return $DefaultValue
 }
 
+function Get-ProjectVersion() {
+    if (Test-Path $versionFilePath) {
+        $version = (Get-Content -Path $versionFilePath -Raw).Trim()
+        if (-not [string]::IsNullOrWhiteSpace($version)) {
+            return $version
+        }
+    }
+
+    if (Test-Path $backendPomPath) {
+        try {
+            [xml]$pom = Get-Content -Path $backendPomPath
+            $version = $pom.project.version
+            if (-not [string]::IsNullOrWhiteSpace($version)) {
+                return $version.Trim()
+            }
+        } catch {
+        }
+    }
+
+    if (Test-Path $frontPackagePath) {
+        try {
+            $package = Get-Content -Path $frontPackagePath -Raw | ConvertFrom-Json
+            if (-not [string]::IsNullOrWhiteSpace($package.version)) {
+                return ([string]$package.version).Trim()
+            }
+        } catch {
+        }
+    }
+
+    return '1.0.0'
+}
+
+function Get-DefaultImageTag() {
+    return (Get-ProjectVersion)
+}
+
+function Test-VersionTag([string]$Value) {
+    if ([string]::IsNullOrWhiteSpace($Value)) {
+        return $false
+    }
+    return $Value.Trim() -match '^(?:v)?\d+\.\d+\.\d+(?:[-._][0-9A-Za-z.-]+)?$'
+}
+
+function Test-ForbiddenImageTag([string]$Value) {
+    if ([string]::IsNullOrWhiteSpace($Value)) {
+        return $true
+    }
+    return $Value.Trim().ToLowerInvariant() -eq 'latest'
+}
+
+function Get-VersionTagOrDefault([string]$Candidate, [string]$Fallback) {
+    if ((-not [string]::IsNullOrWhiteSpace($Candidate)) -and (Test-VersionTag $Candidate) -and (-not (Test-ForbiddenImageTag $Candidate))) {
+        return $Candidate.Trim()
+    }
+    return $Fallback
+}
+
 function Normalize-RegistryHost([string]$Value) {
     if ([string]::IsNullOrWhiteSpace($Value)) {
         return ''
@@ -132,7 +192,7 @@ function Convert-LegacyConfig([hashtable]$Values) {
     $converted['REGISTRY_NAMESPACE'] = Get-ConfigOrDefault $Values 'DOCKERHUB_NAMESPACE' ''
     $converted['BACKEND_IMAGE_NAME'] = Get-ConfigOrDefault $Values 'BACKEND_IMAGE_NAME' 'story-weaver-backend'
     $converted['FRONTEND_IMAGE_NAME'] = Get-ConfigOrDefault $Values 'FRONTEND_IMAGE_NAME' 'story-weaver-front'
-    $converted['IMAGE_TAG'] = Get-ConfigOrDefault $Values 'IMAGE_TAG' 'latest'
+    $converted['IMAGE_TAG'] = Get-VersionTagOrDefault (Get-ConfigOrDefault $Values 'IMAGE_TAG' '') (Get-DefaultImageTag)
     return $converted
 }
 
@@ -175,6 +235,7 @@ function Select-RegistryProvider([string]$CurrentProvider) {
 
 function Collect-InteractiveConfig([hashtable]$CurrentConfig) {
     $provider = Select-RegistryProvider (Get-ConfigOrDefault $CurrentConfig 'REGISTRY_PROVIDER' 'dockerhub')
+    $defaultImageTag = Get-DefaultImageTag
 
     $registryHost = ''
     $loginServer = ''
@@ -210,7 +271,7 @@ function Collect-InteractiveConfig([hashtable]$CurrentConfig) {
         REGISTRY_NAMESPACE = $registryNamespace
         BACKEND_IMAGE_NAME = Normalize-PathSegment (Prompt-Value 'Backend repository name' (Get-ConfigOrDefault $CurrentConfig 'BACKEND_IMAGE_NAME' 'story-weaver-backend'))
         FRONTEND_IMAGE_NAME = Normalize-PathSegment (Prompt-Value 'Frontend repository name' (Get-ConfigOrDefault $CurrentConfig 'FRONTEND_IMAGE_NAME' 'story-weaver-front'))
-        IMAGE_TAG = Prompt-Value 'Image tag' (Get-ConfigOrDefault $CurrentConfig 'IMAGE_TAG' 'latest')
+        IMAGE_TAG = Prompt-Value 'Image version tag' (Get-VersionTagOrDefault (Get-ConfigOrDefault $CurrentConfig 'IMAGE_TAG' '') $defaultImageTag)
     }
 }
 
@@ -225,6 +286,11 @@ function Validate-Config([hashtable]$Config) {
         if ([string]::IsNullOrWhiteSpace((Get-ConfigOrDefault $Config $key ''))) {
             return $false
         }
+    }
+
+    $imageTag = Get-ConfigOrDefault $Config 'IMAGE_TAG' ''
+    if ((Test-ForbiddenImageTag $imageTag) -or (-not (Test-VersionTag $imageTag))) {
+        return $false
     }
 
     switch ($provider) {
@@ -249,7 +315,7 @@ function Build-ImageReference([hashtable]$Config, [string]$RepositoryName) {
     $registryHost = Normalize-RegistryHost (Get-ConfigOrDefault $Config 'REGISTRY_HOST' '')
     $namespace = Normalize-PathSegment (Get-ConfigOrDefault $Config 'REGISTRY_NAMESPACE' '')
     $repository = Normalize-PathSegment $RepositoryName
-    $tagValue = Get-ConfigOrDefault $Config 'IMAGE_TAG' 'latest'
+    $tagValue = Get-VersionTagOrDefault (Get-ConfigOrDefault $Config 'IMAGE_TAG' '') (Get-DefaultImageTag)
 
     if ($provider -eq 'dockerhub') {
         return "${namespace}/${repository}:${tagValue}"
@@ -436,16 +502,34 @@ if (-not (Test-Command 'docker')) {
 }
 
 $config = Load-Config
+$defaultImageTag = Get-DefaultImageTag
+
+if ((Test-ForbiddenImageTag (Get-ConfigOrDefault $config 'IMAGE_TAG' '')) -or [string]::IsNullOrWhiteSpace((Get-ConfigOrDefault $config 'IMAGE_TAG' ''))) {
+    $config['IMAGE_TAG'] = $defaultImageTag
+    if ($config.Count -gt 0) {
+        Write-Warn "Image tag was missing or set to latest. Auto-migrated to version tag $defaultImageTag."
+        if (Validate-Config $config) {
+            Save-EnvFile -Path $configPath -Values $config
+        }
+    }
+}
+
 $needsSetup = $Reconfigure.IsPresent -or -not (Validate-Config $config)
 
 if ($needsSetup) {
     Write-Info 'Registry publish config is missing or incomplete. Starting interactive setup.'
     $config = Collect-InteractiveConfig $config
+    if ((Test-ForbiddenImageTag $config['IMAGE_TAG']) -or (-not (Test-VersionTag $config['IMAGE_TAG']))) {
+        Write-ErrorAndExit "Image version tag must look like 1.0.0 or v1.0.0-beta.1, and cannot be latest. Current value: $($config['IMAGE_TAG'])"
+    }
     Save-EnvFile -Path $configPath -Values $config
     Write-Info "Saved config to $configPath"
 }
 
 if (-not [string]::IsNullOrWhiteSpace($Tag)) {
+    if ((Test-ForbiddenImageTag $Tag) -or (-not (Test-VersionTag $Tag))) {
+        Write-ErrorAndExit "Tag must look like 1.0.0 or v1.0.0-beta.1, and cannot be latest. Current value: $Tag"
+    }
     $config['IMAGE_TAG'] = $Tag.Trim()
     Save-EnvFile -Path $configPath -Values $config
 }
