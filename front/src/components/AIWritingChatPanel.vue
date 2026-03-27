@@ -248,7 +248,11 @@ function isAiOutput(role: string) {
             </div>
 
             <template v-else>
-              <div class="background-item__content">{{ message.content }}</div>
+              <MarkdownContent
+                class="background-item__content"
+                :source="message.content"
+                compact
+              />
               <div class="background-item__actions">
                 <v-btn variant="text" size="small" @click="startEdit(message)">编辑</v-btn>
                 <v-btn variant="text" size="small" @click="toggleBackground(message)">
