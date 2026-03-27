@@ -178,6 +178,15 @@ export interface AIWritingChatMessageRequest {
   entryPoint?: string
 }
 
+export interface AIWritingChatStreamEvent {
+  type: 'meta' | 'chunk' | 'complete' | 'error' | string
+  delta?: string
+  message?: string
+  selectedProviderId?: number | null
+  selectedModel?: string
+  session?: AIWritingChatSession
+}
+
 export interface MenuItem {
   title: string
   icon: string

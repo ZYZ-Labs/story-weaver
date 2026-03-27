@@ -2,13 +2,17 @@ import { ref } from 'vue'
 import { defineStore } from 'pinia'
 
 import * as writingChatApi from '@/api/ai-writing-chat'
-import type { AIWritingChatMessageRequest, AIWritingChatSession } from '@/types'
+import type { AIWritingChatMessageRequest, AIWritingChatSession, AIWritingChatStreamEvent } from '@/types'
 
 type ChatState = {
   loading: boolean
   sending: boolean
   error: string
   session: AIWritingChatSession | null
+  pendingUserMessage: string
+  streamingReply: string
+  selectedProviderId: number | null
+  selectedModel: string
 }
 
 export const useWritingChatStore = defineStore('writing-chat', () => {
@@ -20,6 +24,10 @@ export const useWritingChatStore = defineStore('writing-chat', () => {
       sending: false,
       error: '',
       session: null,
+      pendingUserMessage: '',
+      streamingReply: '',
+      selectedProviderId: null,
+      selectedModel: '',
     }
   }
 
@@ -49,14 +57,23 @@ export const useWritingChatStore = defineStore('writing-chat', () => {
     const state = ensureState(chapterId)
     state.sending = true
     state.error = ''
+    state.pendingUserMessage = payload.content.trim()
+    state.streamingReply = ''
+    state.selectedProviderId = payload.selectedProviderId ?? null
+    state.selectedModel = payload.selectedModel || ''
     try {
-      state.session = await writingChatApi.sendWritingChatMessage(chapterId, payload)
+      state.session = await writingChatApi.streamWritingChatMessage(chapterId, payload, {
+        onEvent: (event) => applyStreamEvent(state, event),
+      })
       return state.session
     } catch (error) {
       state.error = error instanceof Error ? error.message : '发送背景聊天消息失败'
+      await fetchSession(chapterId).catch(() => undefined)
       throw error
     } finally {
       state.sending = false
+      state.pendingUserMessage = ''
+      state.streamingReply = ''
     }
   }
 
@@ -77,6 +94,28 @@ export const useWritingChatStore = defineStore('writing-chat', () => {
       chatStates.value[chapterId] = createEmptyState()
     }
     return chatStates.value[chapterId]
+  }
+
+  function applyStreamEvent(state: ChatState, event: AIWritingChatStreamEvent) {
+    if (event.type === 'meta') {
+      state.selectedProviderId = event.selectedProviderId ?? state.selectedProviderId
+      state.selectedModel = event.selectedModel || state.selectedModel
+      return
+    }
+
+    if (event.type === 'chunk' && event.delta) {
+      state.streamingReply += event.delta
+      return
+    }
+
+    if (event.type === 'complete' && event.session) {
+      state.session = event.session
+      return
+    }
+
+    if (event.type === 'error') {
+      state.error = event.message || '发送背景聊天消息失败'
+    }
   }
 
   return {

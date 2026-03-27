@@ -6,8 +6,10 @@ import com.storyweaver.domain.entity.AIProvider;
 import com.storyweaver.domain.entity.AIWritingChatMessage;
 import com.storyweaver.domain.entity.AIWritingSession;
 import com.storyweaver.domain.entity.Chapter;
+import com.storyweaver.domain.vo.AIWritingChatParticipationVO;
 import com.storyweaver.domain.vo.AIWritingChatMessageVO;
 import com.storyweaver.domain.vo.AIWritingChatSessionVO;
+import com.storyweaver.domain.vo.AIWritingChatStreamEventVO;
 import com.storyweaver.repository.AIWritingChatMessageMapper;
 import com.storyweaver.repository.AIWritingSessionMapper;
 import com.storyweaver.service.AIModelRoutingService;
@@ -22,12 +24,14 @@ import org.springframework.util.StringUtils;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.Consumer;
 
 @Service
 public class AIWritingChatServiceImpl implements AIWritingChatService {
 
     private static final int DEFAULT_MAX_ACTIVE_CHARS = 6000;
     private static final int DEFAULT_KEEP_RECENT_MESSAGES = 4;
+    private static final int CHAT_MAX_TOKENS = 1600;
 
     private final AIWritingSessionMapper sessionMapper;
     private final AIWritingChatMessageMapper messageMapper;
@@ -63,36 +67,55 @@ public class AIWritingChatServiceImpl implements AIWritingChatService {
     @Override
     @Transactional
     public AIWritingChatSessionVO sendMessage(Long userId, Long chapterId, AIWritingChatMessageRequestDTO requestDTO) {
-        Chapter chapter = requireChapter(chapterId, userId);
-        String content = normalizeText(requestDTO.getContent());
-        if (!StringUtils.hasText(content)) {
-            throw new IllegalArgumentException("消息内容不能为空");
-        }
-
-        AIWritingSession session = ensureSession(chapter, userId);
-        appendMessage(session, chapterId, "user", content);
-        syncActiveWindowChars(session);
-
-        AIModelRoutingService.ResolvedModelSelection selection = aiModelRoutingService.resolve(
-                requestDTO.getSelectedProviderId(),
-                requestDTO.getSelectedModel(),
-                requestDTO.getEntryPoint()
-        );
-
-        compressActiveMessagesIfNeeded(session, chapter, selection.provider(), selection.model());
+        PreparedChatGenerationContext context = prepareChatGeneration(userId, chapterId, requestDTO);
 
         String assistantReply = aiProviderService.generateText(
-                selection.provider(),
-                selection.model(),
-                buildChatSystemPrompt(chapter),
-                buildChatUserPrompt(chapter, session, loadMessages(session.getId())),
+                context.provider(),
+                context.model(),
+                buildChatSystemPrompt(context.chapter()),
+                buildChatUserPrompt(context.chapter(), context.session(), loadMessages(context.session().getId())),
                 null,
-                900
+                CHAT_MAX_TOKENS
         );
 
-        appendMessage(session, chapterId, "assistant", normalizeText(assistantReply));
-        syncActiveWindowChars(session);
-        return toSessionVO(session, loadMessages(session.getId()));
+        return persistAssistantReply(context, assistantReply);
+    }
+
+    @Override
+    @Transactional
+    public void streamMessage(
+            Long userId,
+            Long chapterId,
+            AIWritingChatMessageRequestDTO requestDTO,
+            Consumer<AIWritingChatStreamEventVO> eventConsumer) {
+        PreparedChatGenerationContext context = prepareChatGeneration(userId, chapterId, requestDTO);
+        if (eventConsumer != null) {
+            eventConsumer.accept(AIWritingChatStreamEventVO.meta(context.provider().getId(), context.model()));
+        }
+
+        StringBuilder builder = new StringBuilder();
+        aiProviderService.streamText(
+                context.provider(),
+                context.model(),
+                buildChatSystemPrompt(context.chapter()),
+                buildChatUserPrompt(context.chapter(), context.session(), loadMessages(context.session().getId())),
+                null,
+                CHAT_MAX_TOKENS,
+                delta -> {
+                    if (!StringUtils.hasText(delta)) {
+                        return;
+                    }
+                    builder.append(delta);
+                    if (eventConsumer != null) {
+                        eventConsumer.accept(AIWritingChatStreamEventVO.chunk(delta));
+                    }
+                }
+        );
+
+        AIWritingChatSessionVO session = persistAssistantReply(context, builder.toString());
+        if (eventConsumer != null) {
+            eventConsumer.accept(AIWritingChatStreamEventVO.complete(session));
+        }
     }
 
     @Override
@@ -113,54 +136,63 @@ public class AIWritingChatServiceImpl implements AIWritingChatService {
 
     @Override
     @Transactional(readOnly = true)
-    public String buildBackgroundContext(Long userId, Long chapterId) {
+    public boolean hasBackgroundContext(Long userId, Long chapterId) {
         Chapter chapter = chapterService.getChapterWithAuth(chapterId, userId);
         if (chapter == null) {
-            return "";
+            return false;
         }
 
         AIWritingSession session = findSession(chapterId, userId);
         if (session == null) {
-            return "";
+            return false;
         }
 
         List<AIWritingChatMessage> messages = loadMessages(session.getId());
-        StringBuilder builder = new StringBuilder();
+        return hasReusableBackgroundContext(session, messages);
+    }
 
-        if (StringUtils.hasText(session.getCompressedSummary())) {
-            builder.append("[聊天摘要]\n")
-                    .append(session.getCompressedSummary().trim())
-                    .append("\n\n");
+    @Override
+    @Transactional(readOnly = true)
+    public AIWritingChatParticipationVO buildParticipationContext(Long userId, Long chapterId, AIProvider provider, String model) {
+        Chapter chapter = chapterService.getChapterWithAuth(chapterId, userId);
+        if (chapter == null) {
+            return AIWritingChatParticipationVO.empty();
         }
 
-        List<AIWritingChatMessage> backgroundMessages = messages.stream()
-                .filter(item -> Integer.valueOf(1).equals(item.getPinnedToBackground()))
-                .toList();
-        if (!backgroundMessages.isEmpty()) {
-            builder.append("[已置顶背景信息]\n");
-            for (AIWritingChatMessage message : backgroundMessages) {
-                builder.append("- ")
-                        .append(resolveRoleLabel(message.getRole()))
-                        .append(": ")
-                        .append(limit(message.getContent(), 220))
-                        .append('\n');
-            }
-            builder.append('\n');
+        AIWritingSession session = findSession(chapterId, userId);
+        if (session == null) {
+            return AIWritingChatParticipationVO.empty();
         }
 
-        List<AIWritingChatMessage> recentMessages = recentActiveMessages(messages, 6);
-        if (!recentMessages.isEmpty()) {
-            builder.append("[最近对话]\n");
-            for (AIWritingChatMessage message : recentMessages) {
-                builder.append("- ")
-                        .append(resolveRoleLabel(message.getRole()))
-                        .append(": ")
-                        .append(limit(message.getContent(), 180))
-                        .append('\n');
-            }
+        List<AIWritingChatMessage> messages = loadMessages(session.getId());
+        if (!hasReusableBackgroundContext(session, messages)) {
+            return AIWritingChatParticipationVO.empty();
         }
 
-        return builder.toString().trim();
+        String response = aiProviderService.generateText(
+                provider,
+                model,
+                """
+                你是一名中文小说写作背景整理助手。
+                你的任务是把背景聊天整理成可参与本章生成的结构化上下文，而不是复述聊天记录。
+                只能提炼已出现的稳定设定、人物约束、剧情推进方向、写作偏好和不可违背事项，不要补充聊天里没有的新信息。
+                请严格按以下格式输出；如果某一栏没有内容，请写“- 无”：
+                [世界观补充]
+                - ...
+                [人物约束]
+                - ...
+                [剧情推进]
+                - ...
+                [写作偏好]
+                - ...
+                [硬性约束]
+                - ...
+                """,
+                buildParticipationPrompt(chapter, session, messages),
+                null,
+                900
+        );
+        return parseParticipationContext(response);
     }
 
     private Chapter requireChapter(Long chapterId, Long userId) {
@@ -169,6 +201,41 @@ public class AIWritingChatServiceImpl implements AIWritingChatService {
             throw new IllegalArgumentException("章节不存在或无权访问");
         }
         return chapter;
+    }
+
+    private PreparedChatGenerationContext prepareChatGeneration(
+            Long userId,
+            Long chapterId,
+            AIWritingChatMessageRequestDTO requestDTO) {
+        Chapter chapter = requireChapter(chapterId, userId);
+        String content = normalizeText(requestDTO.getContent());
+        if (!StringUtils.hasText(content)) {
+            throw new IllegalArgumentException("消息内容不能为空");
+        }
+
+        AIWritingSession session = ensureSession(chapter, userId);
+        appendMessage(session, chapterId, "user", content);
+        syncActiveWindowChars(session);
+
+        AIModelRoutingService.ResolvedModelSelection selection = aiModelRoutingService.resolve(
+                requestDTO.getSelectedProviderId(),
+                requestDTO.getSelectedModel(),
+                requestDTO.getEntryPoint()
+        );
+        compressActiveMessagesIfNeeded(session, chapter, selection.provider(), selection.model());
+
+        return new PreparedChatGenerationContext(chapter, session, selection.provider(), selection.model());
+    }
+
+    private AIWritingChatSessionVO persistAssistantReply(PreparedChatGenerationContext context, String assistantReply) {
+        String normalizedReply = normalizeText(assistantReply);
+        if (!StringUtils.hasText(normalizedReply)) {
+            throw new IllegalStateException("模型没有返回可用的聊天回复，请稍后重试");
+        }
+
+        appendMessage(context.session(), context.chapter().getId(), "assistant", normalizedReply);
+        syncActiveWindowChars(context.session());
+        return toSessionVO(context.session(), loadMessages(context.session().getId()));
     }
 
     private AIWritingSession ensureSession(Chapter chapter, Long userId) {
@@ -348,12 +415,200 @@ public class AIWritingChatServiceImpl implements AIWritingChatService {
         return builder.toString();
     }
 
+    private String buildParticipationPrompt(Chapter chapter, AIWritingSession session, List<AIWritingChatMessage> messages) {
+        StringBuilder builder = new StringBuilder();
+        builder.append("请把以下背景聊天整理为“参与本章写作的上下文”。\n");
+        builder.append("重点提炼世界观补充、人物行为边界、章节推进方向、文风偏好和硬性限制。\n");
+        builder.append("不要保留问答口吻，不要直接照抄整段聊天。\n\n");
+        builder.append("[当前章节]\n");
+        builder.append("标题：").append(safe(chapter.getTitle(), "未命名章节")).append('\n');
+        if (chapter.getOrderNum() != null) {
+            builder.append("顺序：第 ").append(chapter.getOrderNum()).append(" 章\n");
+        }
+        builder.append('\n');
+
+        if (StringUtils.hasText(session.getCompressedSummary())) {
+            builder.append("[历史摘要]\n")
+                    .append(session.getCompressedSummary().trim())
+                    .append("\n\n");
+        }
+
+        List<AIWritingChatMessage> pinnedMessages = messages.stream()
+                .filter(item -> Integer.valueOf(1).equals(item.getPinnedToBackground()))
+                .filter(item -> !"system".equals(item.getRole()))
+                .toList();
+        if (!pinnedMessages.isEmpty()) {
+            builder.append("[固定背景]\n");
+            for (AIWritingChatMessage message : pinnedMessages) {
+                builder.append("- ")
+                        .append(resolveRoleLabel(message.getRole()))
+                        .append(": ")
+                        .append(limit(message.getContent(), 260))
+                        .append('\n');
+            }
+            builder.append('\n');
+        }
+
+        List<AIWritingChatMessage> recentMessages = recentReusableMessages(messages, 8);
+        if (!recentMessages.isEmpty()) {
+            builder.append("[最近对话]\n");
+            for (AIWritingChatMessage message : recentMessages) {
+                builder.append("- ")
+                        .append(resolveRoleLabel(message.getRole()))
+                        .append(": ")
+                        .append(limit(message.getContent(), 220))
+                        .append('\n');
+            }
+        }
+        return builder.toString();
+    }
+
     private List<AIWritingChatMessage> recentActiveMessages(List<AIWritingChatMessage> messages, int limit) {
         List<AIWritingChatMessage> activeMessages = messages.stream()
                 .filter(item -> !Integer.valueOf(1).equals(item.getCompressed()))
                 .toList();
         long skip = Math.max(0L, activeMessages.size() - (long) limit);
         return activeMessages.stream().skip(skip).toList();
+    }
+
+    private List<AIWritingChatMessage> recentReusableMessages(List<AIWritingChatMessage> messages, int limit) {
+        return recentActiveMessages(messages, limit).stream()
+                .filter(item -> !"system".equals(item.getRole()))
+                .toList();
+    }
+
+    private boolean hasReusableBackgroundContext(AIWritingSession session, List<AIWritingChatMessage> messages) {
+        if (StringUtils.hasText(session.getCompressedSummary())) {
+            return true;
+        }
+        return messages.stream().anyMatch(message ->
+                !"system".equals(message.getRole())
+                        && StringUtils.hasText(message.getContent())
+                        && (Integer.valueOf(1).equals(message.getPinnedToBackground())
+                        || !Integer.valueOf(1).equals(message.getCompressed()))
+        );
+    }
+
+    private AIWritingChatParticipationVO parseParticipationContext(String response) {
+        AIWritingChatParticipationVO participation = AIWritingChatParticipationVO.empty();
+        String currentSection = null;
+        List<String> worldFacts = new ArrayList<>();
+        List<String> characterConstraints = new ArrayList<>();
+        List<String> plotGuidance = new ArrayList<>();
+        List<String> writingPreferences = new ArrayList<>();
+        List<String> hardConstraints = new ArrayList<>();
+
+        for (String rawLine : normalizeText(response).split("\\r?\\n")) {
+            String line = rawLine.trim();
+            if (!StringUtils.hasText(line)) {
+                continue;
+            }
+
+            String section = resolveParticipationSection(line);
+            if (section != null) {
+                currentSection = section;
+                addParticipationItem(resolveParticipationTarget(section, worldFacts, characterConstraints, plotGuidance, writingPreferences, hardConstraints), extractInlineSectionValue(line));
+                continue;
+            }
+
+            if (currentSection == null) {
+                continue;
+            }
+
+            addParticipationItem(
+                    resolveParticipationTarget(currentSection, worldFacts, characterConstraints, plotGuidance, writingPreferences, hardConstraints),
+                    line
+            );
+        }
+
+        participation.setWorldFacts(limitItems(worldFacts, 4, 160));
+        participation.setCharacterConstraints(limitItems(characterConstraints, 4, 160));
+        participation.setPlotGuidance(limitItems(plotGuidance, 4, 160));
+        participation.setWritingPreferences(limitItems(writingPreferences, 4, 160));
+        participation.setHardConstraints(limitItems(hardConstraints, 4, 160));
+        return participation;
+    }
+
+    private List<String> resolveParticipationTarget(
+            String section,
+            List<String> worldFacts,
+            List<String> characterConstraints,
+            List<String> plotGuidance,
+            List<String> writingPreferences,
+            List<String> hardConstraints) {
+        return switch (section) {
+            case "world" -> worldFacts;
+            case "character" -> characterConstraints;
+            case "plot" -> plotGuidance;
+            case "style" -> writingPreferences;
+            case "constraint" -> hardConstraints;
+            default -> new ArrayList<>();
+        };
+    }
+
+    private String resolveParticipationSection(String line) {
+        String normalized = line.replace("[", "").replace("]", "").trim();
+        if (normalized.contains("世界观")) {
+            return "world";
+        }
+        if (normalized.contains("人物约束") || normalized.contains("人物限制") || normalized.startsWith("人物")) {
+            return "character";
+        }
+        if (normalized.contains("剧情推进") || normalized.contains("章节推进") || normalized.startsWith("剧情")) {
+            return "plot";
+        }
+        if (normalized.contains("写作偏好") || normalized.contains("风格偏好") || normalized.contains("文风")) {
+            return "style";
+        }
+        if (normalized.contains("硬性约束") || normalized.contains("不可违背") || normalized.contains("禁忌")) {
+            return "constraint";
+        }
+        return null;
+    }
+
+    private String extractInlineSectionValue(String line) {
+        int separatorIndex = line.indexOf('：');
+        if (separatorIndex < 0) {
+            separatorIndex = line.indexOf(':');
+        }
+        if (separatorIndex < 0 || separatorIndex == line.length() - 1) {
+            return "";
+        }
+        return line.substring(separatorIndex + 1).trim();
+    }
+
+    private void addParticipationItem(List<String> target, String rawItem) {
+        String item = normalizeParticipationItem(rawItem);
+        if (!StringUtils.hasText(item)) {
+            return;
+        }
+        target.add(item);
+    }
+
+    private String normalizeParticipationItem(String rawItem) {
+        if (!StringUtils.hasText(rawItem)) {
+            return "";
+        }
+        String normalized = rawItem
+                .replaceFirst("^[-*•]+\\s*", "")
+                .replaceFirst("^\\d+[.、]\\s*", "")
+                .trim();
+        if (!StringUtils.hasText(normalized)
+                || "无".equals(normalized)
+                || "暂无".equals(normalized)
+                || "none".equalsIgnoreCase(normalized)) {
+            return "";
+        }
+        return normalized;
+    }
+
+    private List<String> limitItems(List<String> items, int maxItems, int maxLength) {
+        return items.stream()
+                .filter(StringUtils::hasText)
+                .map(item -> limit(item, maxLength))
+                .distinct()
+                .limit(maxItems)
+                .toList();
     }
 
     private void syncActiveWindowChars(AIWritingSession session) {
@@ -439,5 +694,12 @@ public class AIWritingChatServiceImpl implements AIWritingChatService {
             case "system" -> "系统";
             default -> "助手";
         };
+    }
+
+    private record PreparedChatGenerationContext(
+            Chapter chapter,
+            AIWritingSession session,
+            AIProvider provider,
+            String model) {
     }
 }

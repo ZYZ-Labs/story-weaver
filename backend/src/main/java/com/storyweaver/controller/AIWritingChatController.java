@@ -3,8 +3,11 @@ package com.storyweaver.controller;
 import com.storyweaver.domain.dto.AIWritingChatMessagePinRequestDTO;
 import com.storyweaver.domain.dto.AIWritingChatMessageRequestDTO;
 import com.storyweaver.domain.vo.AIWritingChatSessionVO;
+import com.storyweaver.domain.vo.AIWritingChatStreamEventVO;
 import com.storyweaver.security.SecurityUtils;
 import com.storyweaver.service.AIWritingChatService;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.validation.annotation.Validated;
@@ -15,7 +18,9 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
+import java.io.IOException;
 import java.util.Map;
 
 @RestController
@@ -55,6 +60,35 @@ public class AIWritingChatController {
         return ResponseEntity.ok(Map.of("code", 200, "message", "发送成功", "data", session));
     }
 
+    @PostMapping(value = "/{chapterId}/messages/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    public ResponseEntity<SseEmitter> sendMessageStream(
+            @PathVariable Long chapterId,
+            @Validated @RequestBody AIWritingChatMessageRequestDTO requestDTO,
+            @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
+            Authentication authentication) {
+        if (!AuthHeaderSupport.hasValidBearerToken(authorizationHeader)) {
+            return ResponseEntity.status(401).build();
+        }
+        Long userId = SecurityUtils.getCurrentUserId(authentication);
+
+        SseEmitter emitter = new SseEmitter(0L);
+        Thread.startVirtualThread(() -> {
+            try {
+                aiWritingChatService.streamMessage(userId, chapterId, requestDTO, event -> sendStreamEvent(emitter, event));
+                emitter.complete();
+            } catch (Exception exception) {
+                sendStreamEvent(emitter, AIWritingChatStreamEventVO.error(resolveMessage(exception)));
+                emitter.complete();
+            }
+        });
+
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CACHE_CONTROL, "no-cache")
+                .header(HttpHeaders.CONNECTION, "keep-alive")
+                .header("X-Accel-Buffering", "no")
+                .body(emitter);
+    }
+
     @PostMapping("/messages/{messageId}/background")
     public ResponseEntity<Map<String, Object>> setBackgroundFlag(
             @PathVariable Long messageId,
@@ -68,5 +102,18 @@ public class AIWritingChatController {
         boolean pinned = requestDTO == null || requestDTO.getPinned() == null || requestDTO.getPinned();
         AIWritingChatSessionVO session = aiWritingChatService.setMessagePinnedToBackground(userId, messageId, pinned);
         return ResponseEntity.ok(Map.of("code", 200, "message", "更新成功", "data", session));
+    }
+
+    private void sendStreamEvent(SseEmitter emitter, AIWritingChatStreamEventVO event) {
+        try {
+            emitter.send(SseEmitter.event().name(event.getType()).data(event));
+        } catch (IOException exception) {
+            throw new IllegalStateException("聊天流式连接已中断");
+        }
+    }
+
+    private String resolveMessage(Exception exception) {
+        String message = exception.getMessage();
+        return message == null || message.isBlank() ? "背景聊天生成失败，请稍后重试" : message;
     }
 }

@@ -12,6 +12,7 @@ import com.storyweaver.domain.entity.KnowledgeDocument;
 import com.storyweaver.domain.entity.Outline;
 import com.storyweaver.domain.entity.Plot;
 import com.storyweaver.domain.entity.Project;
+import com.storyweaver.domain.vo.AIWritingChatParticipationVO;
 import com.storyweaver.domain.vo.AIWritingResponseVO;
 import com.storyweaver.domain.vo.AIWritingStreamEventVO;
 import com.storyweaver.domain.vo.WorldSettingVO;
@@ -84,14 +85,14 @@ public class AIWritingServiceImpl extends ServiceImpl<AIWritingRecordMapper, AIW
 
     @Override
     public AIWritingResponseVO generateContent(Long userId, AIWritingRequestDTO requestDTO) {
-        PreparedGenerationContext context = prepareGeneration(userId, requestDTO);
+        PreparedGenerationContext context = prepareGeneration(userId, requestDTO, null);
         WorkflowResult workflowResult = runWorkflow(context, null, false);
         return persistGeneratedRecord(context, workflowResult.content());
     }
 
     @Override
     public void streamContent(Long userId, AIWritingRequestDTO requestDTO, Consumer<AIWritingStreamEventVO> eventConsumer) {
-        PreparedGenerationContext context = prepareGeneration(userId, requestDTO);
+        PreparedGenerationContext context = prepareGeneration(userId, requestDTO, eventConsumer);
 
         eventConsumer.accept(AIWritingStreamEventVO.meta(
                 context.writingType(),
@@ -172,7 +173,10 @@ public class AIWritingServiceImpl extends ServiceImpl<AIWritingRecordMapper, AIW
         return null;
     }
 
-    private PreparedGenerationContext prepareGeneration(Long userId, AIWritingRequestDTO requestDTO) {
+    private PreparedGenerationContext prepareGeneration(
+            Long userId,
+            AIWritingRequestDTO requestDTO,
+            Consumer<AIWritingStreamEventVO> eventConsumer) {
         Chapter chapter = chapterService.getChapterWithAuth(requestDTO.getChapterId(), userId);
         if (chapter == null) {
             throw new IllegalArgumentException("章节不存在或无权访问");
@@ -192,7 +196,15 @@ public class AIWritingServiceImpl extends ServiceImpl<AIWritingRecordMapper, AIW
         String selectedModel = selection.model();
         String promptSnapshot = resolvePromptSnapshot(requestDTO.getPromptSnapshot(), writingType);
         Project project = chapter.getProjectId() == null ? null : projectService.getById(chapter.getProjectId());
-        WritingContextBundle contextBundle = buildContextBundle(userId, project, chapter, userInstruction);
+        WritingContextBundle contextBundle = buildContextBundle(
+                userId,
+                project,
+                chapter,
+                userInstruction,
+                provider,
+                selectedModel,
+                eventConsumer
+        );
 
         return new PreparedGenerationContext(
                 chapter,
@@ -208,9 +220,26 @@ public class AIWritingServiceImpl extends ServiceImpl<AIWritingRecordMapper, AIW
         );
     }
 
-    private WritingContextBundle buildContextBundle(Long userId, Project project, Chapter chapter, String userInstruction) {
+    private WritingContextBundle buildContextBundle(
+            Long userId,
+            Project project,
+            Chapter chapter,
+            String userInstruction,
+            AIProvider provider,
+            String selectedModel,
+            Consumer<AIWritingStreamEventVO> eventConsumer) {
+        List<String> requiredCharacters = chapter.getRequiredCharacterNames() == null
+                ? List.of()
+                : chapter.getRequiredCharacterNames();
+        AIWritingChatParticipationVO chatParticipation = buildChatParticipationContext(
+                userId,
+                chapter,
+                provider,
+                selectedModel,
+                eventConsumer
+        );
         if (project == null || chapter.getProjectId() == null) {
-            return WritingContextBundle.empty();
+            return WritingContextBundle.empty(requiredCharacters, chatParticipation);
         }
 
         List<Outline> outlines = outlineService.getProjectOutlines(project.getId(), userId);
@@ -255,17 +284,64 @@ public class AIWritingServiceImpl extends ServiceImpl<AIWritingRecordMapper, AIW
         List<KnowledgeDocument> knowledgeDocuments = StringUtils.hasText(retrievalQuery)
                 ? knowledgeDocumentService.queryDocuments(project.getId(), userId, retrievalQuery).stream().limit(3).toList()
                 : List.of();
-        String chatBackground = aiWritingChatService.buildBackgroundContext(userId, chapter.getId());
-
         return new WritingContextBundle(
                 currentOutline,
                 relevantPlots,
                 relevantCausalities,
                 worldSettings,
                 knowledgeDocuments,
-                chapter.getRequiredCharacterNames() == null ? List.of() : chapter.getRequiredCharacterNames(),
-                chatBackground
+                requiredCharacters,
+                chatParticipation
         );
+    }
+
+    private AIWritingChatParticipationVO buildChatParticipationContext(
+            Long userId,
+            Chapter chapter,
+            AIProvider provider,
+            String selectedModel,
+            Consumer<AIWritingStreamEventVO> eventConsumer) {
+        if (!aiWritingChatService.hasBackgroundContext(userId, chapter.getId())) {
+            return AIWritingChatParticipationVO.empty();
+        }
+
+        emitStage(eventConsumer, "context", "started", "正在整理背景讨论并合并到创作上下文");
+        AIWritingChatParticipationVO participation = aiWritingChatService.buildParticipationContext(
+                userId,
+                chapter.getId(),
+                provider,
+                selectedModel
+        );
+        if (participation.hasContent()) {
+            emitLog(eventConsumer, "context", buildChatParticipationLog(participation));
+            emitStage(eventConsumer, "context", "completed", "背景讨论已并入世界观、人物约束和创作偏好");
+            return participation;
+        }
+
+        emitStage(eventConsumer, "context", "completed", "本轮未提炼出需要并入的背景讨论");
+        return participation;
+    }
+
+    private String buildChatParticipationLog(AIWritingChatParticipationVO participation) {
+        List<String> parts = new ArrayList<>();
+        if (!participation.getWorldFacts().isEmpty()) {
+            parts.add("世界观补充 " + participation.getWorldFacts().size() + " 条");
+        }
+        if (!participation.getCharacterConstraints().isEmpty()) {
+            parts.add("人物约束 " + participation.getCharacterConstraints().size() + " 条");
+        }
+        if (!participation.getPlotGuidance().isEmpty()) {
+            parts.add("剧情推进 " + participation.getPlotGuidance().size() + " 条");
+        }
+        if (!participation.getWritingPreferences().isEmpty()) {
+            parts.add("写作偏好 " + participation.getWritingPreferences().size() + " 条");
+        }
+        if (!participation.getHardConstraints().isEmpty()) {
+            parts.add("硬性约束 " + participation.getHardConstraints().size() + " 条");
+        }
+        return parts.isEmpty()
+                ? "背景讨论已检查，但没有提炼出稳定的写作约束"
+                : "已整理背景讨论：" + String.join("，", parts);
     }
 
     private AIWritingResponseVO persistGeneratedRecord(PreparedGenerationContext context, String generatedContent) {
@@ -390,14 +466,18 @@ public class AIWritingServiceImpl extends ServiceImpl<AIWritingRecordMapper, AIW
         if (!contextBundle.requiredCharacters().isEmpty()) {
             builder.append("本章必须出现人物：").append(String.join("、", contextBundle.requiredCharacters())).append('\n');
         }
+        appendInlineConstraint(builder, "背景补充人物约束", contextBundle.chatParticipation().getCharacterConstraints());
+        appendInlineConstraint(builder, "背景补充硬性约束", contextBundle.chatParticipation().getHardConstraints());
         builder.append(resolveWritingIntent(writingType));
 
         appendOutlineSection(builder, contextBundle.currentOutline());
+        appendBackgroundPlotGuidanceSection(builder, contextBundle.chatParticipation());
         appendPlotSection(builder, contextBundle.plots());
         appendCausalitySection(builder, contextBundle.causalities());
         appendWorldSettingSection(builder, contextBundle.worldSettings());
+        appendBackgroundWorldSettingSection(builder, contextBundle.chatParticipation());
         appendKnowledgeSection(builder, contextBundle.knowledgeDocuments());
-        appendChatBackgroundSection(builder, contextBundle.chatBackground());
+        appendWritingPreferenceSection(builder, contextBundle.chatParticipation());
 
         builder.append("\n【当前正文】\n");
         if (StringUtils.hasText(currentContent)) {
@@ -438,6 +518,19 @@ public class AIWritingServiceImpl extends ServiceImpl<AIWritingRecordMapper, AIW
         }
         if (outline.getFocusCharacterNames() != null && !outline.getFocusCharacterNames().isEmpty()) {
             builder.append("聚焦人物：").append(String.join("、", outline.getFocusCharacterNames())).append('\n');
+        }
+    }
+
+    private void appendBackgroundPlotGuidanceSection(StringBuilder builder, AIWritingChatParticipationVO chatParticipation) {
+        if (chatParticipation == null || chatParticipation.getPlotGuidance().isEmpty()) {
+            return;
+        }
+        builder.append("\n【背景补充推进】\n");
+        for (int index = 0; index < chatParticipation.getPlotGuidance().size(); index++) {
+            builder.append(index + 1)
+                    .append(". ")
+                    .append(chatParticipation.getPlotGuidance().get(index))
+                    .append('\n');
         }
     }
 
@@ -519,12 +612,39 @@ public class AIWritingServiceImpl extends ServiceImpl<AIWritingRecordMapper, AIW
         }
     }
 
-    private void appendChatBackgroundSection(StringBuilder builder, String chatBackground) {
-        if (!StringUtils.hasText(chatBackground)) {
+    private void appendBackgroundWorldSettingSection(StringBuilder builder, AIWritingChatParticipationVO chatParticipation) {
+        if (chatParticipation == null || chatParticipation.getWorldFacts().isEmpty()) {
             return;
         }
-        builder.append("\n【聊天背景信息】\n")
-                .append(chatBackground.trim())
+        builder.append("\n【背景补充设定】\n");
+        for (int index = 0; index < chatParticipation.getWorldFacts().size(); index++) {
+            builder.append(index + 1)
+                    .append(". ")
+                    .append(chatParticipation.getWorldFacts().get(index))
+                    .append('\n');
+        }
+    }
+
+    private void appendWritingPreferenceSection(StringBuilder builder, AIWritingChatParticipationVO chatParticipation) {
+        if (chatParticipation == null || chatParticipation.getWritingPreferences().isEmpty()) {
+            return;
+        }
+        builder.append("\n【创作偏好】\n");
+        for (int index = 0; index < chatParticipation.getWritingPreferences().size(); index++) {
+            builder.append(index + 1)
+                    .append(". ")
+                    .append(chatParticipation.getWritingPreferences().get(index))
+                    .append('\n');
+        }
+    }
+
+    private void appendInlineConstraint(StringBuilder builder, String label, List<String> items) {
+        if (items == null || items.isEmpty()) {
+            return;
+        }
+        builder.append(label)
+                .append("：")
+                .append(String.join("；", items))
                 .append('\n');
     }
 
@@ -882,10 +1002,18 @@ public class AIWritingServiceImpl extends ServiceImpl<AIWritingRecordMapper, AIW
             List<WorldSettingVO> worldSettings,
             List<KnowledgeDocument> knowledgeDocuments,
             List<String> requiredCharacters,
-            String chatBackground) {
+            AIWritingChatParticipationVO chatParticipation) {
 
-        private static WritingContextBundle empty() {
-            return new WritingContextBundle(null, List.of(), List.of(), List.of(), List.of(), List.of(), "");
+        private static WritingContextBundle empty(List<String> requiredCharacters, AIWritingChatParticipationVO chatParticipation) {
+            return new WritingContextBundle(
+                    null,
+                    List.of(),
+                    List.of(),
+                    List.of(),
+                    List.of(),
+                    requiredCharacters == null ? List.of() : requiredCharacters,
+                    chatParticipation == null ? AIWritingChatParticipationVO.empty() : chatParticipation
+            );
         }
     }
 
