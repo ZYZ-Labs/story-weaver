@@ -53,14 +53,15 @@ export async function streamGenerateWriting(payload: AIWritingRequest, handlers:
         }
         if (event.type === 'complete' && event.record) {
           completedRecord = event.record
-          await reader.cancel().catch(() => undefined)
-          return completedRecord
         }
       }
       separatorIndex = buffer.indexOf('\n\n')
     }
 
     if (done) {
+      if (completedRecord) {
+        return completedRecord
+      }
       break
     }
   }

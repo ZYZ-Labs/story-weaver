@@ -65,14 +65,15 @@ export async function streamWritingChatMessage(
         }
         if (event.type === 'complete' && event.session) {
           completedSession = event.session
-          await reader.cancel().catch(() => undefined)
-          return completedSession
         }
       }
       separatorIndex = buffer.indexOf('\n\n')
     }
 
     if (done) {
+      if (completedSession) {
+        return completedSession
+      }
       break
     }
   }
