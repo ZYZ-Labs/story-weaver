@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, nextTick, onMounted, ref, watch } from 'vue'
 
 import type { AIWritingStreamLogItem } from '@/types'
 
@@ -17,6 +17,41 @@ const props = withDefaults(
 )
 
 const displayLogs = computed(() => props.logs || [])
+const logListRef = ref<HTMLElement | null>(null)
+
+function scrollToBottom() {
+  const element = logListRef.value
+  if (!element) {
+    return
+  }
+  element.scrollTop = element.scrollHeight
+}
+
+function syncScrollToBottom() {
+  void nextTick(() => {
+    scrollToBottom()
+  })
+}
+
+onMounted(() => {
+  syncScrollToBottom()
+})
+
+watch(
+  () => props.logs?.length || 0,
+  () => {
+    syncScrollToBottom()
+  },
+)
+
+watch(
+  () => props.loading,
+  (loading) => {
+    if (loading) {
+      syncScrollToBottom()
+    }
+  },
+)
 
 function formatStage(item: AIWritingStreamLogItem) {
   const stageMap: Record<string, string> = {
@@ -42,7 +77,7 @@ function formatStage(item: AIWritingStreamLogItem) {
     <v-card-text>
       <v-progress-linear v-if="loading" indeterminate color="primary" class="mb-4" />
 
-      <div v-if="displayLogs.length" class="log-list">
+      <div v-if="displayLogs.length" ref="logListRef" class="log-list">
         <div v-for="item in displayLogs" :key="item.id" class="log-item">
           <div class="text-caption text-medium-emphasis">{{ formatStage(item) }}</div>
           <div class="text-body-2">{{ item.message || '处理中...' }}</div>
