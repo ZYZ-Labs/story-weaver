@@ -76,6 +76,7 @@ INSERT INTO system_config (config_key, config_value, description) VALUES
 ('prompt.causality', '分析事件之间的因果链路，明确原因、结果、触发条件和影响强度。', '因果提示词模板'),
 ('prompt.rag_query', '根据当前项目上下文组织检索关键词，优先召回与角色、章节、剧情和因果强相关的知识片段。', '知识检索提示词模板'),
 ('prompt.knowledge_extract', '从确认后的正文中抽取人物、设定、事件、因果和可复用事实，整理成适合入库的知识摘要。', '知识抽取提示词模板'),
+('ai.request.timeout_seconds', '3600', 'AI 请求超时时间（秒）'),
 ('prompt.character_attributes', '根据角色描述补齐年龄、身份、阵营、目标、技能、特性、天赋、弱点、装备和关系，内容要可直接用于小说设定表。', '人物属性生成提示词模板');
 
 -- 插入示例情节

@@ -10,6 +10,7 @@ import com.storyweaver.domain.entity.AIProvider;
 import com.storyweaver.domain.vo.ProviderDiscoveryVO;
 import com.storyweaver.repository.AIProviderMapper;
 import com.storyweaver.service.AIProviderService;
+import com.storyweaver.service.SystemConfigService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -35,9 +36,11 @@ public class AIProviderServiceImpl extends ServiceImpl<AIProviderMapper, AIProvi
 
     private final ObjectMapper objectMapper;
     private final HttpClient httpClient;
+    private final SystemConfigService systemConfigService;
 
-    public AIProviderServiceImpl(ObjectMapper objectMapper) {
+    public AIProviderServiceImpl(ObjectMapper objectMapper, SystemConfigService systemConfigService) {
         this.objectMapper = objectMapper;
+        this.systemConfigService = systemConfigService;
         this.httpClient = HttpClient.newBuilder()
                 .followRedirects(HttpClient.Redirect.NORMAL)
                 .build();
@@ -324,7 +327,24 @@ public class AIProviderServiceImpl extends ServiceImpl<AIProviderMapper, AIProvi
     }
 
     private int resolveGenerationTimeoutSeconds(AIProvider provider) {
-        return Math.max(resolveTimeoutSeconds(provider), 120);
+        return Math.max(resolveTimeoutSeconds(provider), resolveConfiguredAiTimeoutSeconds());
+    }
+
+    private int resolveStreamingTimeoutSeconds(AIProvider provider) {
+        return Math.max(resolveTimeoutSeconds(provider), resolveConfiguredAiTimeoutSeconds());
+    }
+
+    private int resolveConfiguredAiTimeoutSeconds() {
+        String configuredValue = systemConfigService.getConfigValue("ai.request.timeout_seconds");
+        if (!StringUtils.hasText(configuredValue)) {
+            return 3600;
+        }
+        try {
+            int parsed = Integer.parseInt(configuredValue.trim());
+            return parsed > 0 ? parsed : 3600;
+        } catch (NumberFormatException exception) {
+            return 3600;
+        }
     }
 
     private boolean preferCompatibleOllamaEndpoint(AIProvider provider) {
@@ -379,7 +399,7 @@ public class AIProviderServiceImpl extends ServiceImpl<AIProviderMapper, AIProvi
                 URI.create(buildOllamaChatUrl(provider.getBaseUrl())),
                 objectMapper.writeValueAsString(buildOllamaChatRequestBody(provider, modelName, systemPrompt, userPrompt, temperature, maxTokens, true)),
                 provider,
-                resolveGenerationTimeoutSeconds(provider),
+                resolveStreamingTimeoutSeconds(provider),
                 "application/x-ndjson, application/json"
         );
 
@@ -463,7 +483,7 @@ public class AIProviderServiceImpl extends ServiceImpl<AIProviderMapper, AIProvi
                 URI.create(buildCompatibleChatUrl(provider.getBaseUrl())),
                 objectMapper.writeValueAsString(buildCompatibleRequestBody(provider, modelName, systemPrompt, userPrompt, temperature, maxTokens, true)),
                 provider,
-                resolveGenerationTimeoutSeconds(provider),
+                resolveStreamingTimeoutSeconds(provider),
                 "text/event-stream, application/json"
         );
 

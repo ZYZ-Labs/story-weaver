@@ -72,6 +72,7 @@ const form = reactive({
   workflowMaxCheckRounds: 1,
   workflowMaxRevisionRounds: 1,
   workflowMaxToolCalls: 2,
+  aiRequestTimeoutSeconds: 3600,
   chatMaxActiveChars: 6000,
   chatKeepRecentMessages: 4,
 })
@@ -159,6 +160,7 @@ function hydrateForms() {
   form.workflowMaxCheckRounds = settingsStore.getNumberValue('ai.workflow.max_check_rounds', 1) ?? 1
   form.workflowMaxRevisionRounds = settingsStore.getNumberValue('ai.workflow.max_revision_rounds', 1) ?? 1
   form.workflowMaxToolCalls = settingsStore.getNumberValue('ai.workflow.max_tool_calls', 2) ?? 2
+  form.aiRequestTimeoutSeconds = settingsStore.getNumberValue('ai.request.timeout_seconds', 3600) ?? 3600
   form.chatMaxActiveChars = settingsStore.getNumberValue('ai.chat.max_active_chars', 6000) ?? 6000
   form.chatKeepRecentMessages = settingsStore.getNumberValue('ai.chat.keep_recent_messages', 4) ?? 4
 
@@ -272,6 +274,7 @@ function buildPayload(): SystemConfig[] {
     { configKey: 'ai.workflow.max_check_rounds', configValue: String(form.workflowMaxCheckRounds), description: '检查轮次' },
     { configKey: 'ai.workflow.max_revision_rounds', configValue: String(form.workflowMaxRevisionRounds), description: '修订轮次' },
     { configKey: 'ai.workflow.max_tool_calls', configValue: String(form.workflowMaxToolCalls), description: '工具调用上限' },
+    { configKey: 'ai.request.timeout_seconds', configValue: String(form.aiRequestTimeoutSeconds), description: 'AI 请求超时时间（秒）' },
     { configKey: 'ai.chat.max_active_chars', configValue: String(form.chatMaxActiveChars), description: '聊天活动窗口字符数' },
     { configKey: 'ai.chat.keep_recent_messages', configValue: String(form.chatKeepRecentMessages), description: '聊天保留最近消息数' },
     { configKey: 'prompt.draft', configValue: promptForm.draft, description: '初稿提示词' },
@@ -393,6 +396,7 @@ async function saveSettings() {
               <v-col cols="12" md="6"><v-text-field v-model="form.workflowMaxCheckRounds" label="检查轮次" type="number" /></v-col>
               <v-col cols="12" md="6"><v-text-field v-model="form.workflowMaxRevisionRounds" label="修订轮次" type="number" /></v-col>
               <v-col cols="12" md="6"><v-text-field v-model="form.workflowMaxToolCalls" label="工具调用上限" type="number" /></v-col>
+              <v-col cols="12" md="6"><v-text-field v-model="form.aiRequestTimeoutSeconds" label="AI 请求超时（秒）" type="number" /></v-col>
             </v-row>
           </v-card-text>
         </v-card>

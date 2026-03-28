@@ -50,7 +50,18 @@ export async function streamWritingChatMessage(
   let completedSession: AIWritingChatSession | null = null
 
   while (true) {
-    const { done, value } = await reader.read()
+    let done = false
+    let value: Uint8Array | undefined
+    try {
+      const readResult = await reader.read()
+      done = readResult.done
+      value = readResult.value
+    } catch (error) {
+      if (completedSession) {
+        return completedSession
+      }
+      throw error
+    }
     buffer += decoder.decode(value || new Uint8Array(), { stream: !done }).replace(/\r\n/g, '\n')
 
     let separatorIndex = buffer.indexOf('\n\n')

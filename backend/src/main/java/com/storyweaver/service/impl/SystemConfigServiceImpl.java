@@ -121,6 +121,7 @@ public class SystemConfigServiceImpl extends ServiceImpl<SystemConfigMapper, Sys
         defaults.put("ai.workflow.max_check_rounds", createDefault("ai.workflow.max_check_rounds", "1", "写作自检阶段最大轮次"));
         defaults.put("ai.workflow.max_revision_rounds", createDefault("ai.workflow.max_revision_rounds", "1", "写作修订阶段最大轮次"));
         defaults.put("ai.workflow.max_tool_calls", createDefault("ai.workflow.max_tool_calls", "2", "单次写作允许的工具调用上限"));
+        defaults.put("ai.request.timeout_seconds", createDefault("ai.request.timeout_seconds", "3600", "AI 请求超时时间（秒）"));
         defaults.put("ai.chat.max_active_chars", createDefault("ai.chat.max_active_chars", "6000", "聊天活跃窗口字符上限"));
         defaults.put("ai.chat.keep_recent_messages", createDefault("ai.chat.keep_recent_messages", "4", "压缩时保留的最近消息条数"));
         defaults.put("max_chapter_length", createDefault("max_chapter_length", "5000", "章节最大字数"));
