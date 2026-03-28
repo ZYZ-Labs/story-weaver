@@ -107,7 +107,7 @@ public class AIWritingServiceImpl extends ServiceImpl<AIWritingRecordMapper, AIW
 
         WorkflowResult workflowResult = runWorkflow(context, eventConsumer, true);
         AIWritingResponseVO response = persistGeneratedRecord(context, workflowResult.content());
-        eventConsumer.accept(AIWritingStreamEventVO.complete(response));
+        eventConsumer.accept(AIWritingStreamEventVO.complete(toStreamCompleteRecord(response)));
     }
 
     @Override
@@ -1052,6 +1052,21 @@ public class AIWritingServiceImpl extends ServiceImpl<AIWritingRecordMapper, AIW
         AIWritingResponseVO vo = new AIWritingResponseVO();
         BeanUtils.copyProperties(record, vo);
         return vo;
+    }
+
+    private AIWritingResponseVO toStreamCompleteRecord(AIWritingResponseVO source) {
+        AIWritingResponseVO target = new AIWritingResponseVO();
+        target.setId(source.getId());
+        target.setChapterId(source.getChapterId());
+        target.setGeneratedContent(null);
+        target.setWritingType(source.getWritingType());
+        target.setUserInstruction(null);
+        target.setSelectedProviderId(source.getSelectedProviderId());
+        target.setSelectedModel(source.getSelectedModel());
+        target.setPromptSnapshot(null);
+        target.setStatus(source.getStatus());
+        target.setCreateTime(source.getCreateTime());
+        return target;
     }
 
     private record PreparedGenerationContext(

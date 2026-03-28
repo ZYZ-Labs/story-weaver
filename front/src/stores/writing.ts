@@ -96,24 +96,26 @@ export const useWritingStore = defineStore('writing', () => {
             currentState.error = event.message || 'AI 生成失败'
             appendLogItem(currentState.logs, event)
           } else if (event.type === 'complete' && event.record) {
+            const completedRecord = mergeCompletedRecord(event.record, currentState.content)
             currentState.generating = false
-            currentState.lastRecord = event.record
-            currentState.content = event.record.generatedContent || currentState.content
+            currentState.lastRecord = completedRecord
+            currentState.content = completedRecord.generatedContent || currentState.content
           }
 
           handlers.onEvent?.(event)
         },
       })
 
-      records.value.unshift(record)
-      projectRecords.value.unshift(record)
       const currentState = streamStates.value[payload.chapterId]
+      const completedRecord = mergeCompletedRecord(record, currentState?.content || '')
+      records.value.unshift(completedRecord)
+      projectRecords.value.unshift(completedRecord)
       if (currentState?.requestId === requestId) {
         currentState.generating = false
-        currentState.lastRecord = record
-        currentState.content = record.generatedContent || currentState.content
+        currentState.lastRecord = completedRecord
+        currentState.content = completedRecord.generatedContent || currentState.content
       }
-      return record
+      return completedRecord
     } catch (error) {
       const currentState = streamStates.value[payload.chapterId]
       if (currentState?.requestId === requestId) {
@@ -202,6 +204,13 @@ export const useWritingStore = defineStore('writing', () => {
 
   function buildLogSignature(item: Pick<AIWritingStreamLogItem, 'type' | 'stage' | 'stageStatus' | 'message'>) {
     return [item.type || '', item.stage || '', item.stageStatus || '', item.message || ''].join('|')
+  }
+
+  function mergeCompletedRecord(record: AIWritingRecord, streamedContent: string) {
+    return {
+      ...record,
+      generatedContent: record.generatedContent || streamedContent,
+    }
   }
 
   return {
