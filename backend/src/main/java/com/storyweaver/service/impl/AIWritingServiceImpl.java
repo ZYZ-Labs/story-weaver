@@ -38,6 +38,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
@@ -45,6 +46,7 @@ import java.util.stream.Collectors;
 public class AIWritingServiceImpl extends ServiceImpl<AIWritingRecordMapper, AIWritingRecord> implements AIWritingService {
 
     private static final int MAX_CONTEXT_ITEMS = 4;
+    private static final long STREAM_HEARTBEAT_INTERVAL_MS = 10_000L;
 
     private final ChapterService chapterService;
     private final KnowledgeDocumentService knowledgeDocumentService;
@@ -92,6 +94,7 @@ public class AIWritingServiceImpl extends ServiceImpl<AIWritingRecordMapper, AIW
 
     @Override
     public void streamContent(Long userId, AIWritingRequestDTO requestDTO, Consumer<AIWritingStreamEventVO> eventConsumer) {
+        emitStage(eventConsumer, "prepare", "started", "已收到生成请求，正在整理章节上下文");
         PreparedGenerationContext context = prepareGeneration(userId, requestDTO, eventConsumer);
 
         eventConsumer.accept(AIWritingStreamEventVO.meta(
@@ -100,6 +103,7 @@ public class AIWritingServiceImpl extends ServiceImpl<AIWritingRecordMapper, AIW
                 context.selectedModel(),
                 context.maxTokens()
         ));
+        emitStage(eventConsumer, "prepare", "completed", "章节上下文准备完成，开始生成正文");
 
         WorkflowResult workflowResult = runWorkflow(context, eventConsumer, true);
         AIWritingResponseVO response = persistGeneratedRecord(context, workflowResult.content());
@@ -306,11 +310,16 @@ public class AIWritingServiceImpl extends ServiceImpl<AIWritingRecordMapper, AIW
         }
 
         emitStage(eventConsumer, "context", "started", "正在整理背景讨论并合并到创作上下文");
-        AIWritingChatParticipationVO participation = aiWritingChatService.buildParticipationContext(
-                userId,
-                chapter.getId(),
-                provider,
-                selectedModel
+        AIWritingChatParticipationVO participation = executeWithHeartbeat(
+                eventConsumer,
+                "context",
+                "背景讨论仍在整理中，请稍候",
+                () -> aiWritingChatService.buildParticipationContext(
+                        userId,
+                        chapter.getId(),
+                        provider,
+                        selectedModel
+                )
         );
         if (participation.hasContent()) {
             emitLog(eventConsumer, "context", buildChatParticipationLog(participation));
@@ -669,17 +678,22 @@ public class AIWritingServiceImpl extends ServiceImpl<AIWritingRecordMapper, AIW
 
         if (settings.maxPlanRounds() > 0) {
             emitStage(eventConsumer, "plan", "started", "正在整理本章写作计划");
-            plan = aiProviderService.generateText(
-                    context.provider(),
-                    context.selectedModel(),
-                    """
-                    你是一名中文小说章节规划助手。
-                    请输出一份简短、可执行的中文写作计划。
-                    不要直接产出最终正文。
-                    """,
-                    buildPlanningPrompt(context),
-                    null,
-                    800
+            plan = executeWithHeartbeat(
+                    eventConsumer,
+                    "plan",
+                    "写作计划仍在生成中，请稍候",
+                    () -> aiProviderService.generateText(
+                            context.provider(),
+                            context.selectedModel(),
+                            """
+                            你是一名中文小说章节规划助手。
+                            请输出一份简短、可执行的中文写作计划。
+                            不要直接产出最终正文。
+                            """,
+                            buildPlanningPrompt(context),
+                            null,
+                            800
+                    )
             );
             emitLog(eventConsumer, "plan", limit(plan, 280));
             emitStage(eventConsumer, "plan", "completed", "本章计划已生成");
@@ -721,22 +735,29 @@ public class AIWritingServiceImpl extends ServiceImpl<AIWritingRecordMapper, AIW
         }
 
         emitStage(eventConsumer, "check", "started", "正在检查连贯性与约束条件");
-        String checkReport = aiProviderService.generateText(
-                context.provider(),
-                context.selectedModel(),
-                """
-                你是一名中文小说审校助手。
-                请检查章节正文是否遵循给定上下文和约束。
-                请严格按照以下格式返回：
-                结论：通过 或 修订
-                摘要：一句中文简述
-                问题：
-                - 问题 1
-                - 问题 2
-                """,
-                buildCheckPrompt(context, plan, content),
-                null,
-                700
+        String planForCheck = plan;
+        String contentForCheck = content;
+        String checkReport = executeWithHeartbeat(
+                eventConsumer,
+                "check",
+                "一致性审校仍在进行中，请稍候",
+                () -> aiProviderService.generateText(
+                        context.provider(),
+                        context.selectedModel(),
+                        """
+                        你是一名中文小说审校助手。
+                        请检查章节正文是否遵循给定上下文和约束。
+                        请严格按照以下格式返回：
+                        结论：通过 或 修订
+                        摘要：一句中文简述
+                        问题：
+                        - 问题 1
+                        - 问题 2
+                        """,
+                        buildCheckPrompt(context, planForCheck, contentForCheck),
+                        null,
+                        700
+                )
         );
         WritingCheckResult checkResult = parseCheckResult(checkReport);
         emitLog(eventConsumer, "check", checkResult.summary());
@@ -747,13 +768,20 @@ public class AIWritingServiceImpl extends ServiceImpl<AIWritingRecordMapper, AIW
         }
 
         emitStage(eventConsumer, "revise", "started", "正在根据审校意见修订正文");
-        String revisedContent = aiProviderService.generateText(
-                context.provider(),
-                context.selectedModel(),
-                context.systemPrompt(),
-                buildRevisionPrompt(context, plan, content, checkResult.report()),
-                null,
-                context.maxTokens()
+        String planForRevision = plan;
+        String contentForRevision = content;
+        String revisedContent = executeWithHeartbeat(
+                eventConsumer,
+                "revise",
+                "正在根据审校结果修订正文，请稍候",
+                () -> aiProviderService.generateText(
+                        context.provider(),
+                        context.selectedModel(),
+                        context.systemPrompt(),
+                        buildRevisionPrompt(context, planForRevision, contentForRevision, checkResult.report()),
+                        null,
+                        context.maxTokens()
+                )
         );
         emitLog(eventConsumer, "revise", "已根据审校意见自动完成修订");
         if (eventConsumer != null) {
@@ -855,6 +883,50 @@ public class AIWritingServiceImpl extends ServiceImpl<AIWritingRecordMapper, AIW
         if (eventConsumer != null && StringUtils.hasText(message)) {
             eventConsumer.accept(AIWritingStreamEventVO.log(stage, message));
         }
+    }
+
+    private <T> T executeWithHeartbeat(
+            Consumer<AIWritingStreamEventVO> eventConsumer,
+            String stage,
+            String heartbeatMessage,
+            StreamTask<T> task) {
+        if (eventConsumer == null) {
+            return task.run();
+        }
+
+        AtomicReference<T> resultReference = new AtomicReference<>();
+        AtomicReference<Throwable> failureReference = new AtomicReference<>();
+        Thread worker = Thread.startVirtualThread(() -> {
+            try {
+                resultReference.set(task.run());
+            } catch (Throwable throwable) {
+                failureReference.set(throwable);
+            }
+        });
+
+        while (worker.isAlive()) {
+            try {
+                worker.join(STREAM_HEARTBEAT_INTERVAL_MS);
+            } catch (InterruptedException exception) {
+                Thread.currentThread().interrupt();
+                throw new IllegalStateException("流式生成任务被中断", exception);
+            }
+            if (worker.isAlive()) {
+                emitLog(eventConsumer, stage, heartbeatMessage);
+            }
+        }
+
+        Throwable failure = failureReference.get();
+        if (failure == null) {
+            return resultReference.get();
+        }
+        if (failure instanceof RuntimeException runtimeException) {
+            throw runtimeException;
+        }
+        if (failure instanceof Error error) {
+            throw error;
+        }
+        throw new IllegalStateException(failure.getMessage(), failure);
     }
 
     private void syncKnowledgeDocument(Chapter chapter, AIWritingRecord record) {
@@ -1030,5 +1102,10 @@ public class AIWritingServiceImpl extends ServiceImpl<AIWritingRecordMapper, AIW
             boolean requiresRevision,
             String summary,
             String report) {
+    }
+
+    @FunctionalInterface
+    private interface StreamTask<T> {
+        T run();
     }
 }
