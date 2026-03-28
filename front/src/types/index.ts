@@ -107,6 +107,10 @@ export interface AIWritingStreamLogItem {
   stage?: string
   stageStatus?: string
   message?: string
+  occurrenceCount?: number
+  firstSeenAt?: number
+  lastSeenAt?: number
+  elapsedSeconds?: number
 }
 
 export interface AIWritingStreamEvent {

@@ -86,7 +86,7 @@ export const useWritingStore = defineStore('writing', () => {
             currentState.selectedModel = event.selectedModel || currentState.selectedModel || ''
             currentState.maxTokens = event.maxTokens ?? currentState.maxTokens ?? null
           } else if (event.type === 'stage' || event.type === 'log') {
-            currentState.logs.push(toLogItem(event))
+            appendLogItem(currentState.logs, event)
           } else if (event.type === 'chunk' && event.delta) {
             currentState.content += event.delta
           } else if (event.type === 'replace') {
@@ -94,7 +94,7 @@ export const useWritingStore = defineStore('writing', () => {
           } else if (event.type === 'error') {
             currentState.generating = false
             currentState.error = event.message || 'AI 生成失败'
-            currentState.logs.push(toLogItem(event))
+            appendLogItem(currentState.logs, event)
           } else if (event.type === 'complete' && event.record) {
             currentState.generating = false
             currentState.lastRecord = event.record
@@ -162,13 +162,46 @@ export const useWritingStore = defineStore('writing', () => {
   }
 
   function toLogItem(event: AIWritingStreamEvent): AIWritingStreamLogItem {
+    const now = Date.now()
     return {
       id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
       type: event.type,
       stage: event.stage,
       stageStatus: event.stageStatus,
       message: event.message,
+      occurrenceCount: 1,
+      firstSeenAt: now,
+      lastSeenAt: now,
+      elapsedSeconds: 0,
     }
+  }
+
+  function appendLogItem(logs: AIWritingStreamLogItem[], event: AIWritingStreamEvent) {
+    if (event.type !== 'log') {
+      logs.push(toLogItem(event))
+      return
+    }
+
+    const signature = buildLogSignature(event)
+    for (let index = logs.length - 1; index >= 0; index -= 1) {
+      const item = logs[index]
+      if (buildLogSignature(item) !== signature) {
+        continue
+      }
+
+      const now = Date.now()
+      const firstSeenAt = item.firstSeenAt || now
+      item.occurrenceCount = (item.occurrenceCount || 1) + 1
+      item.lastSeenAt = now
+      item.elapsedSeconds = Math.max(0, Math.floor((now - firstSeenAt) / 1000))
+      return
+    }
+
+    logs.push(toLogItem(event))
+  }
+
+  function buildLogSignature(item: Pick<AIWritingStreamLogItem, 'type' | 'stage' | 'stageStatus' | 'message'>) {
+    return [item.type || '', item.stage || '', item.stageStatus || '', item.message || ''].join('|')
   }
 
   return {

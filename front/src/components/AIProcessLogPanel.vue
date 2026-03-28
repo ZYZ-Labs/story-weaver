@@ -69,6 +69,17 @@ function formatStage(item: AIWritingStreamLogItem) {
   const statusLabel = item.stageStatus ? statusMap[item.stageStatus] || item.stageStatus : ''
   return statusLabel ? `${stageLabel} | ${statusLabel}` : stageLabel
 }
+
+function formatMeta(item: AIWritingStreamLogItem) {
+  const parts: string[] = []
+  if ((item.occurrenceCount || 1) > 1) {
+    parts.push(`已重复 ${item.occurrenceCount} 次`)
+  }
+  if ((item.elapsedSeconds || 0) > 0) {
+    parts.push(`已持续 ${item.elapsedSeconds} 秒`)
+  }
+  return parts.join(' · ')
+}
 </script>
 
 <template>
@@ -79,7 +90,12 @@ function formatStage(item: AIWritingStreamLogItem) {
 
       <div v-if="displayLogs.length" ref="logListRef" class="log-list">
         <div v-for="item in displayLogs" :key="item.id" class="log-item">
-          <div class="text-caption text-medium-emphasis">{{ formatStage(item) }}</div>
+          <div class="d-flex justify-space-between align-center ga-3">
+            <div class="text-caption text-medium-emphasis">{{ formatStage(item) }}</div>
+            <div v-if="formatMeta(item)" class="text-caption text-medium-emphasis">
+              {{ formatMeta(item) }}
+            </div>
+          </div>
           <div class="text-body-2">{{ item.message || '处理中...' }}</div>
         </div>
       </div>
