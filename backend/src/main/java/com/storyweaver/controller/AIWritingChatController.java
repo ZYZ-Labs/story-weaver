@@ -85,7 +85,6 @@ public class AIWritingChatController {
 
         return ResponseEntity.ok()
                 .header(HttpHeaders.CACHE_CONTROL, "no-cache")
-                .header(HttpHeaders.CONNECTION, "keep-alive")
                 .header("X-Accel-Buffering", "no")
                 .body(emitter);
     }
