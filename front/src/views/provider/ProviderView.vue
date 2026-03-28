@@ -80,7 +80,10 @@ const form = reactive({
 
 const currentPreset = computed(() => providerPresets.find((item) => item.value === form.presetValue) || providerPresets[0])
 const isOllama = computed(() => form.providerType === 'ollama')
-const canDiscover = computed(() => isOllama.value && Boolean(form.baseUrl.trim()))
+const supportsRemoteDiscovery = computed(() =>
+  ['ollama', 'openai-compatible'].includes(form.providerType),
+)
+const canDiscover = computed(() => supportsRemoteDiscovery.value && Boolean(form.baseUrl.trim()))
 const modelOptions = computed(() => mergeOptions(currentPreset.value.models, remoteModelOptions.value, [form.modelName]))
 const embeddingOptions = computed(() =>
   mergeOptions(currentPreset.value.embeddings, remoteEmbeddingOptions.value, [form.embeddingModel]),
@@ -394,7 +397,7 @@ async function discoverRemoteModels() {
                   clearable
                 />
                 <v-btn
-                  v-if="isOllama"
+                  v-if="supportsRemoteDiscovery"
                   class="mt-2"
                   variant="outlined"
                   :loading="fetchingCatalog"
@@ -416,7 +419,7 @@ async function discoverRemoteModels() {
                   clearable
                 />
                 <v-btn
-                  v-if="isOllama"
+                  v-if="supportsRemoteDiscovery"
                   class="mt-2"
                   variant="outlined"
                   :loading="fetchingCatalog"
@@ -428,7 +431,7 @@ async function discoverRemoteModels() {
               </div>
             </v-col>
 
-            <v-col v-if="isOllama && (remoteModelOptions.length || remoteEmbeddingOptions.length)" cols="12">
+            <v-col v-if="supportsRemoteDiscovery && (remoteModelOptions.length || remoteEmbeddingOptions.length)" cols="12">
               <v-alert type="success" variant="tonal">
                 已获取 {{ remoteModelOptions.length }} 个对话模型，{{ remoteEmbeddingOptions.length }} 个向量模型，可直接从下拉中选择。
               </v-alert>

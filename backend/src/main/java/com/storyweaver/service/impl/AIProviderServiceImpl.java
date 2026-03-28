@@ -130,86 +130,19 @@ public class AIProviderServiceImpl extends ServiceImpl<AIProviderMapper, AIProvi
         if (!StringUtils.hasText(provider.getBaseUrl())) {
             return new ProviderDiscoveryVO(false, "请先填写服务地址。", List.of(), List.of());
         }
-        if (!"ollama".equalsIgnoreCase(provider.getProviderType())) {
-            return new ProviderDiscoveryVO(false, "当前仅支持从 Ollama 自动获取模型列表。", List.of(), List.of());
-        }
 
         try {
-            String tagsUrl = buildOllamaTagsUrl(provider.getBaseUrl());
-            HttpRequest.Builder builder = HttpRequest.newBuilder(URI.create(tagsUrl))
-                    .GET()
-                    .timeout(Duration.ofSeconds(resolveTimeoutSeconds(provider)))
-                    .header("Accept", "application/json");
-
-            if (StringUtils.hasText(provider.getApiKey())) {
-                builder.header("Authorization", "Bearer " + provider.getApiKey().trim());
+            if ("ollama".equalsIgnoreCase(provider.getProviderType())) {
+                return discoverOllamaModels(provider);
             }
-
-            HttpResponse<String> response = httpClient.send(
-                    builder.build(),
-                    HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8)
-            );
-
-            if (response.statusCode() < 200 || response.statusCode() >= 300) {
-                return new ProviderDiscoveryVO(
-                        false,
-                        "连接成功，但获取模型列表失败，状态码：" + response.statusCode(),
-                        List.of(),
-                        List.of()
-                );
+            if ("openai-compatible".equalsIgnoreCase(provider.getProviderType())) {
+                return discoverCompatibleModels(provider);
             }
-
-            JsonNode root = objectMapper.readTree(response.body());
-            JsonNode modelsNode = root.path("models");
-            if (!modelsNode.isArray()) {
-                return new ProviderDiscoveryVO(false, "Ollama 返回内容不符合预期。", List.of(), List.of());
-            }
-
-            Set<String> names = new LinkedHashSet<>();
-            for (JsonNode item : modelsNode) {
-                String name = "";
-                if (item.hasNonNull("name")) {
-                    name = item.get("name").asText();
-                } else if (item.hasNonNull("model")) {
-                    name = item.get("model").asText();
-                }
-                name = StringUtils.trimWhitespace(name);
-                if (StringUtils.hasText(name)) {
-                    names.add(name);
-                }
-            }
-
-            if (names.isEmpty()) {
-                return new ProviderDiscoveryVO(false, "连接成功，但当前还没有可用模型，请先执行 ollama pull。", List.of(), List.of());
-            }
-
-            List<String> allModels = new ArrayList<>(names);
-            allModels.sort(String::compareToIgnoreCase);
-
-            List<String> modelOptions = allModels.stream()
-                    .filter(name -> !isEmbeddingModel(name))
-                    .toList();
-            List<String> embeddingOptions = allModels.stream()
-                    .filter(this::isEmbeddingModel)
-                    .toList();
-
-            if (modelOptions.isEmpty()) {
-                modelOptions = allModels;
-            }
-            if (embeddingOptions.isEmpty()) {
-                embeddingOptions = allModels;
-            }
-
-            return new ProviderDiscoveryVO(
-                    true,
-                    "连接成功，已获取 " + allModels.size() + " 个模型。",
-                    new ArrayList<>(modelOptions),
-                    new ArrayList<>(embeddingOptions)
-            );
+            return new ProviderDiscoveryVO(false, "当前服务类型暂不支持自动获取模型列表。", List.of(), List.of());
         } catch (IllegalArgumentException exception) {
             return new ProviderDiscoveryVO(false, "服务地址格式不正确，请检查后重试。", List.of(), List.of());
         } catch (IOException exception) {
-            return new ProviderDiscoveryVO(false, "连接失败，无法读取 Ollama 返回结果。", List.of(), List.of());
+            return new ProviderDiscoveryVO(false, "连接失败，无法读取模型服务返回结果。", List.of(), List.of());
         } catch (InterruptedException exception) {
             Thread.currentThread().interrupt();
             return new ProviderDiscoveryVO(false, "获取模型列表时被中断，请稍后重试。", List.of(), List.of());
@@ -315,6 +248,17 @@ public class AIProviderServiceImpl extends ServiceImpl<AIProviderMapper, AIProvi
             return normalized + "/chat/completions";
         }
         return normalized + "/v1/chat/completions";
+    }
+
+    private String buildCompatibleModelsUrl(String baseUrl) {
+        String normalized = normalizeBaseUrl(baseUrl);
+        if (normalized.endsWith("/models")) {
+            return normalized;
+        }
+        if (normalized.endsWith("/v1")) {
+            return normalized + "/models";
+        }
+        return normalized + "/v1/models";
     }
 
     private String normalizeBaseUrl(String baseUrl) {
@@ -545,6 +489,135 @@ public class AIProviderServiceImpl extends ServiceImpl<AIProviderMapper, AIProvi
             builder.header("Authorization", "Bearer " + provider.getApiKey().trim());
         }
         return builder;
+    }
+
+    private HttpRequest.Builder createJsonGetBuilder(
+            URI uri,
+            AIProvider provider,
+            int timeoutSeconds,
+            String accept) {
+        HttpRequest.Builder builder = HttpRequest.newBuilder(uri)
+                .GET()
+                .timeout(Duration.ofSeconds(timeoutSeconds))
+                .header("Accept", accept);
+
+        if (StringUtils.hasText(provider.getApiKey())) {
+            builder.header("Authorization", "Bearer " + provider.getApiKey().trim());
+        }
+        return builder;
+    }
+
+    private ProviderDiscoveryVO discoverOllamaModels(AIProvider provider) throws IOException, InterruptedException {
+        HttpResponse<String> response = httpClient.send(
+                createJsonGetBuilder(
+                        URI.create(buildOllamaTagsUrl(provider.getBaseUrl())),
+                        provider,
+                        resolveTimeoutSeconds(provider),
+                        "application/json"
+                ).build(),
+                HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8)
+        );
+
+        if (response.statusCode() < 200 || response.statusCode() >= 300) {
+            return new ProviderDiscoveryVO(
+                    false,
+                    "连接成功，但获取模型列表失败，状态码：" + response.statusCode(),
+                    List.of(),
+                    List.of()
+            );
+        }
+
+        JsonNode root = objectMapper.readTree(response.body());
+        JsonNode modelsNode = root.path("models");
+        if (!modelsNode.isArray()) {
+            return new ProviderDiscoveryVO(false, "Ollama 返回内容不符合预期。", List.of(), List.of());
+        }
+
+        Set<String> names = extractModelNames(modelsNode);
+        if (names.isEmpty()) {
+            return new ProviderDiscoveryVO(false, "连接成功，但当前还没有可用模型，请先执行 ollama pull。", List.of(), List.of());
+        }
+
+        return buildDiscoveryResult(names);
+    }
+
+    private ProviderDiscoveryVO discoverCompatibleModels(AIProvider provider) throws IOException, InterruptedException {
+        HttpResponse<String> response = httpClient.send(
+                createJsonGetBuilder(
+                        URI.create(buildCompatibleModelsUrl(provider.getBaseUrl())),
+                        provider,
+                        resolveTimeoutSeconds(provider),
+                        "application/json"
+                ).build(),
+                HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8)
+        );
+
+        if (response.statusCode() < 200 || response.statusCode() >= 300) {
+            return new ProviderDiscoveryVO(
+                    false,
+                    "连接成功，但获取模型列表失败，状态码：" + response.statusCode(),
+                    List.of(),
+                    List.of()
+            );
+        }
+
+        JsonNode root = objectMapper.readTree(response.body());
+        JsonNode modelsNode = root.path("data");
+        if (!modelsNode.isArray()) {
+            return new ProviderDiscoveryVO(false, "兼容接口返回内容不符合预期。", List.of(), List.of());
+        }
+
+        Set<String> names = extractModelNames(modelsNode);
+        if (names.isEmpty()) {
+            return new ProviderDiscoveryVO(false, "连接成功，但当前没有可用模型。", List.of(), List.of());
+        }
+
+        return buildDiscoveryResult(names);
+    }
+
+    private Set<String> extractModelNames(JsonNode modelsNode) {
+        Set<String> names = new LinkedHashSet<>();
+        for (JsonNode item : modelsNode) {
+            String name = "";
+            if (item.hasNonNull("id")) {
+                name = item.get("id").asText();
+            } else if (item.hasNonNull("name")) {
+                name = item.get("name").asText();
+            } else if (item.hasNonNull("model")) {
+                name = item.get("model").asText();
+            }
+            name = StringUtils.trimWhitespace(name);
+            if (StringUtils.hasText(name)) {
+                names.add(name);
+            }
+        }
+        return names;
+    }
+
+    private ProviderDiscoveryVO buildDiscoveryResult(Set<String> names) {
+        List<String> allModels = new ArrayList<>(names);
+        allModels.sort(String::compareToIgnoreCase);
+
+        List<String> modelOptions = allModels.stream()
+                .filter(name -> !isEmbeddingModel(name))
+                .toList();
+        List<String> embeddingOptions = allModels.stream()
+                .filter(this::isEmbeddingModel)
+                .toList();
+
+        if (modelOptions.isEmpty()) {
+            modelOptions = allModels;
+        }
+        if (embeddingOptions.isEmpty()) {
+            embeddingOptions = allModels;
+        }
+
+        return new ProviderDiscoveryVO(
+                true,
+                "连接成功，已获取 " + allModels.size() + " 个模型。",
+                new ArrayList<>(modelOptions),
+                new ArrayList<>(embeddingOptions)
+        );
     }
 
     private ObjectNode buildOllamaChatRequestBody(
