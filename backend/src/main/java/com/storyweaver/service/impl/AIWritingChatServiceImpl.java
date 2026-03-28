@@ -218,15 +218,15 @@ public class AIWritingChatServiceImpl implements AIWritingChatService {
                 你的任务是把背景聊天整理成可参与本章生成的结构化上下文，而不是复述聊天记录。
                 只能提炼已出现的稳定设定、人物约束、剧情推进方向、写作偏好和不可违背事项，不要补充聊天里没有的新信息。
                 请严格按以下格式输出；如果某一栏没有内容，请写“- 无”：
-                [世界观补充]
+                【世界观补充】
                 - ...
-                [人物约束]
+                【人物约束】
                 - ...
-                [剧情推进]
+                【剧情推进】
                 - ...
-                [写作偏好]
+                【写作偏好】
                 - ...
-                [硬性约束]
+                【硬性约束】
                 - ...
                 """,
                 buildParticipationPrompt(chapter, session, messages),
@@ -405,7 +405,7 @@ public class AIWritingChatServiceImpl implements AIWritingChatService {
     private String buildChatUserPrompt(Chapter chapter, AIWritingSession session, List<AIWritingChatMessage> messages) {
         StringBuilder builder = new StringBuilder();
         builder.append("请用中文回复用户最新一条消息。\n");
-        builder.append("[当前章节]\n");
+        builder.append("【当前章节】\n");
         builder.append("标题：").append(safe(chapter.getTitle(), "未命名章节")).append('\n');
         if (chapter.getOrderNum() != null) {
             builder.append("章节顺序：第 ").append(chapter.getOrderNum()).append(" 章\n");
@@ -415,7 +415,7 @@ public class AIWritingChatServiceImpl implements AIWritingChatService {
         }
 
         if (StringUtils.hasText(session.getCompressedSummary())) {
-            builder.append("[压缩后的聊天摘要]\n")
+            builder.append("【压缩后的聊天摘要】\n")
                     .append(session.getCompressedSummary().trim())
                     .append("\n\n");
         }
@@ -424,7 +424,7 @@ public class AIWritingChatServiceImpl implements AIWritingChatService {
                 .filter(item -> Integer.valueOf(1).equals(item.getPinnedToBackground()))
                 .toList();
         if (!pinnedMessages.isEmpty()) {
-            builder.append("[已置顶背景信息]\n");
+            builder.append("【已置顶背景信息】\n");
             for (AIWritingChatMessage message : pinnedMessages) {
                 builder.append("- ")
                         .append(resolveRoleLabel(message.getRole()))
@@ -435,7 +435,7 @@ public class AIWritingChatServiceImpl implements AIWritingChatService {
             builder.append('\n');
         }
 
-        builder.append("[最近对话]\n");
+        builder.append("【最近对话】\n");
         for (AIWritingChatMessage message : recentActiveMessages(messages, 8)) {
             builder.append(resolveRoleLabel(message.getRole()))
                     .append(": ")
@@ -453,9 +453,9 @@ public class AIWritingChatServiceImpl implements AIWritingChatService {
         builder.append("不要编造任何原对话中没有提到的内容。\n\n");
         builder.append("章节：").append(safe(chapter.getTitle(), "未命名章节")).append("\n\n");
         if (StringUtils.hasText(existingSummary)) {
-            builder.append("[已有摘要]\n").append(existingSummary.trim()).append("\n\n");
+            builder.append("【已有摘要】\n").append(existingSummary.trim()).append("\n\n");
         }
-        builder.append("[待压缩消息]\n");
+        builder.append("【待压缩消息】\n");
         for (AIWritingChatMessage message : archivedMessages) {
             builder.append(resolveRoleLabel(message.getRole()))
                     .append(": ")
@@ -470,7 +470,7 @@ public class AIWritingChatServiceImpl implements AIWritingChatService {
         builder.append("请把以下背景聊天整理为“参与本章写作的上下文”。\n");
         builder.append("重点提炼世界观补充、人物行为边界、章节推进方向、文风偏好和硬性限制。\n");
         builder.append("不要保留问答口吻，不要直接照抄整段聊天。\n\n");
-        builder.append("[当前章节]\n");
+        builder.append("【当前章节】\n");
         builder.append("标题：").append(safe(chapter.getTitle(), "未命名章节")).append('\n');
         if (chapter.getOrderNum() != null) {
             builder.append("顺序：第 ").append(chapter.getOrderNum()).append(" 章\n");
@@ -478,7 +478,7 @@ public class AIWritingChatServiceImpl implements AIWritingChatService {
         builder.append('\n');
 
         if (StringUtils.hasText(session.getCompressedSummary())) {
-            builder.append("[历史摘要]\n")
+            builder.append("【历史摘要】\n")
                     .append(session.getCompressedSummary().trim())
                     .append("\n\n");
         }
@@ -488,7 +488,7 @@ public class AIWritingChatServiceImpl implements AIWritingChatService {
                 .filter(item -> !"system".equals(item.getRole()))
                 .toList();
         if (!pinnedMessages.isEmpty()) {
-            builder.append("[固定背景]\n");
+            builder.append("【固定背景】\n");
             for (AIWritingChatMessage message : pinnedMessages) {
                 builder.append("- ")
                         .append(resolveRoleLabel(message.getRole()))
@@ -501,7 +501,7 @@ public class AIWritingChatServiceImpl implements AIWritingChatService {
 
         List<AIWritingChatMessage> recentMessages = recentReusableMessages(messages, 8);
         if (!recentMessages.isEmpty()) {
-            builder.append("[最近对话]\n");
+            builder.append("【最近对话】\n");
             for (AIWritingChatMessage message : recentMessages) {
                 builder.append("- ")
                         .append(resolveRoleLabel(message.getRole()))
@@ -597,7 +597,12 @@ public class AIWritingChatServiceImpl implements AIWritingChatService {
     }
 
     private String resolveParticipationSection(String line) {
-        String normalized = line.replace("[", "").replace("]", "").trim();
+        String normalized = line
+                .replace("[", "")
+                .replace("]", "")
+                .replace("【", "")
+                .replace("】", "")
+                .trim();
         if (normalized.contains("世界观")) {
             return "world";
         }

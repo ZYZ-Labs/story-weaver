@@ -823,10 +823,10 @@ public class AIWritingServiceImpl extends ServiceImpl<AIWritingRecordMapper, AIW
         StringBuilder builder = new StringBuilder();
         builder.append("请检查这段章节正文是否遵循上下文与约束条件。\n");
         if (StringUtils.hasText(plan)) {
-            builder.append("[写作计划]\n").append(plan.trim()).append("\n\n");
+            builder.append("【写作计划】\n").append(plan.trim()).append("\n\n");
         }
-        builder.append("[上下文]\n").append(context.userPrompt()).append("\n\n");
-        builder.append("[正文草稿]\n").append(content == null ? "" : content.trim()).append('\n');
+        builder.append("【上下文】\n").append(context.userPrompt()).append("\n\n");
+        builder.append("【正文草稿】\n").append(content == null ? "" : content.trim()).append('\n');
         return builder.toString();
     }
 
@@ -838,11 +838,11 @@ public class AIWritingServiceImpl extends ServiceImpl<AIWritingRecordMapper, AIW
         builder.append("2. 保留正确的剧情事实和叙事口吻。\n");
         builder.append("3. 优先修复连贯性、设定一致性和章节目标偏差。\n\n");
         if (StringUtils.hasText(plan)) {
-            builder.append("[写作计划]\n").append(plan.trim()).append("\n\n");
+            builder.append("【写作计划】\n").append(plan.trim()).append("\n\n");
         }
-        builder.append("[上下文]\n").append(context.userPrompt()).append("\n\n");
-        builder.append("[审校意见]\n").append(checkReport.trim()).append("\n\n");
-        builder.append("[原始草稿]\n").append(content == null ? "" : content.trim());
+        builder.append("【上下文】\n").append(context.userPrompt()).append("\n\n");
+        builder.append("【审校意见】\n").append(checkReport.trim()).append("\n\n");
+        builder.append("【原始草稿】\n").append(content == null ? "" : content.trim());
         return builder.toString();
     }
 
