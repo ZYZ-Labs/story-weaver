@@ -217,6 +217,10 @@ mysql -u root -p < sql/009_ai_writing_chat_and_workflow.sql
 
 详细步骤见 [DEPLOYMENT.md](./DEPLOYMENT.md)。
 
+## 许可证
+
+本项目采用 Apache License 2.0 许可证，详情请参见 [LICENSE](./LICENSE) 文件。
+
 ## 常见说明
 
 ### 1. 为什么局域网访问前端时之前会报跨域
