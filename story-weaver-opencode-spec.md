@@ -210,8 +210,8 @@ story-weaver/
 
 - Host: `192.168.5.249`
 - Port: `3306`
-- Username: `root`
-- Password: `your-local-password`
+- Username: `your_mysql_username`
+- Password: `your_mysql_password`
 
 ## 4.2 数据库名
 
@@ -1520,8 +1520,8 @@ convert
 spring:
   datasource:
     url: jdbc:mysql://192.168.5.249:3306/story_weaver?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&useSSL=false
-    username: root
-    password: "your-local-password"
+    username: ${SPRING_DATASOURCE_USERNAME:your_mysql_username}
+    password: ${SPRING_DATASOURCE_PASSWORD:your_mysql_password}
 ```
 
 ---

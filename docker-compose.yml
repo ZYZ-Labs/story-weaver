@@ -8,12 +8,13 @@ services:
       - ./backend:/app
       - maven_repo:/root/.m2
     environment:
-      SPRING_DATASOURCE_URL: jdbc:mysql://192.168.5.249:3306/story_weaver?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
-      SPRING_DATASOURCE_USERNAME: root
-      SPRING_DATASOURCE_PASSWORD: your-local-password
-      SPRING_DATA_REDIS_HOST: 192.168.5.249
-      SPRING_DATA_REDIS_PORT: 6379
-      SPRING_DATA_REDIS_PASSWORD: your-local-password
+      SPRING_DATASOURCE_URL: ${SPRING_DATASOURCE_URL:?Please set SPRING_DATASOURCE_URL}
+      SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME:?Please set SPRING_DATASOURCE_USERNAME}
+      SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD:-}
+      SPRING_DATA_REDIS_HOST: ${SPRING_DATA_REDIS_HOST:?Please set SPRING_DATA_REDIS_HOST}
+      SPRING_DATA_REDIS_PORT: ${SPRING_DATA_REDIS_PORT:-6379}
+      SPRING_DATA_REDIS_PASSWORD: ${SPRING_DATA_REDIS_PASSWORD:-}
+      JWT_SECRET: ${JWT_SECRET:-change-this-to-a-32-plus-char-jwt-secret}
     ports:
       - "8080:8080"
 

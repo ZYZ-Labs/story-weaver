@@ -41,13 +41,15 @@ story-weaver/
 - MySQL 8.x
 - Redis 6.x+
 
-当前开发环境默认连接：
+当前仓库不再提交真实数据库 / Redis 口令。开发环境请在本地环境变量中提供：
 
-- MySQL: `192.168.5.249:3306`
-- Redis: `192.168.5.249:6379`
-- 数据库用户: `root`
-- 数据库密码: `your-local-password`
-- Redis 密码: `your-local-password`
+- `SPRING_DATASOURCE_URL`
+- `SPRING_DATASOURCE_USERNAME`
+- `SPRING_DATASOURCE_PASSWORD`
+- `SPRING_DATA_REDIS_HOST`
+- `SPRING_DATA_REDIS_PORT`
+- `SPRING_DATA_REDIS_PASSWORD`
+- `JWT_SECRET`
 
 ## 默认账号
 

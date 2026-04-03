@@ -24,6 +24,7 @@ Thumbs.db
 *.yml
 .env
 .env.local
+.codex-runtime/
 *.pem
 .deploy/dockerhub.env
 .deploy/registry.env

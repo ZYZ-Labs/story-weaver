@@ -235,12 +235,12 @@ SSL_CERT_FILE=/etc/nginx/ssl/fullchain.pem
 SSL_CERT_KEY_FILE=/etc/nginx/ssl/privkey.pem
 
 SPRING_DATASOURCE_URL=jdbc:mysql://192.168.5.249:3306/story_weaver?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
-SPRING_DATASOURCE_USERNAME=root
-SPRING_DATASOURCE_PASSWORD=your-local-password
+SPRING_DATASOURCE_USERNAME=your_mysql_username
+SPRING_DATASOURCE_PASSWORD=your_mysql_password
 
-SPRING_DATA_REDIS_HOST=192.168.5.249
+SPRING_DATA_REDIS_HOST=127.0.0.1
 SPRING_DATA_REDIS_PORT=6379
-SPRING_DATA_REDIS_PASSWORD=your-local-password
+SPRING_DATA_REDIS_PASSWORD=your_redis_password
 
 JWT_SECRET=change-this-to-a-long-random-jwt-secret-at-least-32-characters
 APP_CORS_ALLOWED_ORIGIN_PATTERNS=http://localhost:*,http://127.0.0.1:*,http://192.168.*:*,http://10.*:*

@@ -13,8 +13,13 @@ MYSQL_PORT="3306"
 REDIS_HOST="192.168.5.249"
 REDIS_PORT="6379"
 MYSQL_USER="root"
-MYSQL_PASSWORD="your-local-password"
-REDIS_PASSWORD="your-local-password"
+MYSQL_PASSWORD="${STORY_WEAVER_MYSQL_PASSWORD:-}"
+REDIS_PASSWORD="${STORY_WEAVER_REDIS_PASSWORD:-}"
+MYSQL_HOST="${STORY_WEAVER_MYSQL_HOST:-127.0.0.1}"
+MYSQL_PORT="${STORY_WEAVER_MYSQL_PORT:-3306}"
+REDIS_HOST="${STORY_WEAVER_REDIS_HOST:-127.0.0.1}"
+REDIS_PORT="${STORY_WEAVER_REDIS_PORT:-6379}"
+MYSQL_USER="${STORY_WEAVER_MYSQL_USER:-root}"
 REQUIRED_NODE_VERSION="$(cat "$ROOT_DIR/.nvmrc")"
 
 if [[ -s "${NVM_DIR:-$HOME/.nvm}/nvm.sh" ]]; then
@@ -159,7 +164,11 @@ select_node_version
 
 check_port "$MYSQL_HOST" "$MYSQL_PORT" "MySQL" 8
 if command -v mysql >/dev/null 2>&1; then
-  mysql -h"$MYSQL_HOST" -P"$MYSQL_PORT" -u"$MYSQL_USER" -p"$MYSQL_PASSWORD" -e "SELECT 1;" >/dev/null
+  mysql_args=(-h"$MYSQL_HOST" -P"$MYSQL_PORT" -u"$MYSQL_USER")
+  if [[ -n "$MYSQL_PASSWORD" ]]; then
+    mysql_args+=(-p"$MYSQL_PASSWORD")
+  fi
+  mysql "${mysql_args[@]}" -e "SELECT 1;" >/dev/null
   echo "[OK] MySQL credential check passed"
 else
   echo "[WARN] mysql client not found, skipping credential check"
@@ -167,7 +176,11 @@ fi
 
 check_port "$REDIS_HOST" "$REDIS_PORT" "Redis" 8
 if command -v redis-cli >/dev/null 2>&1; then
-  redis-cli -h "$REDIS_HOST" -p "$REDIS_PORT" -a "$REDIS_PASSWORD" ping >/dev/null
+  redis_args=(-h "$REDIS_HOST" -p "$REDIS_PORT")
+  if [[ -n "$REDIS_PASSWORD" ]]; then
+    redis_args+=(-a "$REDIS_PASSWORD")
+  fi
+  redis-cli "${redis_args[@]}" ping >/dev/null
   echo "[OK] Redis password check passed"
 else
   echo "[WARN] redis-cli not found, skipping password check"

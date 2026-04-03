@@ -50,14 +50,14 @@ const providerPresets: ProviderPreset[] = [
     remark: '适合团队共享的 Ollama 服务。',
   },
   {
-    title: '兼容云端接口',
+    title: '兼容本地网关',
     value: 'openai-compatible',
     providerType: 'openai-compatible',
     baseUrl: 'http://127.0.0.1:8000/v1',
-    defaultName: '兼容云端接口',
-    models: ['gpt-4.1', 'gpt-4o-mini', 'gpt-4.1-mini'],
-    embeddings: ['text-embedding-3-large', 'text-embedding-3-small'],
-    remark: '仅在需要云端模型时再启用，通常需要填写接口密钥。',
+    defaultName: '兼容本地网关',
+    models: ['qwen2.5-14b-instruct', 'deepseek-r1-distill-llama-8b'],
+    embeddings: ['bge-m3', 'nomic-embed-text'],
+    remark: '用于本机或局域网中的兼容接口网关，密钥请只保存在本地环境中。',
   },
 ]
 

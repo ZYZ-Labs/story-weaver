@@ -6,13 +6,13 @@ $FrontendDir = Join-Path $RootDir 'front'
 $LogDir = Join-Path $RootDir 'logs'
 $BackendLog = Join-Path $LogDir 'backend-dev.log'
 $FrontendLog = Join-Path $LogDir 'front-dev.log'
-$MysqlHost = '192.168.5.249'
-$MysqlPort = 3306
-$RedisHost = '192.168.5.249'
-$RedisPort = 6379
-$MysqlUser = 'root'
-$MysqlPassword = 'your-local-password'
-$RedisPassword = 'your-local-password'
+$MysqlHost = if ($env:STORY_WEAVER_MYSQL_HOST) { $env:STORY_WEAVER_MYSQL_HOST } else { '127.0.0.1' }
+$MysqlPort = if ($env:STORY_WEAVER_MYSQL_PORT) { [int]$env:STORY_WEAVER_MYSQL_PORT } else { 3306 }
+$RedisHost = if ($env:STORY_WEAVER_REDIS_HOST) { $env:STORY_WEAVER_REDIS_HOST } else { '127.0.0.1' }
+$RedisPort = if ($env:STORY_WEAVER_REDIS_PORT) { [int]$env:STORY_WEAVER_REDIS_PORT } else { 6379 }
+$MysqlUser = if ($env:STORY_WEAVER_MYSQL_USER) { $env:STORY_WEAVER_MYSQL_USER } else { 'root' }
+$MysqlPassword = if ($env:STORY_WEAVER_MYSQL_PASSWORD) { $env:STORY_WEAVER_MYSQL_PASSWORD } else { '' }
+$RedisPassword = if ($env:STORY_WEAVER_REDIS_PASSWORD) { $env:STORY_WEAVER_REDIS_PASSWORD } else { '' }
 $RequiredNodeVersion = '20.19.0'
 
 New-Item -ItemType Directory -Force -Path $LogDir | Out-Null
@@ -183,7 +183,12 @@ Write-Host "[OK] Node major version: $nodeMajor"
 
 Test-TcpPort -TargetHost $MysqlHost -Port $MysqlPort -Name 'MySQL'
 if (Get-Command mysql -ErrorAction SilentlyContinue) {
-    & mysql "-h$MysqlHost" "-P$MysqlPort" "-u$MysqlUser" "-p$MysqlPassword" -e 'SELECT 1;' | Out-Null
+    $mysqlArgs = @("-h$MysqlHost", "-P$MysqlPort", "-u$MysqlUser")
+    if ($MysqlPassword) {
+        $mysqlArgs += "-p$MysqlPassword"
+    }
+    $mysqlArgs += @('-e', 'SELECT 1;')
+    & mysql @mysqlArgs | Out-Null
     Write-Host '[OK] MySQL credential check passed'
 } else {
     Write-Host '[WARN] mysql client not found, skipping credential check'
@@ -191,7 +196,12 @@ if (Get-Command mysql -ErrorAction SilentlyContinue) {
 
 Test-TcpPort -TargetHost $RedisHost -Port $RedisPort -Name 'Redis'
 if (Get-Command redis-cli -ErrorAction SilentlyContinue) {
-    & redis-cli -h $RedisHost -p $RedisPort -a $RedisPassword ping | Out-Null
+    $redisArgs = @('-h', $RedisHost, '-p', $RedisPort)
+    if ($RedisPassword) {
+        $redisArgs += @('-a', $RedisPassword)
+    }
+    $redisArgs += 'ping'
+    & redis-cli @redisArgs | Out-Null
     Write-Host '[OK] Redis password check passed'
 } else {
     Write-Host '[WARN] redis-cli not found, skipping password check'
