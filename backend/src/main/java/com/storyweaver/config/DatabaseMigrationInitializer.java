@@ -62,6 +62,79 @@ public class DatabaseMigrationInitializer implements ApplicationRunner {
             )
             """;
 
+    private static final String CREATE_ITEM_SQL = """
+            CREATE TABLE IF NOT EXISTS item (
+              id BIGINT PRIMARY KEY AUTO_INCREMENT,
+              project_id BIGINT NOT NULL,
+              owner_user_id BIGINT NOT NULL,
+              name VARCHAR(120) NOT NULL,
+              description TEXT NULL,
+              category VARCHAR(32) NOT NULL DEFAULT 'prop',
+              rarity VARCHAR(32) NOT NULL DEFAULT 'common',
+              stackable INT NOT NULL DEFAULT 0,
+              max_stack INT NOT NULL DEFAULT 1,
+              usable INT NOT NULL DEFAULT 0,
+              equippable INT NOT NULL DEFAULT 0,
+              slot_type VARCHAR(32) NOT NULL DEFAULT 'misc',
+              item_value INT NOT NULL DEFAULT 0,
+              weight INT NOT NULL DEFAULT 0,
+              attributes_json LONGTEXT NULL,
+              effect_json LONGTEXT NULL,
+              tags VARCHAR(500) NULL,
+              source_type VARCHAR(32) NOT NULL DEFAULT 'manual',
+              create_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+              update_time DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+              deleted INT DEFAULT 0,
+              INDEX idx_item_project_deleted (project_id, deleted),
+              INDEX idx_item_owner_deleted (owner_user_id, deleted),
+              INDEX idx_item_category_rarity (category, rarity),
+              CONSTRAINT fk_item_project FOREIGN KEY (project_id) REFERENCES project(id) ON DELETE CASCADE,
+              CONSTRAINT fk_item_owner FOREIGN KEY (owner_user_id) REFERENCES user(id) ON DELETE CASCADE
+            )
+            """;
+
+    private static final String CREATE_CHARACTER_INVENTORY_SQL = """
+            CREATE TABLE IF NOT EXISTS character_inventory_item (
+              id BIGINT PRIMARY KEY AUTO_INCREMENT,
+              project_id BIGINT NOT NULL,
+              character_id BIGINT NOT NULL,
+              item_id BIGINT NOT NULL,
+              quantity INT NOT NULL DEFAULT 1,
+              equipped INT NOT NULL DEFAULT 0,
+              durability INT NOT NULL DEFAULT 100,
+              custom_name VARCHAR(120) NULL,
+              notes TEXT NULL,
+              sort_order INT NOT NULL DEFAULT 0,
+              create_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+              update_time DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+              deleted INT DEFAULT 0,
+              INDEX idx_inventory_character (character_id),
+              INDEX idx_inventory_project_character (project_id, character_id),
+              INDEX idx_inventory_item (item_id),
+              CONSTRAINT fk_inventory_project FOREIGN KEY (project_id) REFERENCES project(id) ON DELETE CASCADE,
+              CONSTRAINT fk_inventory_character FOREIGN KEY (character_id) REFERENCES `character`(id) ON DELETE CASCADE,
+              CONSTRAINT fk_inventory_item FOREIGN KEY (item_id) REFERENCES item(id) ON DELETE CASCADE
+            )
+            """;
+
+    private static final String UPSERT_ITEM_PROVIDER_CONFIG_SQL = """
+            INSERT INTO system_config (config_key, config_value, description)
+            VALUES ('item_ai_provider_id', '', '物品生成默认 Provider ID')
+            ON DUPLICATE KEY UPDATE description = VALUES(description)
+            """;
+
+    private static final String UPSERT_ITEM_MODEL_CONFIG_SQL = """
+            INSERT INTO system_config (config_key, config_value, description)
+            VALUES ('item_ai_model', '', '物品生成默认模型名称')
+            ON DUPLICATE KEY UPDATE description = VALUES(description)
+            """;
+
+    private static final String UPSERT_ITEM_PROMPT_CONFIG_SQL = """
+            INSERT INTO system_config (config_key, config_value, description)
+            VALUES ('prompt.item_generation', '优先生成适合长篇创作的道具、药品、装备、材料与任务物品，名称、说明、效果和标签必须便于剧情使用。', '物品生成提示词模板')
+            ON DUPLICATE KEY UPDATE description = VALUES(description)
+            """;
+
     private final DataSource dataSource;
 
     public DatabaseMigrationInitializer(DataSource dataSource) {
@@ -79,25 +152,35 @@ public class DatabaseMigrationInitializer implements ApplicationRunner {
 
             boolean sessionTableExists = tableExists(connection, "ai_writing_session");
             boolean messageTableExists = tableExists(connection, "ai_writing_chat_message");
-            if (sessionTableExists && messageTableExists) {
-                return;
-            }
-
-            log.warn("检测到 AI 写作聊天相关数据表缺失，开始自动补齐。sessionExists={}, messageExists={}",
-                    sessionTableExists, messageTableExists);
+            boolean itemTableExists = tableExists(connection, "item");
+            boolean inventoryTableExists = tableExists(connection, "character_inventory_item");
 
             try (Statement statement = connection.createStatement()) {
                 if (!sessionTableExists) {
+                    log.warn("检测到 ai_writing_session 缺失，开始自动补齐。");
                     statement.execute(CREATE_AI_WRITING_SESSION_SQL);
                 }
                 if (!messageTableExists) {
+                    log.warn("检测到 ai_writing_chat_message 缺失，开始自动补齐。");
                     statement.execute(CREATE_AI_WRITING_CHAT_MESSAGE_SQL);
                 }
+                if (!itemTableExists) {
+                    log.warn("检测到 item 缺失，开始自动补齐。");
+                    statement.execute(CREATE_ITEM_SQL);
+                }
+                if (!inventoryTableExists) {
+                    log.warn("检测到 character_inventory_item 缺失，开始自动补齐。");
+                    statement.execute(CREATE_CHARACTER_INVENTORY_SQL);
+                }
+
+                statement.execute(UPSERT_ITEM_PROVIDER_CONFIG_SQL);
+                statement.execute(UPSERT_ITEM_MODEL_CONFIG_SQL);
+                statement.execute(UPSERT_ITEM_PROMPT_CONFIG_SQL);
             }
 
-            log.info("AI 写作聊天相关数据表已补齐完成。");
+            log.info("数据库增量初始化检查完成。");
         } catch (SQLException exception) {
-            throw new IllegalStateException("初始化 AI 写作聊天数据表失败，请检查数据库权限和表结构", exception);
+            throw new IllegalStateException("初始化增量数据表失败，请检查数据库权限和表结构", exception);
         }
     }
 

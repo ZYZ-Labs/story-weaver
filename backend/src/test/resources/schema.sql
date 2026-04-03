@@ -248,3 +248,43 @@ CREATE TABLE IF NOT EXISTS system_config (
     create_time TIMESTAMP NULL,
     update_time TIMESTAMP NULL
 );
+
+CREATE TABLE IF NOT EXISTS item (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    project_id BIGINT NOT NULL,
+    owner_user_id BIGINT NOT NULL,
+    name VARCHAR(120) NOT NULL,
+    description TEXT,
+    category VARCHAR(32) DEFAULT 'prop',
+    rarity VARCHAR(32) DEFAULT 'common',
+    stackable INT DEFAULT 0,
+    max_stack INT DEFAULT 1,
+    usable INT DEFAULT 0,
+    equippable INT DEFAULT 0,
+    slot_type VARCHAR(32) DEFAULT 'misc',
+    item_value INT DEFAULT 0,
+    weight INT DEFAULT 0,
+    attributes_json TEXT,
+    effect_json TEXT,
+    tags VARCHAR(500),
+    source_type VARCHAR(32) DEFAULT 'manual',
+    create_time TIMESTAMP NULL,
+    update_time TIMESTAMP NULL,
+    deleted INT DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS character_inventory_item (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    project_id BIGINT NOT NULL,
+    character_id BIGINT NOT NULL,
+    item_id BIGINT NOT NULL,
+    quantity INT DEFAULT 1,
+    equipped INT DEFAULT 0,
+    durability INT DEFAULT 100,
+    custom_name VARCHAR(120),
+    notes TEXT,
+    sort_order INT DEFAULT 0,
+    create_time TIMESTAMP NULL,
+    update_time TIMESTAMP NULL,
+    deleted INT DEFAULT 0
+);

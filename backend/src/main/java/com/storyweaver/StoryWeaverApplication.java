@@ -7,7 +7,10 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 
 @SpringBootApplication
 @EnableConfigurationProperties
-@MapperScan("com.storyweaver.repository")
+@MapperScan(basePackages = {
+        "com.storyweaver.repository",
+        "com.storyweaver.item.infrastructure.persistence.mapper"
+})
 public class StoryWeaverApplication {
     public static void main(String[] args) {
         SpringApplication.run(StoryWeaverApplication.class, args);

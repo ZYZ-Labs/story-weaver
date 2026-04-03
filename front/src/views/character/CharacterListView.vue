@@ -4,6 +4,7 @@ import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { generateCharacterAttributes } from '@/api/character'
 import { generateNameSuggestions } from '@/api/name-suggestion'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
+import CharacterInventoryDialog from '@/components/CharacterInventoryDialog.vue'
 import EmptyState from '@/components/EmptyState.vue'
 import MarkdownContent from '@/components/MarkdownContent.vue'
 import MarkdownEditor from '@/components/MarkdownEditor.vue'
@@ -23,6 +24,8 @@ const projectStore = useProjectStore()
 const characterStore = useCharacterStore()
 
 const dialog = ref(false)
+const inventoryDialog = ref(false)
+const inventoryCharacter = ref<Character | null>(null)
 const deletingId = ref<number | null>(null)
 const confirmVisible = ref(false)
 const editingId = ref<number | null>(null)
@@ -207,6 +210,11 @@ function requestDelete(character: Character) {
   confirmVisible.value = true
 }
 
+function openInventory(character: Character) {
+  inventoryCharacter.value = character
+  inventoryDialog.value = true
+}
+
 watch(
   () => form.existingCharacterId,
   () => {
@@ -375,6 +383,17 @@ async function confirmDelete() {
   deletingId.value = null
   confirmVisible.value = false
 }
+
+async function refreshCharacterInventorySummary() {
+  if (!currentProjectId.value) {
+    return
+  }
+  await characterStore.fetchByProject(currentProjectId.value)
+  if (inventoryCharacter.value) {
+    inventoryCharacter.value =
+      characterStore.characters.find((item) => item.id === inventoryCharacter.value?.id) || inventoryCharacter.value
+  }
+}
 </script>
 
 <template>
@@ -482,7 +501,23 @@ async function confirmDelete() {
               </div>
             </div>
 
+            <div class="mt-4">
+              <div class="text-caption text-medium-emphasis mb-2">背包摘要</div>
+              <div class="d-flex flex-wrap ga-2">
+                <v-chip size="small" color="primary" variant="tonal">
+                  物品 {{ item.inventoryItemCount || 0 }}
+                </v-chip>
+                <v-chip size="small" color="secondary" variant="outlined">
+                  已装备 {{ item.equippedItemCount || 0 }}
+                </v-chip>
+                <v-chip size="small" color="warning" variant="outlined">
+                  稀有 {{ item.rareItemCount || 0 }}
+                </v-chip>
+              </div>
+            </div>
+
             <div class="d-flex ga-2 mt-auto pt-4">
+              <v-btn color="primary" variant="tonal" @click="openInventory(item)">背包</v-btn>
               <v-btn variant="outlined" @click="openEdit(item)">编辑</v-btn>
               <v-btn color="error" variant="text" @click="requestDelete(item)">移出项目</v-btn>
             </div>
@@ -856,6 +891,13 @@ async function confirmDelete() {
       empty-text="这次没有拿到合适的人物名，可以重新生成。"
       @refresh="generateCharacterNames"
       @select="applySuggestedName"
+    />
+
+    <CharacterInventoryDialog
+      v-model="inventoryDialog"
+      :project-id="currentProjectId"
+      :character="inventoryCharacter"
+      @changed="refreshCharacterInventorySummary"
     />
   </PageContainer>
 </template>

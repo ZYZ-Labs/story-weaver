@@ -69,43 +69,47 @@ onMounted(() => {
 </script>
 
 <template>
-  <v-container fluid class="fill-height pa-0">
+  <v-container fluid class="fill-height pa-0 login-shell">
     <v-row class="fill-height ma-0">
-      <v-col cols="12" lg="7" class="d-none d-lg-flex align-center justify-center">
-        <div style="max-width: 620px" class="pa-10">
-          <div class="text-overline text-secondary">中文长篇创作工作台</div>
-          <div class="text-h2 font-weight-bold mt-3 text-primary">
-            从世界设定到 AI 续写，把小说创作真正串起来。
+      <v-col cols="12" lg="7" class="d-none d-lg-flex align-center justify-center login-hero-column">
+        <div class="login-hero">
+          <div class="login-hero__art" />
+          <div class="login-hero__overlay" />
+          <div class="login-hero__content">
+            <div class="text-overline login-hero__eyebrow">中文长篇创作工作台</div>
+            <div class="text-h2 font-weight-bold mt-3 login-hero__title">
+              从世界设定到 AI 续写，把小说创作真正串起来。
+            </div>
+            <div class="text-h6 mt-5 login-hero__subtitle">
+              一个面向长篇创作的工作台，覆盖项目、章节、人物、因果、知识库与模型服务。
+            </div>
+            <v-row class="mt-8" dense>
+              <v-col cols="6">
+                <v-card class="login-hero__card" rounded="xl">
+                  <v-card-text>
+                    <div class="text-h5 font-weight-bold">统一上下文</div>
+                    <div class="text-body-2 mt-2 login-hero__card-text">
+                      项目、章节、人物、因果和 AI 输出共用同一套上下文。
+                    </div>
+                  </v-card-text>
+                </v-card>
+              </v-col>
+              <v-col cols="6">
+                <v-card class="login-hero__card" rounded="xl">
+                  <v-card-text>
+                    <div class="text-h5 font-weight-bold">采纳后入库</div>
+                    <div class="text-body-2 mt-2 login-hero__card-text">
+                      AI 先生成草稿，再确认写回章节与知识库。
+                    </div>
+                  </v-card-text>
+                </v-card>
+              </v-col>
+            </v-row>
           </div>
-          <div class="text-h6 text-medium-emphasis mt-5">
-            一个面向长篇创作的工作台，覆盖项目、章节、人物、因果、知识库与模型服务。
-          </div>
-          <v-row class="mt-8" dense>
-            <v-col cols="6">
-              <v-card class="soft-panel">
-                <v-card-text>
-                  <div class="text-h5 font-weight-bold">统一上下文</div>
-                  <div class="text-body-2 text-medium-emphasis mt-2">
-                    项目、章节、人物、因果和 AI 输出共用同一套上下文。
-                  </div>
-                </v-card-text>
-              </v-card>
-            </v-col>
-            <v-col cols="6">
-              <v-card class="soft-panel">
-                <v-card-text>
-                  <div class="text-h5 font-weight-bold">采纳后入库</div>
-                  <div class="text-body-2 text-medium-emphasis mt-2">
-                    AI 先生成草稿，再确认写回章节与知识库。
-                  </div>
-                </v-card-text>
-              </v-card>
-            </v-col>
-          </v-row>
         </div>
       </v-col>
-      <v-col cols="12" lg="5" class="d-flex align-center justify-center">
-        <v-card width="100%" max-width="520" class="mx-4 soft-panel">
+      <v-col cols="12" lg="5" class="d-flex align-center justify-center login-form-column">
+        <v-card width="100%" max-width="520" class="mx-4 soft-panel login-form-card" rounded="xl">
           <v-card-text class="pa-8">
             <div class="text-h4 font-weight-bold">进入织文者</div>
             <div class="text-body-2 text-medium-emphasis mt-2">
@@ -173,3 +177,96 @@ onMounted(() => {
     </v-row>
   </v-container>
 </template>
+
+<style scoped>
+.login-shell {
+  background:
+    radial-gradient(circle at left top, rgba(185, 95, 48, 0.16), transparent 28%),
+    linear-gradient(135deg, rgba(255, 248, 239, 0.9), rgba(241, 246, 251, 0.94));
+}
+
+.login-hero-column,
+.login-form-column {
+  min-height: 100vh;
+}
+
+.login-hero {
+  position: relative;
+  width: min(100%, 720px);
+  min-height: 84vh;
+  margin: 24px;
+  overflow: hidden;
+  border: 1px solid rgba(26, 54, 84, 0.08);
+  border-radius: 32px;
+  box-shadow: 0 24px 60px rgba(46, 61, 78, 0.14);
+}
+
+.login-hero__art,
+.login-hero__overlay {
+  position: absolute;
+  inset: 0;
+}
+
+.login-hero__art {
+  background:
+    linear-gradient(135deg, rgba(17, 30, 43, 0.2), rgba(114, 59, 24, 0.12)),
+    url('/cover.png') center center / cover no-repeat;
+  transform: scale(1.02);
+}
+
+.login-hero__overlay {
+  background:
+    linear-gradient(180deg, rgba(8, 18, 28, 0.12) 0%, rgba(8, 18, 28, 0.56) 100%),
+    linear-gradient(135deg, rgba(184, 100, 54, 0.12), transparent 36%);
+}
+
+.login-hero__content {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  min-height: 84vh;
+  padding: 40px;
+  color: #f8fbff;
+}
+
+.login-hero__eyebrow {
+  color: rgba(255, 244, 234, 0.88);
+  letter-spacing: 0.16em;
+}
+
+.login-hero__title {
+  max-width: 12ch;
+  line-height: 1.08;
+  color: #fff9f4;
+}
+
+.login-hero__subtitle {
+  max-width: 30rem;
+  line-height: 1.5;
+  color: rgba(244, 248, 252, 0.9);
+}
+
+.login-hero__card {
+  color: #14314f;
+  backdrop-filter: blur(10px);
+  background: linear-gradient(135deg, rgba(255, 251, 246, 0.92), rgba(245, 249, 253, 0.86));
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.login-hero__card-text {
+  color: rgba(20, 49, 79, 0.76);
+}
+
+.login-form-card {
+  box-shadow: 0 18px 46px rgba(46, 61, 78, 0.1);
+}
+
+@media (max-width: 1279px) {
+  .login-form-column {
+    min-height: auto;
+    padding: 24px 0;
+  }
+}
+</style>

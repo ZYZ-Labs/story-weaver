@@ -10,6 +10,11 @@ import com.storyweaver.domain.entity.Chapter;
 import com.storyweaver.domain.entity.Character;
 import com.storyweaver.domain.entity.Project;
 import com.storyweaver.domain.entity.ProjectCharacterLink;
+import com.storyweaver.item.domain.entity.CharacterInventoryItem;
+import com.storyweaver.item.domain.entity.ItemDefinition;
+import com.storyweaver.item.domain.support.ItemCatalogRules;
+import com.storyweaver.item.infrastructure.persistence.mapper.CharacterInventoryItemMapper;
+import com.storyweaver.item.infrastructure.persistence.mapper.ItemMapper;
 import com.storyweaver.repository.ChapterCharacterMapper;
 import com.storyweaver.repository.ChapterMapper;
 import com.storyweaver.repository.CharacterMapper;
@@ -40,6 +45,8 @@ public class CharacterServiceImpl extends ServiceImpl<CharacterMapper, Character
     private final ProjectCharacterMapper projectCharacterMapper;
     private final ChapterCharacterMapper chapterCharacterMapper;
     private final ChapterMapper chapterMapper;
+    private final CharacterInventoryItemMapper characterInventoryItemMapper;
+    private final ItemMapper itemMapper;
     private final ObjectMapper objectMapper;
 
     public CharacterServiceImpl(
@@ -48,12 +55,16 @@ public class CharacterServiceImpl extends ServiceImpl<CharacterMapper, Character
             ProjectCharacterMapper projectCharacterMapper,
             ChapterCharacterMapper chapterCharacterMapper,
             ChapterMapper chapterMapper,
+            CharacterInventoryItemMapper characterInventoryItemMapper,
+            ItemMapper itemMapper,
             ObjectMapper objectMapper) {
         this.projectService = projectService;
         this.projectMapper = projectMapper;
         this.projectCharacterMapper = projectCharacterMapper;
         this.chapterCharacterMapper = chapterCharacterMapper;
         this.chapterMapper = chapterMapper;
+        this.characterInventoryItemMapper = characterInventoryItemMapper;
+        this.itemMapper = itemMapper;
         this.objectMapper = objectMapper;
     }
 
@@ -86,6 +97,7 @@ public class CharacterServiceImpl extends ServiceImpl<CharacterMapper, Character
         }
 
         attachProjectSummaries(result);
+        attachInventorySummaries(projectId, result);
         return result;
     }
 
@@ -191,6 +203,11 @@ public class CharacterServiceImpl extends ServiceImpl<CharacterMapper, Character
                     .in("chapter_id", chapterIds));
         }
 
+        characterInventoryItemMapper.delete(new LambdaQueryWrapper<CharacterInventoryItem>()
+                .eq(CharacterInventoryItem::getProjectId, projectId)
+                .eq(CharacterInventoryItem::getCharacterId, characterId)
+                .eq(CharacterInventoryItem::getDeleted, 0));
+
         return true;
     }
 
@@ -257,6 +274,70 @@ public class CharacterServiceImpl extends ServiceImpl<CharacterMapper, Character
                     .map(Project::getName)
                     .filter(StringUtils::hasText)
                     .toList());
+        }
+    }
+
+    private void attachInventorySummaries(Long projectId, List<Character> characters) {
+        if (characters == null || characters.isEmpty()) {
+            return;
+        }
+
+        List<Long> characterIds = characters.stream()
+                .map(Character::getId)
+                .filter(Objects::nonNull)
+                .toList();
+        if (characterIds.isEmpty()) {
+            return;
+        }
+
+        List<CharacterInventoryItem> inventoryItems = characterInventoryItemMapper.selectList(
+                new LambdaQueryWrapper<CharacterInventoryItem>()
+                        .eq(CharacterInventoryItem::getProjectId, projectId)
+                        .in(CharacterInventoryItem::getCharacterId, characterIds)
+                        .eq(CharacterInventoryItem::getDeleted, 0)
+        );
+        if (inventoryItems.isEmpty()) {
+            for (Character character : characters) {
+                character.setInventoryItemCount(0);
+                character.setEquippedItemCount(0);
+                character.setRareItemCount(0);
+            }
+            return;
+        }
+
+        List<Long> itemIds = inventoryItems.stream()
+                .map(CharacterInventoryItem::getItemId)
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
+        Map<Long, ItemDefinition> itemMap = itemIds.isEmpty()
+                ? Map.of()
+                : itemMapper.selectBatchIds(itemIds).stream()
+                        .filter(item -> item != null && !Integer.valueOf(1).equals(item.getDeleted()))
+                        .collect(Collectors.toMap(ItemDefinition::getId, item -> item, (left, right) -> left, LinkedHashMap::new));
+
+        Map<Long, Integer> totalCountByCharacter = new LinkedHashMap<>();
+        Map<Long, Integer> equippedCountByCharacter = new LinkedHashMap<>();
+        Map<Long, Integer> rareCountByCharacter = new LinkedHashMap<>();
+        for (CharacterInventoryItem inventoryItem : inventoryItems) {
+            if (inventoryItem.getCharacterId() == null) {
+                continue;
+            }
+            int quantity = inventoryItem.getQuantity() == null ? 1 : Math.max(1, inventoryItem.getQuantity());
+            totalCountByCharacter.merge(inventoryItem.getCharacterId(), quantity, Integer::sum);
+            if (Integer.valueOf(1).equals(inventoryItem.getEquipped())) {
+                equippedCountByCharacter.merge(inventoryItem.getCharacterId(), quantity, Integer::sum);
+            }
+            ItemDefinition item = itemMap.get(inventoryItem.getItemId());
+            if (item != null && ItemCatalogRules.isRare(item.getRarity())) {
+                rareCountByCharacter.merge(inventoryItem.getCharacterId(), quantity, Integer::sum);
+            }
+        }
+
+        for (Character character : characters) {
+            character.setInventoryItemCount(totalCountByCharacter.getOrDefault(character.getId(), 0));
+            character.setEquippedItemCount(equippedCountByCharacter.getOrDefault(character.getId(), 0));
+            character.setRareItemCount(rareCountByCharacter.getOrDefault(character.getId(), 0));
         }
     }
 

@@ -31,6 +31,15 @@ public class Character {
     @TableField(exist = false)
     private List<String> projectNames;
 
+    @TableField(exist = false)
+    private Integer inventoryItemCount;
+
+    @TableField(exist = false)
+    private Integer equippedItemCount;
+
+    @TableField(exist = false)
+    private Integer rareItemCount;
+
     @TableField(fill = FieldFill.INSERT)
     private LocalDateTime createTime;
 
@@ -67,6 +76,15 @@ public class Character {
 
     public List<String> getProjectNames() { return projectNames; }
     public void setProjectNames(List<String> projectNames) { this.projectNames = projectNames; }
+
+    public Integer getInventoryItemCount() { return inventoryItemCount; }
+    public void setInventoryItemCount(Integer inventoryItemCount) { this.inventoryItemCount = inventoryItemCount; }
+
+    public Integer getEquippedItemCount() { return equippedItemCount; }
+    public void setEquippedItemCount(Integer equippedItemCount) { this.equippedItemCount = equippedItemCount; }
+
+    public Integer getRareItemCount() { return rareItemCount; }
+    public void setRareItemCount(Integer rareItemCount) { this.rareItemCount = rareItemCount; }
 
     public LocalDateTime getCreateTime() { return createTime; }
     public void setCreateTime(LocalDateTime createTime) { this.createTime = createTime; }

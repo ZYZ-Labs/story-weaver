@@ -1,11 +1,12 @@
 package com.storyweaver.service.impl;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import com.storyweaver.ai.application.support.StructuredJsonSupport;
 import com.storyweaver.domain.dto.CharacterAttributeSuggestionRequestDTO;
 import com.storyweaver.domain.entity.AIProvider;
 import com.storyweaver.domain.entity.Project;
 import com.storyweaver.domain.vo.CharacterAttributeSuggestionVO;
+import com.storyweaver.service.AIModelRoutingService;
 import com.storyweaver.service.AIProviderService;
 import com.storyweaver.service.CharacterAttributeSuggestionService;
 import com.storyweaver.service.ProjectService;
@@ -13,30 +14,26 @@ import com.storyweaver.service.SystemConfigService;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
-import java.util.ArrayList;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Set;
-
 @Service
 public class CharacterAttributeSuggestionServiceImpl implements CharacterAttributeSuggestionService {
-
-    private static final Set<String> SPLIT_SYMBOLS = Set.of("，", ",", "、", ";", "；", "/", "|", "\n");
 
     private final ProjectService projectService;
     private final SystemConfigService systemConfigService;
     private final AIProviderService aiProviderService;
-    private final ObjectMapper objectMapper;
+    private final AIModelRoutingService aiModelRoutingService;
+    private final StructuredJsonSupport structuredJsonSupport;
 
     public CharacterAttributeSuggestionServiceImpl(
             ProjectService projectService,
             SystemConfigService systemConfigService,
             AIProviderService aiProviderService,
-            ObjectMapper objectMapper) {
+            AIModelRoutingService aiModelRoutingService,
+            StructuredJsonSupport structuredJsonSupport) {
         this.projectService = projectService;
         this.systemConfigService = systemConfigService;
         this.aiProviderService = aiProviderService;
-        this.objectMapper = objectMapper;
+        this.aiModelRoutingService = aiModelRoutingService;
+        this.structuredJsonSupport = structuredJsonSupport;
     }
 
     @Override
@@ -53,8 +50,9 @@ public class CharacterAttributeSuggestionServiceImpl implements CharacterAttribu
             throw new IllegalArgumentException("项目不存在或无权访问");
         }
 
-        AIProvider provider = resolveProvider();
-        String modelName = resolveModelName(provider);
+        AIModelRoutingService.ResolvedModelSelection selection = aiModelRoutingService.resolve(null, null, "naming");
+        AIProvider provider = selection.provider();
+        String modelName = selection.model();
 
         String rawResponse = aiProviderService.generateText(
                 provider,
@@ -69,40 +67,6 @@ public class CharacterAttributeSuggestionServiceImpl implements CharacterAttribu
         result.setProviderName(provider.getName());
         result.setModelName(modelName);
         return result;
-    }
-
-    private AIProvider resolveProvider() {
-        Long providerId = parseLong(systemConfigService.getConfigValue("naming_ai_provider_id"));
-        if (providerId != null) {
-            AIProvider provider = aiProviderService.getById(providerId);
-            if (provider != null && !Integer.valueOf(1).equals(provider.getDeleted()) && Integer.valueOf(1).equals(provider.getEnabled())) {
-                return provider;
-            }
-        }
-
-        Long defaultProviderId = parseLong(systemConfigService.getConfigValue("default_ai_provider_id"));
-        if (defaultProviderId != null) {
-            AIProvider provider = aiProviderService.getById(defaultProviderId);
-            if (provider != null && !Integer.valueOf(1).equals(provider.getDeleted()) && Integer.valueOf(1).equals(provider.getEnabled())) {
-                return provider;
-            }
-        }
-
-        return aiProviderService.listProviders().stream()
-                .filter(item -> Integer.valueOf(1).equals(item.getEnabled()))
-                .findFirst()
-                .orElseThrow(() -> new IllegalStateException("当前没有可用的模型服务，请先在模型服务页面启用一个 Provider"));
-    }
-
-    private String resolveModelName(AIProvider provider) {
-        String configured = systemConfigService.getConfigValue("naming_ai_model");
-        if (StringUtils.hasText(configured)) {
-            return configured.trim();
-        }
-        if (StringUtils.hasText(provider.getModelName())) {
-            return provider.getModelName().trim();
-        }
-        throw new IllegalStateException("轻量生成模型未配置，请先在系统设置中指定命名模型");
     }
 
     private String buildSystemPrompt() {
@@ -150,98 +114,28 @@ public class CharacterAttributeSuggestionServiceImpl implements CharacterAttribu
     }
 
     private CharacterAttributeSuggestionVO parseResponse(String rawResponse) {
-        if (!StringUtils.hasText(rawResponse)) {
-            throw new IllegalStateException("模型没有返回可用的人物属性内容");
-        }
-
-        String normalized = rawResponse
-                .replace("```json", "")
-                .replace("```JSON", "")
-                .replace("```", "")
-                .trim();
-
-        try {
-            JsonNode root = objectMapper.readTree(normalized);
-            CharacterAttributeSuggestionVO result = new CharacterAttributeSuggestionVO();
-            result.setAge(readText(root, "age", "年龄"));
-            result.setGender(readText(root, "gender", "性别"));
-            result.setIdentity(readText(root, "identity", "身份", "职业", "角色定位"));
-            result.setCamp(readText(root, "camp", "阵营"));
-            result.setGoal(readText(root, "goal", "目标"));
-            result.setBackground(readText(root, "background", "背景", "出身"));
-            result.setAppearance(readText(root, "appearance", "外貌"));
-            result.setTraits(readList(root, "traits", "特性", "性格", "性格特性"));
-            result.setTalents(readList(root, "talents", "天赋"));
-            result.setSkills(readList(root, "skills", "技能", "特长", "能力"));
-            result.setWeaknesses(readList(root, "weaknesses", "弱点", "缺点"));
-            result.setEquipment(readList(root, "equipment", "装备"));
-            result.setTags(readList(root, "tags", "标签"));
-            result.setRelations(readList(root, "relations", "关系", "人际关系"));
-            result.setNotes(readText(root, "notes", "备注", "秘密", "补充"));
-            return result;
-        } catch (Exception exception) {
-            throw new IllegalStateException("人物属性生成结果无法解析，请稍后重试");
-        }
-    }
-
-    private String readText(JsonNode root, String... fieldNames) {
-        for (String fieldName : fieldNames) {
-            JsonNode node = root.path(fieldName);
-            if (!node.isMissingNode() && !node.isNull()) {
-                String value = node.asText("").trim();
-                if (StringUtils.hasText(value)) {
-                    return value;
-                }
-            }
-        }
-        return "";
-    }
-
-    private List<String> readList(JsonNode root, String... fieldNames) {
-        for (String fieldName : fieldNames) {
-            JsonNode node = root.path(fieldName);
-            if (node.isArray()) {
-                LinkedHashSet<String> values = new LinkedHashSet<>();
-                for (JsonNode item : node) {
-                    String value = item.asText("").trim();
-                    if (StringUtils.hasText(value)) {
-                        values.add(value);
-                    }
-                }
-                return new ArrayList<>(values);
-            }
-            if (!node.isMissingNode() && !node.isNull() && StringUtils.hasText(node.asText(""))) {
-                return splitValues(node.asText(""));
-            }
-        }
-        return new ArrayList<>();
-    }
-
-    private List<String> splitValues(String value) {
-        String normalized = value;
-        for (String symbol : SPLIT_SYMBOLS) {
-            normalized = normalized.replace(symbol, "\n");
-        }
-
-        LinkedHashSet<String> values = new LinkedHashSet<>();
-        for (String item : normalized.split("\n")) {
-            String candidate = item.trim();
-            if (StringUtils.hasText(candidate)) {
-                values.add(candidate);
-            }
-        }
-        return new ArrayList<>(values);
-    }
-
-    private Long parseLong(String value) {
-        if (!StringUtils.hasText(value)) {
-            return null;
-        }
-        try {
-            return Long.parseLong(value.trim());
-        } catch (NumberFormatException exception) {
-            return null;
-        }
+        JsonNode root = structuredJsonSupport.readRoot(
+                rawResponse,
+                "模型没有返回可用的人物属性内容",
+                "人物属性生成结果无法解析，请稍后重试"
+        );
+        CharacterAttributeSuggestionVO result = new CharacterAttributeSuggestionVO();
+        result.setAge(structuredJsonSupport.readText(root, "age", "年龄"));
+        result.setGender(structuredJsonSupport.readText(root, "gender", "性别"));
+        result.setIdentity(structuredJsonSupport.readText(root, "identity", "身份", "职业", "角色定位"));
+        result.setCamp(structuredJsonSupport.readText(root, "camp", "阵营"));
+        result.setGoal(structuredJsonSupport.readText(root, "goal", "目标"));
+        result.setBackground(structuredJsonSupport.readText(root, "background", "背景", "出身"));
+        result.setAppearance(structuredJsonSupport.readText(root, "appearance", "外貌"));
+        result.setTraits(structuredJsonSupport.readList(root, "traits", "特性", "性格", "性格特性"));
+        result.setTalents(structuredJsonSupport.readList(root, "talents", "天赋"));
+        result.setSkills(structuredJsonSupport.readList(root, "skills", "技能", "特长", "能力"));
+        result.setWeaknesses(structuredJsonSupport.readList(root, "weaknesses", "弱点", "缺点"));
+        result.setEquipment(structuredJsonSupport.readList(root, "equipment", "装备"));
+        result.setTags(structuredJsonSupport.readList(root, "tags", "标签"));
+        result.setRelations(structuredJsonSupport.readList(root, "relations", "关系", "人际关系"));
+        result.setNotes(structuredJsonSupport.readText(root, "notes", "备注", "秘密", "补充"));
+        return result;
     }
 
     private String safe(String value) {

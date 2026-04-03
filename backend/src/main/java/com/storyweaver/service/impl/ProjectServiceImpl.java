@@ -21,6 +21,10 @@ import com.storyweaver.repository.KnowledgeDocumentMapper;
 import com.storyweaver.repository.OutlineMapper;
 import com.storyweaver.repository.PlotMapper;
 import com.storyweaver.domain.vo.WorldSettingVO;
+import com.storyweaver.item.domain.entity.CharacterInventoryItem;
+import com.storyweaver.item.domain.entity.ItemDefinition;
+import com.storyweaver.item.infrastructure.persistence.mapper.CharacterInventoryItemMapper;
+import com.storyweaver.item.infrastructure.persistence.mapper.ItemMapper;
 import com.storyweaver.repository.ChapterCharacterMapper;
 import com.storyweaver.repository.ProjectMapper;
 import com.storyweaver.repository.ProjectCharacterMapper;
@@ -47,6 +51,8 @@ public class ProjectServiceImpl extends ServiceImpl<ProjectMapper, Project> impl
     private final ProjectWorldSettingMapper projectWorldSettingMapper;
     private final ProjectCharacterMapper projectCharacterMapper;
     private final ChapterCharacterMapper chapterCharacterMapper;
+    private final ItemMapper itemMapper;
+    private final CharacterInventoryItemMapper characterInventoryItemMapper;
 
     public ProjectServiceImpl(
             WorldSettingService worldSettingService,
@@ -58,7 +64,9 @@ public class ProjectServiceImpl extends ServiceImpl<ProjectMapper, Project> impl
             AIWritingRecordMapper aiWritingRecordMapper,
             ProjectWorldSettingMapper projectWorldSettingMapper,
             ProjectCharacterMapper projectCharacterMapper,
-            ChapterCharacterMapper chapterCharacterMapper) {
+            ChapterCharacterMapper chapterCharacterMapper,
+            ItemMapper itemMapper,
+            CharacterInventoryItemMapper characterInventoryItemMapper) {
         this.worldSettingService = worldSettingService;
         this.chapterMapper = chapterMapper;
         this.plotMapper = plotMapper;
@@ -69,6 +77,8 @@ public class ProjectServiceImpl extends ServiceImpl<ProjectMapper, Project> impl
         this.projectWorldSettingMapper = projectWorldSettingMapper;
         this.projectCharacterMapper = projectCharacterMapper;
         this.chapterCharacterMapper = chapterCharacterMapper;
+        this.itemMapper = itemMapper;
+        this.characterInventoryItemMapper = characterInventoryItemMapper;
     }
 
     @Override
@@ -182,6 +192,14 @@ public class ProjectServiceImpl extends ServiceImpl<ProjectMapper, Project> impl
         // Characters remain reusable in the library, but the project bindings should be removed.
         projectCharacterMapper.delete(new QueryWrapper<ProjectCharacterLink>()
                 .eq("project_id", projectId));
+
+        characterInventoryItemMapper.delete(new LambdaQueryWrapper<CharacterInventoryItem>()
+                .eq(CharacterInventoryItem::getProjectId, projectId)
+                .eq(CharacterInventoryItem::getDeleted, 0));
+
+        itemMapper.delete(new LambdaQueryWrapper<ItemDefinition>()
+                .eq(ItemDefinition::getProjectId, projectId)
+                .eq(ItemDefinition::getDeleted, 0));
 
         // Characters are intentionally retained for future reuse, so they are not cascade deleted here.
         return removeById(projectId);

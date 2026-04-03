@@ -70,8 +70,59 @@ export interface Character {
   projectRole?: string
   projectIds?: number[]
   projectNames?: string[]
+  inventoryItemCount?: number
+  equippedItemCount?: number
+  rareItemCount?: number
   createTime?: string
   updateTime?: string
+}
+
+export interface Item {
+  id: number
+  projectId: number
+  ownerUserId?: number
+  name: string
+  description?: string
+  category: string
+  rarity: string
+  stackable: boolean
+  maxStack?: number
+  usable: boolean
+  equippable: boolean
+  slotType?: string
+  itemValue?: number
+  weight?: number
+  attributesJson?: string
+  effectJson?: string
+  tags?: string
+  sourceType?: string
+  createTime?: string
+  updateTime?: string
+}
+
+export interface CharacterInventoryItem {
+  id: number
+  projectId: number
+  characterId: number
+  itemId: number
+  quantity: number
+  equipped: boolean
+  durability?: number
+  customName?: string
+  notes?: string
+  sortOrder?: number
+  item: Item
+  createTime?: string
+  updateTime?: string
+}
+
+export interface ItemGenerationRequest {
+  category?: string
+  count?: number
+  prompt?: string
+  constraints?: string
+  selectedProviderId?: number | null
+  selectedModel?: string
 }
 
 export interface WorldSetting {
