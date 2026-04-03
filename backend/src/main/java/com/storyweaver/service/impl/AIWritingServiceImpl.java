@@ -16,6 +16,10 @@ import com.storyweaver.domain.vo.AIWritingChatParticipationVO;
 import com.storyweaver.domain.vo.AIWritingResponseVO;
 import com.storyweaver.domain.vo.AIWritingStreamEventVO;
 import com.storyweaver.domain.vo.WorldSettingVO;
+import com.storyweaver.item.domain.entity.CharacterInventoryItem;
+import com.storyweaver.item.domain.entity.ItemDefinition;
+import com.storyweaver.item.infrastructure.persistence.mapper.CharacterInventoryItemMapper;
+import com.storyweaver.item.infrastructure.persistence.mapper.ItemMapper;
 import com.storyweaver.repository.AIWritingRecordMapper;
 import com.storyweaver.service.AIModelRoutingService;
 import com.storyweaver.service.AIProviderService;
@@ -34,9 +38,12 @@ import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
@@ -57,6 +64,8 @@ public class AIWritingServiceImpl extends ServiceImpl<AIWritingRecordMapper, AIW
     private final PlotService plotService;
     private final CausalityService causalityService;
     private final WorldSettingService worldSettingService;
+    private final CharacterInventoryItemMapper characterInventoryItemMapper;
+    private final ItemMapper itemMapper;
     private final AIModelRoutingService aiModelRoutingService;
     private final AIWritingChatService aiWritingChatService;
 
@@ -70,6 +79,8 @@ public class AIWritingServiceImpl extends ServiceImpl<AIWritingRecordMapper, AIW
             PlotService plotService,
             CausalityService causalityService,
             WorldSettingService worldSettingService,
+            CharacterInventoryItemMapper characterInventoryItemMapper,
+            ItemMapper itemMapper,
             AIModelRoutingService aiModelRoutingService,
             AIWritingChatService aiWritingChatService) {
         this.chapterService = chapterService;
@@ -81,6 +92,8 @@ public class AIWritingServiceImpl extends ServiceImpl<AIWritingRecordMapper, AIW
         this.plotService = plotService;
         this.causalityService = causalityService;
         this.worldSettingService = worldSettingService;
+        this.characterInventoryItemMapper = characterInventoryItemMapper;
+        this.itemMapper = itemMapper;
         this.aiModelRoutingService = aiModelRoutingService;
         this.aiWritingChatService = aiWritingChatService;
     }
@@ -235,6 +248,7 @@ public class AIWritingServiceImpl extends ServiceImpl<AIWritingRecordMapper, AIW
         List<String> requiredCharacters = chapter.getRequiredCharacterNames() == null
                 ? List.of()
                 : chapter.getRequiredCharacterNames();
+        List<CharacterInventorySummary> characterInventories = buildRequiredCharacterInventories(chapter);
         AIWritingChatParticipationVO chatParticipation = buildChatParticipationContext(
                 userId,
                 chapter,
@@ -294,9 +308,134 @@ public class AIWritingServiceImpl extends ServiceImpl<AIWritingRecordMapper, AIW
                 relevantCausalities,
                 worldSettings,
                 knowledgeDocuments,
+                characterInventories,
                 requiredCharacters,
                 chatParticipation
         );
+    }
+
+    private List<CharacterInventorySummary> buildRequiredCharacterInventories(Chapter chapter) {
+        if (chapter == null
+                || chapter.getProjectId() == null
+                || chapter.getRequiredCharacterIds() == null
+                || chapter.getRequiredCharacterIds().isEmpty()) {
+            return List.of();
+        }
+
+        List<Long> characterIds = chapter.getRequiredCharacterIds().stream()
+                .filter(Objects::nonNull)
+                .toList();
+        if (characterIds.isEmpty()) {
+            return List.of();
+        }
+
+        List<CharacterInventoryItem> inventoryItems = characterInventoryItemMapper.selectList(
+                new LambdaQueryWrapper<CharacterInventoryItem>()
+                        .eq(CharacterInventoryItem::getProjectId, chapter.getProjectId())
+                        .in(CharacterInventoryItem::getCharacterId, characterIds)
+                        .eq(CharacterInventoryItem::getDeleted, 0)
+                        .orderByDesc(CharacterInventoryItem::getEquipped)
+                        .orderByAsc(CharacterInventoryItem::getSortOrder)
+                        .orderByDesc(CharacterInventoryItem::getUpdateTime)
+        );
+        if (inventoryItems.isEmpty()) {
+            return List.of();
+        }
+
+        List<Long> itemIds = inventoryItems.stream()
+                .map(CharacterInventoryItem::getItemId)
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
+        Map<Long, ItemDefinition> itemMap = itemIds.isEmpty()
+                ? Map.of()
+                : itemMapper.selectBatchIds(itemIds).stream()
+                        .filter(item -> item != null && !Integer.valueOf(1).equals(item.getDeleted()))
+                        .collect(Collectors.toMap(ItemDefinition::getId, item -> item, (left, right) -> left, LinkedHashMap::new));
+
+        Map<Long, String> characterNameMap = buildRequiredCharacterNameMap(chapter);
+        Map<Long, List<String>> itemSummariesByCharacter = new LinkedHashMap<>();
+        for (CharacterInventoryItem inventoryItem : inventoryItems) {
+            Long characterId = inventoryItem.getCharacterId();
+            if (characterId == null) {
+                continue;
+            }
+            List<String> itemSummaries = itemSummariesByCharacter.computeIfAbsent(characterId, key -> new ArrayList<>());
+            if (itemSummaries.size() >= MAX_CONTEXT_ITEMS) {
+                continue;
+            }
+            String summary = buildInventoryItemSummary(inventoryItem, itemMap.get(inventoryItem.getItemId()));
+            if (StringUtils.hasText(summary)) {
+                itemSummaries.add(summary);
+            }
+        }
+
+        List<CharacterInventorySummary> result = new ArrayList<>();
+        for (Long characterId : characterIds) {
+            List<String> itemSummaries = itemSummariesByCharacter.getOrDefault(characterId, List.of());
+            if (itemSummaries.isEmpty()) {
+                continue;
+            }
+            result.add(new CharacterInventorySummary(
+                    characterNameMap.getOrDefault(characterId, "角色#" + characterId),
+                    itemSummaries
+            ));
+        }
+        return result;
+    }
+
+    private Map<Long, String> buildRequiredCharacterNameMap(Chapter chapter) {
+        Map<Long, String> nameMap = new LinkedHashMap<>();
+        List<Long> requiredCharacterIds = chapter.getRequiredCharacterIds() == null
+                ? List.of()
+                : chapter.getRequiredCharacterIds();
+        List<String> requiredCharacterNames = chapter.getRequiredCharacterNames() == null
+                ? List.of()
+                : chapter.getRequiredCharacterNames();
+
+        for (int index = 0; index < requiredCharacterIds.size(); index++) {
+            Long characterId = requiredCharacterIds.get(index);
+            if (characterId == null) {
+                continue;
+            }
+            String characterName = index < requiredCharacterNames.size() ? requiredCharacterNames.get(index) : null;
+            if (StringUtils.hasText(characterName)) {
+                nameMap.put(characterId, characterName.trim());
+            }
+        }
+        return nameMap;
+    }
+
+    private String buildInventoryItemSummary(CharacterInventoryItem inventoryItem, ItemDefinition item) {
+        if (inventoryItem == null) {
+            return "";
+        }
+
+        String itemName = StringUtils.hasText(inventoryItem.getCustomName())
+                ? inventoryItem.getCustomName().trim()
+                : item != null && StringUtils.hasText(item.getName())
+                        ? item.getName().trim()
+                        : "物品#" + inventoryItem.getItemId();
+
+        int quantity = inventoryItem.getQuantity() == null ? 1 : Math.max(1, inventoryItem.getQuantity());
+        List<String> details = new ArrayList<>();
+        if (Integer.valueOf(1).equals(inventoryItem.getEquipped())) {
+            details.add("已装备");
+        }
+        if (inventoryItem.getDurability() != null && inventoryItem.getDurability() >= 0 && inventoryItem.getDurability() < 100) {
+            details.add("耐久" + inventoryItem.getDurability());
+        }
+
+        String note = StringUtils.hasText(inventoryItem.getNotes())
+                ? inventoryItem.getNotes()
+                : item == null ? null : item.getDescription();
+        if (StringUtils.hasText(note)) {
+            details.add(limit(note, 36));
+        }
+
+        return details.isEmpty()
+                ? itemName + " x" + quantity
+                : itemName + " x" + quantity + "（" + String.join("；", details) + "）";
     }
 
     private AIWritingChatParticipationVO buildChatParticipationContext(
@@ -479,6 +618,7 @@ public class AIWritingServiceImpl extends ServiceImpl<AIWritingRecordMapper, AIW
         appendInlineConstraint(builder, "背景补充硬性约束", contextBundle.chatParticipation().getHardConstraints());
         builder.append(resolveWritingIntent(writingType));
 
+        appendCharacterInventorySection(builder, contextBundle.characterInventories());
         appendOutlineSection(builder, contextBundle.currentOutline());
         appendBackgroundPlotGuidanceSection(builder, contextBundle.chatParticipation());
         appendPlotSection(builder, contextBundle.plots());
@@ -527,6 +667,22 @@ public class AIWritingServiceImpl extends ServiceImpl<AIWritingRecordMapper, AIW
         }
         if (outline.getFocusCharacterNames() != null && !outline.getFocusCharacterNames().isEmpty()) {
             builder.append("聚焦人物：").append(String.join("、", outline.getFocusCharacterNames())).append('\n');
+        }
+    }
+
+    private void appendCharacterInventorySection(StringBuilder builder, List<CharacterInventorySummary> characterInventories) {
+        if (characterInventories == null || characterInventories.isEmpty()) {
+            return;
+        }
+        builder.append("\n【章节人物背包】\n");
+        for (int index = 0; index < characterInventories.size(); index++) {
+            CharacterInventorySummary inventory = characterInventories.get(index);
+            builder.append(index + 1)
+                    .append(". ")
+                    .append(inventory.characterName())
+                    .append("：")
+                    .append(String.join("；", inventory.itemSummaries()))
+                    .append('\n');
         }
     }
 
@@ -1088,6 +1244,7 @@ public class AIWritingServiceImpl extends ServiceImpl<AIWritingRecordMapper, AIW
             List<Causality> causalities,
             List<WorldSettingVO> worldSettings,
             List<KnowledgeDocument> knowledgeDocuments,
+            List<CharacterInventorySummary> characterInventories,
             List<String> requiredCharacters,
             AIWritingChatParticipationVO chatParticipation) {
 
@@ -1098,10 +1255,16 @@ public class AIWritingServiceImpl extends ServiceImpl<AIWritingRecordMapper, AIW
                     List.of(),
                     List.of(),
                     List.of(),
+                    List.of(),
                     requiredCharacters == null ? List.of() : requiredCharacters,
                     chatParticipation == null ? AIWritingChatParticipationVO.empty() : chatParticipation
             );
         }
+    }
+
+    private record CharacterInventorySummary(
+            String characterName,
+            List<String> itemSummaries) {
     }
 
     private record WorkflowResult(String content) {

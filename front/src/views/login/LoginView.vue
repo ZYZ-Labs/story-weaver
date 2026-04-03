@@ -181,8 +181,9 @@ onMounted(() => {
 <style scoped>
 .login-shell {
   background:
+    linear-gradient(135deg, rgba(10, 17, 24, 0.42), rgba(10, 17, 24, 0.24)),
     radial-gradient(circle at left top, rgba(185, 95, 48, 0.16), transparent 28%),
-    linear-gradient(135deg, rgba(255, 248, 239, 0.9), rgba(241, 246, 251, 0.94));
+    url('/cover.png') center top / 100% auto no-repeat;
 }
 
 .login-hero-column,
@@ -196,9 +197,10 @@ onMounted(() => {
   min-height: 84vh;
   margin: 24px;
   overflow: hidden;
-  border: 1px solid rgba(26, 54, 84, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 32px;
   box-shadow: 0 24px 60px rgba(46, 61, 78, 0.14);
+  backdrop-filter: blur(6px);
 }
 
 .login-hero__art,
@@ -208,10 +210,12 @@ onMounted(() => {
 }
 
 .login-hero__art {
+  display: flex;
+  align-items: center;
+  justify-content: center;
   background:
-    linear-gradient(135deg, rgba(17, 30, 43, 0.2), rgba(114, 59, 24, 0.12)),
-    url('/cover.png') center center / cover no-repeat;
-  transform: scale(1.02);
+    linear-gradient(135deg, rgba(17, 30, 43, 0.18), rgba(114, 59, 24, 0.1)),
+    linear-gradient(180deg, rgba(255, 248, 239, 0.1), rgba(241, 246, 251, 0.08));
 }
 
 .login-hero__overlay {

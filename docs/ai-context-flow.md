@@ -19,12 +19,14 @@ flowchart TD
     D --> G["读取剧情节点"]
     D --> H["读取因果链"]
     D --> I["读取世界观"]
+    D --> I2["读取章节必出人物背包"]
     D --> J["读取知识片段"]
     E --> K["组装 system prompt + user prompt"]
     F --> K
     G --> K
     H --> K
     I --> K
+    I2 --> K
     J --> K
     K --> L["AIProviderService 调用默认或指定模型"]
     L --> M["返回完整结果或流式 chunk"]
@@ -53,8 +55,9 @@ sequenceDiagram
     S->>X: PlotService.getProjectPlots(projectId)
     S->>X: CausalityService.getProjectCausalities(projectId, userId)
     S->>X: WorldSettingService.getWorldSettingsByProjectId(projectId)
+    S->>X: CharacterInventoryItemMapper + ItemMapper 读取必出人物背包
     S->>X: KnowledgeDocumentService.queryDocuments(projectId, userId, query)
-    X-->>S: 返回大纲/剧情/因果/世界观/知识片段
+    X-->>S: 返回大纲/剧情/因果/世界观/背包摘要/知识片段
     S->>S: 聚合上下文并拼接 prompt
     S->>P: generateText / streamText
     P-->>S: 正文或流式 chunk
@@ -78,11 +81,13 @@ sequenceDiagram
 - 章节顺序
 - 当前正文
 - 本章必须出现人物
+- 本章必须出现人物的背包摘要（如存在）
 
 代码位置：
 
 - `AIWritingServiceImpl.prepareGeneration(...)`
 - `AIWritingServiceImpl.buildUserPrompt(...)`
+- `AIWritingServiceImpl.buildRequiredCharacterInventories(...)`
 
 ### 3.2 大纲
 
@@ -160,7 +165,25 @@ sequenceDiagram
 - `WorldSettingServiceImpl`
 - `AIWritingServiceImpl.appendWorldSettingSection(...)`
 
-### 3.6 知识片段
+### 3.6 章节人物背包
+
+只读取当前章节“必出人物”的背包，不读取项目下所有人物背包：
+
+- 物品名称 / 自定义名称
+- 数量
+- 装备状态
+- 耐久（低于 100 时）
+- 备注或物品简述
+
+进入 prompt 的目的是让模型知道当前章节角色手上实际持有什么，不再只依赖人物设定文本自行假设。
+
+代码位置：
+
+- `CharacterInventoryItemMapper`
+- `ItemMapper`
+- `AIWritingServiceImpl.appendCharacterInventorySection(...)`
+
+### 3.7 知识片段
 
 知识片段是一个轻量检索分支，当前查询词由这几部分拼接：
 
@@ -181,13 +204,14 @@ sequenceDiagram
 
 1. 项目信息
 2. 当前章节
-3. 章节大纲
-4. 相关剧情节点
-5. 相关因果链
-6. 世界观上下文
-7. 知识片段
-8. 当前正文
-9. 用户补充要求
+3. 章节人物背包
+4. 章节大纲
+5. 相关剧情节点
+6. 相关因果链
+7. 世界观上下文
+8. 知识片段
+9. 当前正文
+10. 用户补充要求
 
 这样做的目的，是先给模型一个稳定的“结构骨架”，再给“剧情推进约束”，最后才给当前正文和临时指令。
 
@@ -205,6 +229,7 @@ sequenceDiagram
 目前的上下文聚合仍然偏“规则筛选”，不是 embedding 级的深度召回：
 
 - 剧情和因果主要靠章节绑定或大纲手动关联
+- 背包上下文目前只覆盖章节必出人物，不自动扩散到全部关联角色
 - 知识片段仍是关键词检索，不是向量检索
 - 如果一个章节没有绑定大纲，会自动回退到“项目级剧情/因果/世界观”
 
