@@ -91,6 +91,7 @@ export const useWritingStore = defineStore('writing', () => {
             currentState.content += event.delta
           } else if (event.type === 'replace') {
             currentState.content = event.content || ''
+            appendLogItem(currentState.logs, createRevisionAppliedLogEvent())
           } else if (event.type === 'error') {
             currentState.generating = false
             currentState.error = event.message || 'AI 生成失败'
@@ -200,6 +201,15 @@ export const useWritingStore = defineStore('writing', () => {
     }
 
     logs.push(toLogItem(event))
+  }
+
+  function createRevisionAppliedLogEvent(): AIWritingStreamEvent {
+    return {
+      type: 'log',
+      stage: 'revise',
+      stageStatus: 'completed',
+      message: '已应用修订稿，当前预览已更新为修订后的版本。',
+    }
   }
 
   function buildLogSignature(item: Pick<AIWritingStreamLogItem, 'type' | 'stage' | 'stageStatus' | 'message'>) {

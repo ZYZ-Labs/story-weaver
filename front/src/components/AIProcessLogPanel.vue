@@ -55,6 +55,8 @@ watch(
 
 function formatStage(item: AIWritingStreamLogItem) {
   const stageMap: Record<string, string> = {
+    prepare: '准备',
+    context: '背景整理',
     plan: '规划',
     write: '写作',
     check: '检查',
@@ -65,7 +67,11 @@ function formatStage(item: AIWritingStreamLogItem) {
     completed: '完成',
   }
 
-  const stageLabel = item.stage ? stageMap[item.stage] || item.stage : '日志'
+  const stageLabel = item.stage
+    ? stageMap[item.stage] || item.stage
+    : item.type === 'error'
+      ? '错误'
+      : '日志'
   const statusLabel = item.stageStatus ? statusMap[item.stageStatus] || item.stageStatus : ''
   return statusLabel ? `${stageLabel} | ${statusLabel}` : stageLabel
 }
@@ -100,7 +106,7 @@ function formatMeta(item: AIWritingStreamLogItem) {
         </div>
       </div>
       <div v-else class="text-medium-emphasis">
-        模型在规划、写作、自检和修订时，阶段更新会显示在这里。
+        模型在准备上下文、整理背景、规划、写作、自检和修订时，阶段更新会显示在这里。
       </div>
     </v-card-text>
   </v-card>
