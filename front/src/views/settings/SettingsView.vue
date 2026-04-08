@@ -20,7 +20,7 @@ type PromptFormKey =
   | 'namingCharacter'
   | 'characterAttributes'
 
-type ModelTarget = 'default' | 'draft' | 'writing' | 'naming'
+type ModelTarget = 'default' | 'draft' | 'writing' | 'director' | 'naming'
 
 const settingsStore = useSettingsStore()
 const providerStore = useProviderStore()
@@ -39,6 +39,7 @@ const modelOptions = reactive<Record<ModelTarget, string[]>>({
   default: [],
   draft: [],
   writing: [],
+  director: [],
   naming: [],
 })
 
@@ -46,6 +47,7 @@ const refreshing = reactive<Record<ModelTarget, boolean>>({
   default: false,
   draft: false,
   writing: false,
+  director: false,
   naming: false,
 })
 
@@ -59,6 +61,8 @@ const form = reactive({
   draftAiModel: '',
   writingAiProviderId: null as number | null,
   writingAiModel: '',
+  directorAiProviderId: null as number | null,
+  directorAiModel: '',
   namingAiProviderId: null as number | null,
   namingAiModel: '',
   maxChapterLength: 5000,
@@ -72,6 +76,10 @@ const form = reactive({
   workflowMaxCheckRounds: 1,
   workflowMaxRevisionRounds: 1,
   workflowMaxToolCalls: 2,
+  aiDirectorEnabled: true,
+  directorMaxToolCalls: 4,
+  directorMaxSelectedModules: 6,
+  directorDebugExposeDecision: false,
   aiRequestTimeoutSeconds: 3600,
   chatMaxActiveChars: 6000,
   chatKeepRecentMessages: 4,
@@ -111,6 +119,7 @@ const selectedProviders = computed(() => ({
   default: providerStore.providers.find((item) => item.id === form.defaultAiProviderId) || null,
   draft: providerStore.providers.find((item) => item.id === form.draftAiProviderId) || null,
   writing: providerStore.providers.find((item) => item.id === form.writingAiProviderId) || null,
+  director: providerStore.providers.find((item) => item.id === form.directorAiProviderId) || null,
   naming: providerStore.providers.find((item) => item.id === form.namingAiProviderId) || null,
 }))
 
@@ -121,6 +130,7 @@ onMounted(async () => {
     refreshModelOptions('default', true),
     refreshModelOptions('draft', true),
     refreshModelOptions('writing', true),
+    refreshModelOptions('director', true),
     refreshModelOptions('naming', true),
   ])
 })
@@ -128,6 +138,7 @@ onMounted(async () => {
 watch(() => form.defaultAiProviderId, () => refreshModelOptions('default', true).catch(() => undefined))
 watch(() => form.draftAiProviderId, () => refreshModelOptions('draft', true).catch(() => undefined))
 watch(() => form.writingAiProviderId, () => refreshModelOptions('writing', true).catch(() => undefined))
+watch(() => form.directorAiProviderId, () => refreshModelOptions('director', true).catch(() => undefined))
 watch(() => form.namingAiProviderId, () => refreshModelOptions('naming', true).catch(() => undefined))
 
 function getPreferredProviderId() {
@@ -147,6 +158,8 @@ function hydrateForms() {
   form.draftAiModel = settingsStore.getConfigValue('draft_ai_model', 'qwen3.5:9b')
   form.writingAiProviderId = settingsStore.getNumberValue('writing_ai_provider_id', preferredProviderId)
   form.writingAiModel = settingsStore.getConfigValue('writing_ai_model', 'qwen2.5:14b')
+  form.directorAiProviderId = settingsStore.getNumberValue('director_ai_provider_id', preferredProviderId)
+  form.directorAiModel = settingsStore.getConfigValue('director_ai_model', 'qwen2.5:7b')
   form.namingAiProviderId = settingsStore.getNumberValue('naming_ai_provider_id', preferredProviderId)
   form.namingAiModel = settingsStore.getConfigValue('naming_ai_model', 'qwen2.5:3b')
   form.maxChapterLength = settingsStore.getNumberValue('max_chapter_length', 5000) ?? 5000
@@ -160,6 +173,10 @@ function hydrateForms() {
   form.workflowMaxCheckRounds = settingsStore.getNumberValue('ai.workflow.max_check_rounds', 1) ?? 1
   form.workflowMaxRevisionRounds = settingsStore.getNumberValue('ai.workflow.max_revision_rounds', 1) ?? 1
   form.workflowMaxToolCalls = settingsStore.getNumberValue('ai.workflow.max_tool_calls', 2) ?? 2
+  form.aiDirectorEnabled = settingsStore.getBooleanValue('ai.director.enabled', true)
+  form.directorMaxToolCalls = settingsStore.getNumberValue('ai.director.max_tool_calls', 4) ?? 4
+  form.directorMaxSelectedModules = settingsStore.getNumberValue('ai.director.max_selected_modules', 6) ?? 6
+  form.directorDebugExposeDecision = settingsStore.getBooleanValue('ai.director.debug_expose_decision', false)
   form.aiRequestTimeoutSeconds = settingsStore.getNumberValue('ai.request.timeout_seconds', 3600) ?? 3600
   form.chatMaxActiveChars = settingsStore.getNumberValue('ai.chat.max_active_chars', 6000) ?? 6000
   form.chatKeepRecentMessages = settingsStore.getNumberValue('ai.chat.keep_recent_messages', 4) ?? 4
@@ -184,6 +201,7 @@ function getModelValue(target: ModelTarget) {
       default: form.defaultAiModel,
       draft: form.draftAiModel,
       writing: form.writingAiModel,
+      director: form.directorAiModel,
       naming: form.namingAiModel,
     } as const
   )[target]
@@ -193,6 +211,7 @@ function setModelValue(target: ModelTarget, value: string) {
   if (target === 'default') form.defaultAiModel = value
   if (target === 'draft') form.draftAiModel = value
   if (target === 'writing') form.writingAiModel = value
+  if (target === 'director') form.directorAiModel = value
   if (target === 'naming') form.namingAiModel = value
 }
 
@@ -245,6 +264,7 @@ function resolveTargetLabel(target: ModelTarget) {
     default: '默认',
     draft: '初稿',
     writing: '写作中心',
+    director: '总导',
     naming: '命名',
   }
   return mapping[target]
@@ -261,6 +281,8 @@ function buildPayload(): SystemConfig[] {
     { configKey: 'draft_ai_model', configValue: form.draftAiModel, description: '初稿模型' },
     { configKey: 'writing_ai_provider_id', configValue: String(form.writingAiProviderId ?? ''), description: '写作中心模型服务' },
     { configKey: 'writing_ai_model', configValue: form.writingAiModel, description: '写作中心模型' },
+    { configKey: 'director_ai_provider_id', configValue: String(form.directorAiProviderId ?? ''), description: '总导决策层模型服务' },
+    { configKey: 'director_ai_model', configValue: form.directorAiModel, description: '总导决策层模型' },
     { configKey: 'naming_ai_provider_id', configValue: String(form.namingAiProviderId ?? ''), description: '命名模型服务' },
     { configKey: 'naming_ai_model', configValue: form.namingAiModel, description: '命名模型' },
     { configKey: 'max_chapter_length', configValue: String(form.maxChapterLength), description: '章节最大字数' },
@@ -274,6 +296,10 @@ function buildPayload(): SystemConfig[] {
     { configKey: 'ai.workflow.max_check_rounds', configValue: String(form.workflowMaxCheckRounds), description: '检查轮次' },
     { configKey: 'ai.workflow.max_revision_rounds', configValue: String(form.workflowMaxRevisionRounds), description: '修订轮次' },
     { configKey: 'ai.workflow.max_tool_calls', configValue: String(form.workflowMaxToolCalls), description: '工具调用上限' },
+    { configKey: 'ai.director.enabled', configValue: String(form.aiDirectorEnabled), description: '是否启用 AI 总导决策层' },
+    { configKey: 'ai.director.max_tool_calls', configValue: String(form.directorMaxToolCalls), description: '总导决策层最大工具调用次数' },
+    { configKey: 'ai.director.max_selected_modules', configValue: String(form.directorMaxSelectedModules), description: '总导决策层最大选中模块数' },
+    { configKey: 'ai.director.debug_expose_decision', configValue: String(form.directorDebugExposeDecision), description: '是否暴露总导决策调试信息' },
     { configKey: 'ai.request.timeout_seconds', configValue: String(form.aiRequestTimeoutSeconds), description: 'AI 请求超时时间（秒）' },
     { configKey: 'ai.chat.max_active_chars', configValue: String(form.chatMaxActiveChars), description: '聊天活动窗口字符数' },
     { configKey: 'ai.chat.keep_recent_messages', configValue: String(form.chatKeepRecentMessages), description: '聊天保留最近消息数' },
@@ -311,7 +337,7 @@ async function saveSettings() {
 <template>
   <PageContainer
     title="系统设置"
-    description="统一配置全局默认模型、章节初稿默认、写作中心默认、工作流上限和聊天压缩策略。"
+    description="统一配置全局默认模型、章节初稿默认、写作中心默认、AI 总导决策层路由、工作流上限和聊天压缩策略。"
   >
     <template #actions>
       <v-btn color="primary" :loading="saving" @click="saveSettings">保存设置</v-btn>
@@ -379,8 +405,17 @@ async function saveSettings() {
                   <v-btn class="mt-2" variant="outlined" :loading="refreshing.writing" @click="refreshModelOptions('writing')">刷新</v-btn>
                 </div>
               </v-col>
+              <v-col cols="12" md="6">
+                <v-select v-model="form.directorAiProviderId" label="总导决策层模型服务" :items="providerStore.providers" item-title="name" item-value="id" clearable />
+              </v-col>
+              <v-col cols="12" md="6">
+                <div class="d-flex ga-2 align-start">
+                  <v-combobox v-model="form.directorAiModel" class="flex-grow-1" label="总导决策层模型" :items="modelOptions.director" clearable />
+                  <v-btn class="mt-2" variant="outlined" :loading="refreshing.director" @click="refreshModelOptions('director')">刷新</v-btn>
+                </div>
+              </v-col>
               <v-col cols="12">
-                <v-alert type="info" variant="tonal">建议把章节初稿放在更轻量的模型上，把写作中心放在更强的模型上。</v-alert>
+                <v-alert type="info" variant="tonal">建议把章节初稿放在更轻量的模型上，把写作中心放在更强的模型上；总导决策层优先使用响应稳定、支持工具调用的模型。</v-alert>
               </v-col>
             </v-row>
           </v-card-text>
@@ -395,7 +430,11 @@ async function saveSettings() {
               <v-col cols="12" md="6"><v-text-field v-model="form.workflowMaxPlanRounds" label="规划轮次" type="number" /></v-col>
               <v-col cols="12" md="6"><v-text-field v-model="form.workflowMaxCheckRounds" label="检查轮次" type="number" /></v-col>
               <v-col cols="12" md="6"><v-text-field v-model="form.workflowMaxRevisionRounds" label="修订轮次" type="number" /></v-col>
-              <v-col cols="12" md="6"><v-text-field v-model="form.workflowMaxToolCalls" label="工具调用上限" type="number" /></v-col>
+              <v-col cols="12" md="6"><v-text-field v-model="form.workflowMaxToolCalls" label="写作工作流工具调用上限" type="number" /></v-col>
+              <v-col cols="12" md="6"><v-switch v-model="form.aiDirectorEnabled" color="primary" label="启用总导决策层" inset /></v-col>
+              <v-col cols="12" md="6"><v-text-field v-model="form.directorMaxToolCalls" label="总导工具调用上限" type="number" /></v-col>
+              <v-col cols="12" md="6"><v-text-field v-model="form.directorMaxSelectedModules" label="总导最大选中模块数" type="number" /></v-col>
+              <v-col cols="12" md="6"><v-switch v-model="form.directorDebugExposeDecision" color="primary" label="暴露总导调试信息" inset /></v-col>
               <v-col cols="12" md="6"><v-text-field v-model="form.aiRequestTimeoutSeconds" label="AI 请求超时（秒）" type="number" /></v-col>
             </v-row>
           </v-card-text>

@@ -25,6 +25,8 @@ public class AIWritingResponseVO {
 
     private String promptSnapshot;
 
+    private Long directorDecisionId;
+
     private String status;
 
     private LocalDateTime createTime;
@@ -99,6 +101,14 @@ public class AIWritingResponseVO {
 
     public void setPromptSnapshot(String promptSnapshot) {
         this.promptSnapshot = promptSnapshot;
+    }
+
+    public Long getDirectorDecisionId() {
+        return directorDecisionId;
+    }
+
+    public void setDirectorDecisionId(Long directorDecisionId) {
+        this.directorDecisionId = directorDecisionId;
     }
 
     public String getStatus() {

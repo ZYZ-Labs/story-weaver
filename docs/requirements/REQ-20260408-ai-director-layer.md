@@ -1,7 +1,7 @@
 # AI 总导编排层
 
 - Req ID: REQ-20260408-ai-director-layer
-- Status: Planned
+- Status: In Progress
 - Created At: 2026-04-08 Asia/Shanghai
 - Updated At: 2026-04-08 Asia/Shanghai
 
@@ -72,3 +72,5 @@
 - [2026-04-08 Asia/Shanghai] 确认决策层需要引入 function call / tool calling，以降低对长 prompt 的依赖。
 - [2026-04-08 Asia/Shanghai] 确认现有 chat 式编写功能保留，决策层是新增编排层，不替代编写层聊天入口。
 - [2026-04-08 Asia/Shanghai] 已形成 v1 实施计划，进入可实施状态；后续优先按计划实现后端骨架和配置接入。
+- [2026-04-08 Asia/Shanghai] 已完成 v1 第一批后端骨架：决策记录表结构、实体/Mapper/DTO/VO、最小决策服务与接口、系统配置与模型路由接入。
+- [2026-04-08 Asia/Shanghai] 已接入 provider 级真实 tool calling、总导工具白名单和模型决策解析，并在系统设置页暴露 director 专属 Provider / Model / 限制项配置。

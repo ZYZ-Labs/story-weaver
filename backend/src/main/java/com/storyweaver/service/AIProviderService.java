@@ -6,6 +6,7 @@ import com.storyweaver.domain.vo.ProviderDiscoveryVO;
 
 import java.util.List;
 import java.util.function.Consumer;
+import java.util.function.Function;
 
 public interface AIProviderService extends IService<AIProvider> {
     List<AIProvider> listProviders();
@@ -23,4 +24,26 @@ public interface AIProviderService extends IService<AIProvider> {
             Double temperature,
             Integer maxTokens,
             Consumer<String> onChunk);
+
+    ToolExecutionResult generateTextWithTools(
+            AIProvider provider,
+            String modelName,
+            String systemPrompt,
+            String userPrompt,
+            List<ToolDefinition> tools,
+            Integer maxTokens,
+            int maxToolCalls,
+            Function<ToolCallRequest, String> toolExecutor);
+
+    record ToolDefinition(String name, String description, String inputSchemaJson) {
+    }
+
+    record ToolCallRequest(String id, String name, String argumentsJson) {
+    }
+
+    record ToolCallTrace(String id, String name, String argumentsJson, String resultJson) {
+    }
+
+    record ToolExecutionResult(String finalText, List<ToolCallTrace> toolCalls) {
+    }
 }

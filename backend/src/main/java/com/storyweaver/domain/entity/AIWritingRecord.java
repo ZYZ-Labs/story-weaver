@@ -34,6 +34,8 @@ public class AIWritingRecord {
 
     private String promptSnapshot;
 
+    private Long directorDecisionId;
+
     private String status;
 
     @TableField(fill = FieldFill.INSERT)
@@ -115,6 +117,14 @@ public class AIWritingRecord {
 
     public void setPromptSnapshot(String promptSnapshot) {
         this.promptSnapshot = promptSnapshot;
+    }
+
+    public Long getDirectorDecisionId() {
+        return directorDecisionId;
+    }
+
+    public void setDirectorDecisionId(Long directorDecisionId) {
+        this.directorDecisionId = directorDecisionId;
     }
 
     public String getStatus() {

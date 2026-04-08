@@ -3,6 +3,9 @@ package com.storyweaver.service.impl;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.storyweaver.ai.director.application.AIDirectorApplicationService;
+import com.storyweaver.domain.dto.AIDirectorDecisionRequestDTO;
 import com.storyweaver.domain.dto.AIWritingRequestDTO;
 import com.storyweaver.domain.entity.AIProvider;
 import com.storyweaver.domain.entity.AIWritingRecord;
@@ -13,6 +16,7 @@ import com.storyweaver.domain.entity.Outline;
 import com.storyweaver.domain.entity.Plot;
 import com.storyweaver.domain.entity.Project;
 import com.storyweaver.domain.vo.AIWritingChatParticipationVO;
+import com.storyweaver.domain.vo.AIDirectorDecisionVO;
 import com.storyweaver.domain.vo.AIWritingResponseVO;
 import com.storyweaver.domain.vo.AIWritingStreamEventVO;
 import com.storyweaver.domain.vo.WorldSettingVO;
@@ -68,6 +72,7 @@ public class AIWritingServiceImpl extends ServiceImpl<AIWritingRecordMapper, AIW
     private final ItemMapper itemMapper;
     private final AIModelRoutingService aiModelRoutingService;
     private final AIWritingChatService aiWritingChatService;
+    private final AIDirectorApplicationService aiDirectorApplicationService;
 
     public AIWritingServiceImpl(
             ChapterService chapterService,
@@ -82,7 +87,8 @@ public class AIWritingServiceImpl extends ServiceImpl<AIWritingRecordMapper, AIW
             CharacterInventoryItemMapper characterInventoryItemMapper,
             ItemMapper itemMapper,
             AIModelRoutingService aiModelRoutingService,
-            AIWritingChatService aiWritingChatService) {
+            AIWritingChatService aiWritingChatService,
+            AIDirectorApplicationService aiDirectorApplicationService) {
         this.chapterService = chapterService;
         this.knowledgeDocumentService = knowledgeDocumentService;
         this.aiProviderService = aiProviderService;
@@ -96,6 +102,7 @@ public class AIWritingServiceImpl extends ServiceImpl<AIWritingRecordMapper, AIW
         this.itemMapper = itemMapper;
         this.aiModelRoutingService = aiModelRoutingService;
         this.aiWritingChatService = aiWritingChatService;
+        this.aiDirectorApplicationService = aiDirectorApplicationService;
     }
 
     @Override
@@ -213,6 +220,10 @@ public class AIWritingServiceImpl extends ServiceImpl<AIWritingRecordMapper, AIW
         String selectedModel = selection.model();
         String promptSnapshot = resolvePromptSnapshot(requestDTO.getPromptSnapshot(), writingType);
         Project project = chapter.getProjectId() == null ? null : projectService.getById(chapter.getProjectId());
+        AIDirectorDecisionVO directorDecision = aiDirectorApplicationService.decide(
+                userId,
+                buildDirectorDecisionRequest(requestDTO, writingType, currentContent, userInstruction)
+        );
         WritingContextBundle contextBundle = buildContextBundle(
                 userId,
                 project,
@@ -232,9 +243,26 @@ public class AIWritingServiceImpl extends ServiceImpl<AIWritingRecordMapper, AIW
                 selectedModel,
                 promptSnapshot,
                 buildSystemPrompt(promptSnapshot),
-                buildUserPrompt(project, chapter, contextBundle, currentContent, writingType, userInstruction),
+                buildUserPrompt(project, chapter, contextBundle, directorDecision, currentContent, writingType, userInstruction),
+                directorDecision,
                 normalizeMaxTokens(requestDTO.getMaxTokens())
         );
+    }
+
+    private AIDirectorDecisionRequestDTO buildDirectorDecisionRequest(
+            AIWritingRequestDTO requestDTO,
+            String writingType,
+            String currentContent,
+            String userInstruction) {
+        AIDirectorDecisionRequestDTO directorRequest = new AIDirectorDecisionRequestDTO();
+        directorRequest.setChapterId(requestDTO.getChapterId());
+        directorRequest.setCurrentContent(currentContent);
+        directorRequest.setUserInstruction(userInstruction);
+        directorRequest.setWritingType(writingType);
+        directorRequest.setEntryPoint(requestDTO.getEntryPoint());
+        directorRequest.setSourceType("writing");
+        directorRequest.setForceRefresh(false);
+        return directorRequest;
     }
 
     private WritingContextBundle buildContextBundle(
@@ -507,6 +535,7 @@ public class AIWritingServiceImpl extends ServiceImpl<AIWritingRecordMapper, AIW
         record.setSelectedProviderId(context.provider().getId());
         record.setSelectedModel(context.selectedModel());
         record.setPromptSnapshot(context.promptSnapshot());
+        record.setDirectorDecisionId(context.directorDecision() == null ? null : context.directorDecision().getId());
         record.setStatus("draft");
 
         save(record);
@@ -585,6 +614,7 @@ public class AIWritingServiceImpl extends ServiceImpl<AIWritingRecordMapper, AIW
             Project project,
             Chapter chapter,
             WritingContextBundle contextBundle,
+            AIDirectorDecisionVO directorDecision,
             String currentContent,
             String writingType,
             String userInstruction) {
@@ -617,16 +647,33 @@ public class AIWritingServiceImpl extends ServiceImpl<AIWritingRecordMapper, AIW
         appendInlineConstraint(builder, "背景补充人物约束", contextBundle.chatParticipation().getCharacterConstraints());
         appendInlineConstraint(builder, "背景补充硬性约束", contextBundle.chatParticipation().getHardConstraints());
         builder.append(resolveWritingIntent(writingType));
+        appendDirectorDecisionSection(builder, directorDecision);
 
-        appendCharacterInventorySection(builder, contextBundle.characterInventories());
-        appendOutlineSection(builder, contextBundle.currentOutline());
-        appendBackgroundPlotGuidanceSection(builder, contextBundle.chatParticipation());
-        appendPlotSection(builder, contextBundle.plots());
-        appendCausalitySection(builder, contextBundle.causalities());
-        appendWorldSettingSection(builder, contextBundle.worldSettings());
-        appendBackgroundWorldSettingSection(builder, contextBundle.chatParticipation());
-        appendKnowledgeSection(builder, contextBundle.knowledgeDocuments());
-        appendWritingPreferenceSection(builder, contextBundle.chatParticipation());
+        if (shouldUseModule(directorDecision, "character_inventory")) {
+            appendCharacterInventorySection(builder, contextBundle.characterInventories());
+        }
+        if (shouldUseModule(directorDecision, "outline")) {
+            appendOutlineSection(builder, contextBundle.currentOutline());
+        }
+        if (shouldUseModule(directorDecision, "chat_background")) {
+            appendBackgroundPlotGuidanceSection(builder, contextBundle.chatParticipation());
+        }
+        if (shouldUseModule(directorDecision, "plot")) {
+            appendPlotSection(builder, contextBundle.plots());
+        }
+        if (shouldUseModule(directorDecision, "causality")) {
+            appendCausalitySection(builder, contextBundle.causalities());
+        }
+        if (shouldUseModule(directorDecision, "world_setting")) {
+            appendWorldSettingSection(builder, contextBundle.worldSettings());
+        }
+        if (shouldUseModule(directorDecision, "chat_background")) {
+            appendBackgroundWorldSettingSection(builder, contextBundle.chatParticipation());
+            appendWritingPreferenceSection(builder, contextBundle.chatParticipation());
+        }
+        if (shouldUseModule(directorDecision, "knowledge")) {
+            appendKnowledgeSection(builder, contextBundle.knowledgeDocuments());
+        }
 
         builder.append("\n【当前正文】\n");
         if (StringUtils.hasText(currentContent)) {
@@ -640,6 +687,59 @@ public class AIWritingServiceImpl extends ServiceImpl<AIWritingRecordMapper, AIW
         }
 
         return builder.toString();
+    }
+
+    private void appendDirectorDecisionSection(StringBuilder builder, AIDirectorDecisionVO directorDecision) {
+        if (directorDecision == null || directorDecision.getDecisionPack() == null || directorDecision.getDecisionPack().isNull()) {
+            return;
+        }
+        builder.append("\n【总导决策】\n");
+        if (StringUtils.hasText(directorDecision.getStage())) {
+            builder.append("章节阶段：").append(directorDecision.getStage()).append('\n');
+        }
+        if (StringUtils.hasText(directorDecision.getWritingMode())) {
+            builder.append("本轮模式：").append(directorDecision.getWritingMode()).append('\n');
+        }
+        if (StringUtils.hasText(directorDecision.getDecisionSummary())) {
+            builder.append("决策摘要：").append(directorDecision.getDecisionSummary().trim()).append('\n');
+        }
+        appendInlineConstraint(builder, "总导硬约束", readDecisionPackStrings(directorDecision, "requiredFacts"));
+        appendInlineConstraint(builder, "总导禁止事项", readDecisionPackStrings(directorDecision, "prohibitedMoves"));
+        appendInlineConstraint(builder, "总导写作提示", readDecisionPackStrings(directorDecision, "writerHints"));
+    }
+
+    private boolean shouldUseModule(AIDirectorDecisionVO directorDecision, String moduleName) {
+        if (directorDecision == null || directorDecision.getDecisionPack() == null || directorDecision.getDecisionPack().isNull()) {
+            return true;
+        }
+        JsonNode selectedModules = directorDecision.getDecisionPack().path("selectedModules");
+        if (!selectedModules.isArray() || selectedModules.isEmpty()) {
+            return true;
+        }
+        for (JsonNode module : selectedModules) {
+            if (moduleName.equals(module.path("module").asText())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private List<String> readDecisionPackStrings(AIDirectorDecisionVO directorDecision, String fieldName) {
+        if (directorDecision == null || directorDecision.getDecisionPack() == null || directorDecision.getDecisionPack().isNull()) {
+            return List.of();
+        }
+        JsonNode arrayNode = directorDecision.getDecisionPack().path(fieldName);
+        if (!arrayNode.isArray() || arrayNode.isEmpty()) {
+            return List.of();
+        }
+        List<String> values = new ArrayList<>();
+        for (JsonNode item : arrayNode) {
+            String value = item.asText("").trim();
+            if (StringUtils.hasText(value)) {
+                values.add(value);
+            }
+        }
+        return values;
     }
 
     private void appendOutlineSection(StringBuilder builder, Outline outline) {
@@ -1220,6 +1320,7 @@ public class AIWritingServiceImpl extends ServiceImpl<AIWritingRecordMapper, AIW
         target.setSelectedProviderId(source.getSelectedProviderId());
         target.setSelectedModel(source.getSelectedModel());
         target.setPromptSnapshot(null);
+        target.setDirectorDecisionId(source.getDirectorDecisionId());
         target.setStatus(source.getStatus());
         target.setCreateTime(source.getCreateTime());
         return target;
@@ -1235,6 +1336,7 @@ public class AIWritingServiceImpl extends ServiceImpl<AIWritingRecordMapper, AIW
             String promptSnapshot,
             String systemPrompt,
             String userPrompt,
+            AIDirectorDecisionVO directorDecision,
             Integer maxTokens) {
     }
 

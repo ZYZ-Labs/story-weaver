@@ -1,25 +1,29 @@
 # AI 总导编排层 进度记录
 
 - Req ID: REQ-20260408-ai-director-layer
-- Status: Planning Completed
+- Status: In Progress
 - Created At: 2026-04-08 Asia/Shanghai
 - Updated At: 2026-04-08 Asia/Shanghai
 
 ## 当前快照
 
-- Current Phase: 文档规划完成，等待进入实现
-- Current Task: 基于 v1 计划开始后端骨架实现
-- Last Completed: 已完成需求文档、正式计划文档和 bug 关联文档的落盘
-- Next Action: 按计划先实现 SQL 迁移、决策记录实体、工具协议和 `decision pack` schema
+- Current Phase: 真实 tool calling 与设置页入口已落地，进入联调与可视化收尾
+- Current Task: 验证兼容 Provider 的 tool calling 表现，并评估补写作页只读决策摘要
+- Last Completed: 已把 `AIProviderService`、总导工具执行器和前端 director 配置入口打通
+- Next Action: 结合真实 Provider 做一次端到端决策验证，并决定是否在写作页展示最新 `decision pack` 摘要
 - Blockers:
-  - 决策层工具调用仅计划支持兼容 `/v1/chat/completions` 的 Provider，实际 Provider 兼容性尚未验证
-  - 决策层前端是否展示只读决策摘要仍可按实现成本做裁剪
+  - 决策层工具调用当前仅支持兼容 `/v1/chat/completions` 的 Provider，真实联调结果仍未知
+  - 决策摘要前端展示还没做，当前只能通过接口和记录表查看
 - Latest Verified:
-  - 已核对现有写作链路、聊天提炼、Provider 配置和系统设置结构
-  - 已确认 chat 面板可以保留，不需要被决策层取代
+  - 已实现 `AIProviderService.generateTextWithTools(...)`，支持基于兼容 chat completions 的工具循环
+  - 已实现总导工具执行器，覆盖章节快照、大纲、剧情、因果、世界观、人物、背包、知识、背景聊天摘要
+  - 已实现总导层模型决策解析与失败回退启发式 fallback
+  - 已补前端系统设置中的 director Provider / Model / 开关 / 限制项配置
+  - 已执行 `mvn -f backend/pom.xml -DskipTests compile`，后端编译通过
+  - 已执行 `npm run build`，前端构建通过
 - Latest Unverified:
-  - 尚未验证真实 provider 的 tool calling 返回格式
-  - 尚未运行任何后端或前端测试
+  - 尚未验证真实 Provider 返回的 tool call schema 是否与当前兼容实现完全一致
+  - 尚未补写作页对最新总导决策摘要的只读展示
 
 ## 关键节点记录
 
@@ -61,3 +65,86 @@
   - “最新决策摘要”前端是否首版交付，仍可在实现时裁剪
 - 下一步:
   - 从 SQL 迁移和后端实体层开始实现最小骨架
+
+### [2026-04-08 Asia/Shanghai] 完成总导层第一批后端骨架
+- 背景:
+  - bug 修复已经提交，需要切回总导层主线并开始实际功能实现。
+- 本次完成:
+  - 新增 `sql/011_ai_director_layer.sql`
+  - 新增 `AIDirectorDecision` 实体、Mapper、DTO、VO
+  - 新增 `AIDirectorApplicationService`、`AIDirectorController`
+  - 新增 `DirectorModuleRegistry` 和 `DirectorDecisionPackAssembler`
+  - 扩展系统配置、模型路由和数据库增量初始化，加入 director 相关配置与表结构
+  - 为 `AIWritingRecord` / `AIWritingResponseVO` 增加 `directorDecisionId` 字段
+- 修改文件:
+  - `sql/011_ai_director_layer.sql`
+  - `backend/src/main/java/com/storyweaver/domain/entity/AIDirectorDecision.java`
+  - `backend/src/main/java/com/storyweaver/repository/AIDirectorDecisionMapper.java`
+  - `backend/src/main/java/com/storyweaver/domain/dto/AIDirectorDecisionRequestDTO.java`
+  - `backend/src/main/java/com/storyweaver/domain/vo/AIDirectorDecisionVO.java`
+  - `backend/src/main/java/com/storyweaver/ai/director/application/AIDirectorApplicationService.java`
+  - `backend/src/main/java/com/storyweaver/ai/director/application/DirectorModuleRegistry.java`
+  - `backend/src/main/java/com/storyweaver/ai/director/application/DirectorDecisionPackAssembler.java`
+  - `backend/src/main/java/com/storyweaver/ai/director/application/impl/AIDirectorApplicationServiceImpl.java`
+  - `backend/src/main/java/com/storyweaver/controller/AIDirectorController.java`
+  - `backend/src/main/java/com/storyweaver/service/AIModelRoutingService.java`
+  - `backend/src/main/java/com/storyweaver/service/impl/SystemConfigServiceImpl.java`
+  - `backend/src/main/java/com/storyweaver/config/DatabaseMigrationInitializer.java`
+  - `backend/src/main/java/com/storyweaver/domain/entity/AIWritingRecord.java`
+  - `backend/src/main/java/com/storyweaver/domain/vo/AIWritingResponseVO.java`
+- 验证:
+  - 执行 `mvn -f backend/pom.xml -DskipTests compile` 成功
+- 风险/遗留:
+  - 当前 `decision pack` 仍使用后端启发式规则生成，真实 tool calling 还未接入
+  - 写作接口尚未真正消费总导决策结果
+- 下一步:
+  - 把总导层接入 `AIWritingServiceImpl.prepareGeneration(...)`
+
+### [2026-04-08 Asia/Shanghai] 完成写作主链路接入
+- 背景:
+  - 第一批骨架完成后，需要验证总导决策不是孤立接口，而是真正进入写作生成链路。
+- 本次完成:
+  - `AIWritingServiceImpl` 在生成前会先调用总导决策服务
+  - `buildUserPrompt(...)` 开始消费总导决策中的阶段、摘要、硬约束、禁止事项和写作提示
+  - 上下文段落改为按已选模块决定是否拼入 prompt
+  - 生成记录开始写入 `directorDecisionId`
+- 修改文件:
+  - `backend/src/main/java/com/storyweaver/service/impl/AIWritingServiceImpl.java`
+- 验证:
+  - 再次执行 `mvn -f backend/pom.xml -DskipTests compile` 成功
+- 风险/遗留:
+  - 当前模块选择仍基于后端启发式规则，不是真实 tool calling 结果
+  - 目前还没有把 director 配置暴露到前端设置页
+- 下一步:
+  - 继续实现 provider 级 tool calling 协议和前端配置接入
+
+### [2026-04-08 Asia/Shanghai] 完成真实 tool calling 与前端 director 配置入口
+- 背景:
+  - 写作主链路已接入总导服务，但此前总导决策仍是启发式规则拼装，尚未真正使用工具调用。
+- 本次完成:
+  - 为 `AIProviderService` / `AIProviderServiceImpl` 补齐非流式 tool calling 协议
+  - 新增 `DirectorToolExecutor` 和 `DirectorToolDefinition`，落地 9 个总导工具白名单
+  - `AIDirectorApplicationServiceImpl` 改为优先调用工具并解析模型返回的结构化决策；失败时退回启发式 fallback
+  - `DirectorDecisionPackAssembler` 改为同时支持模型决策与 fallback 的统一装配
+  - 前端系统设置页新增 director Provider / Model / 开关 / 最大工具调用次数 / 最大选中模块数 / 调试开关
+  - 前端新增 `ai-director` API 和对应类型定义
+- 修改文件:
+  - `backend/src/main/java/com/storyweaver/service/AIProviderService.java`
+  - `backend/src/main/java/com/storyweaver/service/impl/AIProviderServiceImpl.java`
+  - `backend/src/main/java/com/storyweaver/ai/director/application/DirectorDecisionPackAssembler.java`
+  - `backend/src/main/java/com/storyweaver/ai/director/application/impl/AIDirectorApplicationServiceImpl.java`
+  - `backend/src/main/java/com/storyweaver/ai/director/application/tool/DirectorToolDefinition.java`
+  - `backend/src/main/java/com/storyweaver/ai/director/application/tool/DirectorToolExecutor.java`
+  - `front/src/views/settings/SettingsView.vue`
+  - `front/src/types/index.ts`
+  - `front/src/api/ai-director.ts`
+- 验证:
+  - 执行 `mvn -f backend/pom.xml -DskipTests compile` 成功
+  - 执行 `npm run build` 成功
+- 风险/遗留:
+  - 当前只支持兼容 `/v1/chat/completions` 工具协议的 Provider
+  - `getChatBackgroundSummary` 仍复用现有聊天提炼链路，真实成本和效果还需要联调验证
+  - 写作页尚未直接展示最新总导决策摘要
+- 下一步:
+  - 用真实兼容 Provider 做一次端到端决策验证
+  - 评估是否补写作页只读决策摘要

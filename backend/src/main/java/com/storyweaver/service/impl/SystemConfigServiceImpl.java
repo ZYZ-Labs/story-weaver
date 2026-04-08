@@ -114,9 +114,15 @@ public class SystemConfigServiceImpl extends ServiceImpl<SystemConfigMapper, Sys
         defaults.put("draft_ai_provider_id", createDefault("draft_ai_provider_id", "1", "章节初稿默认模型服务"));
         defaults.put("writing_ai_model", createDefault("writing_ai_model", "qwen2.5:14b", "AI 写作中心默认模型"));
         defaults.put("writing_ai_provider_id", createDefault("writing_ai_provider_id", "1", "AI 写作中心默认模型服务"));
+        defaults.put("director_ai_model", createDefault("director_ai_model", "qwen2.5:7b", "AI 总导决策层默认模型"));
+        defaults.put("director_ai_provider_id", createDefault("director_ai_provider_id", "1", "AI 总导决策层默认模型服务"));
         defaults.put("default_embedding_provider_id", createDefault("default_embedding_provider_id", "1", "默认向量服务"));
         defaults.put("naming_ai_provider_id", createDefault("naming_ai_provider_id", "1", "轻量生成模型服务"));
         defaults.put("naming_ai_model", createDefault("naming_ai_model", "qwen2.5:3b", "轻量生成模型"));
+        defaults.put("ai.director.enabled", createDefault("ai.director.enabled", "true", "是否启用 AI 总导决策层"));
+        defaults.put("ai.director.max_tool_calls", createDefault("ai.director.max_tool_calls", "4", "总导决策层最大工具调用次数"));
+        defaults.put("ai.director.max_selected_modules", createDefault("ai.director.max_selected_modules", "6", "总导决策层最大选中模块数"));
+        defaults.put("ai.director.debug_expose_decision", createDefault("ai.director.debug_expose_decision", "false", "是否暴露总导决策调试信息"));
         defaults.put("ai.workflow.max_plan_rounds", createDefault("ai.workflow.max_plan_rounds", "1", "写作计划阶段最大轮次"));
         defaults.put("ai.workflow.max_check_rounds", createDefault("ai.workflow.max_check_rounds", "1", "写作自检阶段最大轮次"));
         defaults.put("ai.workflow.max_revision_rounds", createDefault("ai.workflow.max_revision_rounds", "1", "写作修订阶段最大轮次"));

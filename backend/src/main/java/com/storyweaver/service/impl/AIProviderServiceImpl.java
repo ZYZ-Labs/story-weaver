@@ -30,6 +30,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.function.Consumer;
+import java.util.function.Function;
 
 @Service
 public class AIProviderServiceImpl extends ServiceImpl<AIProviderMapper, AIProvider> implements AIProviderService {
@@ -198,6 +199,47 @@ public class AIProviderServiceImpl extends ServiceImpl<AIProviderMapper, AIProvi
                 return;
             }
             requestCompatibleChatStream(provider, resolvedModelName, systemPrompt, userPrompt, temperature, maxTokens, onChunk);
+        } catch (IOException exception) {
+            throw new IllegalStateException("调用模型服务失败，无法读取返回结果");
+        } catch (InterruptedException exception) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("调用模型服务时被中断，请稍后重试");
+        }
+    }
+
+    @Override
+    public ToolExecutionResult generateTextWithTools(
+            AIProvider provider,
+            String modelName,
+            String systemPrompt,
+            String userPrompt,
+            List<ToolDefinition> tools,
+            Integer maxTokens,
+            int maxToolCalls,
+            Function<ToolCallRequest, String> toolExecutor) {
+        String resolvedModelName = validateGenerationRequest(provider, modelName);
+        if (tools == null || tools.isEmpty() || toolExecutor == null) {
+            return new ToolExecutionResult(
+                    generateText(provider, resolvedModelName, systemPrompt, userPrompt, null, maxTokens),
+                    List.of()
+            );
+        }
+
+        if ("ollama".equalsIgnoreCase(provider.getProviderType()) && !preferCompatibleOllamaEndpoint(provider)) {
+            throw new IllegalStateException("当前 Provider 未启用兼容 /v1/chat/completions 接口，暂不支持 tool calling");
+        }
+
+        try {
+            return requestCompatibleChatWithTools(
+                    provider,
+                    resolvedModelName,
+                    systemPrompt,
+                    userPrompt,
+                    tools,
+                    maxTokens,
+                    maxToolCalls,
+                    toolExecutor
+            );
         } catch (IOException exception) {
             throw new IllegalStateException("调用模型服务失败，无法读取返回结果");
         } catch (InterruptedException exception) {
@@ -473,6 +515,76 @@ public class AIProviderServiceImpl extends ServiceImpl<AIProviderMapper, AIProvi
         }
     }
 
+    private ToolExecutionResult requestCompatibleChatWithTools(
+            AIProvider provider,
+            String modelName,
+            String systemPrompt,
+            String userPrompt,
+            List<ToolDefinition> tools,
+            Integer maxTokens,
+            int maxToolCalls,
+            Function<ToolCallRequest, String> toolExecutor) throws IOException, InterruptedException {
+        ArrayNode messages = buildMessages(systemPrompt, userPrompt);
+        List<ToolCallTrace> traces = new ArrayList<>();
+        int safeMaxToolCalls = Math.max(0, maxToolCalls);
+        int maxRounds = Math.max(2, safeMaxToolCalls + 2);
+
+        for (int round = 0; round < maxRounds; round++) {
+            HttpRequest.Builder builder = createJsonPostBuilder(
+                    URI.create(buildCompatibleChatUrl(provider.getBaseUrl())),
+                    objectMapper.writeValueAsString(buildCompatibleToolRequestBody(provider, modelName, messages, tools, maxTokens)),
+                    provider,
+                    resolveGenerationTimeoutSeconds(provider),
+                    "application/json"
+            );
+
+            HttpResponse<String> response = httpClient.send(
+                    builder.build(),
+                    HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8)
+            );
+
+            if (response.statusCode() < 200 || response.statusCode() >= 300) {
+                throw new IllegalStateException("模型服务返回异常状态码：" + response.statusCode() + " " + compactError(response.body()));
+            }
+
+            JsonNode root = objectMapper.readTree(response.body());
+            JsonNode firstChoice = getFirstChoice(root);
+            if (firstChoice == null) {
+                throw new IllegalStateException("模型服务没有返回可用结果");
+            }
+
+            JsonNode assistantMessage = firstChoice.path("message");
+            List<ToolCallRequest> toolRequests = extractToolCallRequests(assistantMessage);
+            String content = extractCompatibleContent(root).trim();
+
+            if (toolRequests.isEmpty()) {
+                if (!StringUtils.hasText(content)) {
+                    throw new IllegalStateException("模型服务没有返回可用文本");
+                }
+                return new ToolExecutionResult(content, List.copyOf(traces));
+            }
+
+            messages.add(buildAssistantToolCallMessage(assistantMessage, content));
+            for (ToolCallRequest toolRequest : toolRequests) {
+                String resultJson;
+                if (traces.size() >= safeMaxToolCalls) {
+                    resultJson = writeToolErrorJson("max_tool_calls_exceeded", "工具调用次数已达到上限");
+                } else {
+                    resultJson = executeToolSafely(toolExecutor, toolRequest);
+                }
+                traces.add(new ToolCallTrace(
+                        toolRequest.id(),
+                        toolRequest.name(),
+                        toolRequest.argumentsJson(),
+                        resultJson
+                ));
+                messages.add(buildToolResultMessage(toolRequest.id(), resultJson));
+            }
+        }
+
+        throw new IllegalStateException("模型在工具调用后仍未返回最终决策结果");
+    }
+
     private HttpRequest.Builder createJsonPostBuilder(
             URI uri,
             String payload,
@@ -666,6 +778,29 @@ public class AIProviderServiceImpl extends ServiceImpl<AIProviderMapper, AIProvi
         return requestBody;
     }
 
+    private ObjectNode buildCompatibleToolRequestBody(
+            AIProvider provider,
+            String modelName,
+            ArrayNode messages,
+            List<ToolDefinition> tools,
+            Integer maxTokens) throws IOException {
+        ObjectNode requestBody = objectMapper.createObjectNode();
+        requestBody.put("model", modelName);
+        requestBody.set("messages", messages);
+        requestBody.put("temperature", resolveTemperature(provider, null));
+        if (provider.getTopP() != null) {
+            requestBody.put("top_p", provider.getTopP());
+        }
+        requestBody.put("max_tokens", resolveMaxTokens(provider, maxTokens));
+        requestBody.put("stream", false);
+        requestBody.put("tool_choice", "auto");
+        requestBody.set("tools", buildToolDefinitions(tools));
+        if ("ollama".equalsIgnoreCase(provider.getProviderType())) {
+            requestBody.put("reasoning_effort", "none");
+        }
+        return requestBody;
+    }
+
     private ArrayNode buildMessages(String systemPrompt, String userPrompt) {
         ArrayNode messages = objectMapper.createArrayNode();
 
@@ -684,6 +819,80 @@ public class AIProviderServiceImpl extends ServiceImpl<AIProviderMapper, AIProvi
         return messages;
     }
 
+    private ArrayNode buildToolDefinitions(List<ToolDefinition> tools) throws IOException {
+        ArrayNode toolArray = objectMapper.createArrayNode();
+        for (ToolDefinition tool : tools) {
+            if (tool == null || !StringUtils.hasText(tool.name())) {
+                continue;
+            }
+            ObjectNode toolNode = objectMapper.createObjectNode();
+            toolNode.put("type", "function");
+            ObjectNode functionNode = toolNode.putObject("function");
+            functionNode.put("name", tool.name().trim());
+            functionNode.put("description", StringUtils.hasText(tool.description()) ? tool.description().trim() : "");
+            String inputSchemaJson = StringUtils.hasText(tool.inputSchemaJson())
+                    ? tool.inputSchemaJson().trim()
+                    : "{\"type\":\"object\",\"properties\":{},\"additionalProperties\":false}";
+            functionNode.set("parameters", objectMapper.readTree(inputSchemaJson));
+            toolArray.add(toolNode);
+        }
+        return toolArray;
+    }
+
+    private List<ToolCallRequest> extractToolCallRequests(JsonNode assistantMessage) throws IOException {
+        JsonNode toolCallsNode = assistantMessage.path("tool_calls");
+        if (!toolCallsNode.isArray() || toolCallsNode.isEmpty()) {
+            return List.of();
+        }
+
+        List<ToolCallRequest> requests = new ArrayList<>();
+        for (JsonNode item : toolCallsNode) {
+            String id = item.path("id").asText("");
+            JsonNode functionNode = item.path("function");
+            String name = functionNode.path("name").asText("");
+            if (!StringUtils.hasText(id) || !StringUtils.hasText(name)) {
+                continue;
+            }
+
+            JsonNode argumentsNode = functionNode.path("arguments");
+            String argumentsJson;
+            if (argumentsNode.isTextual()) {
+                argumentsJson = argumentsNode.asText("{}");
+            } else if (argumentsNode.isObject() || argumentsNode.isArray()) {
+                argumentsJson = objectMapper.writeValueAsString(argumentsNode);
+            } else {
+                argumentsJson = "{}";
+            }
+            requests.add(new ToolCallRequest(id, name.trim(), argumentsJson));
+        }
+        return requests;
+    }
+
+    private ObjectNode buildAssistantToolCallMessage(JsonNode assistantMessage, String content) {
+        ObjectNode message = objectMapper.createObjectNode();
+        message.put("role", "assistant");
+        if (assistantMessage != null) {
+            JsonNode toolCallsNode = assistantMessage.path("tool_calls");
+            if (toolCallsNode.isArray() && !toolCallsNode.isEmpty()) {
+                message.set("tool_calls", toolCallsNode.deepCopy());
+            }
+        }
+        if (StringUtils.hasText(content)) {
+            message.put("content", content);
+        } else {
+            message.putNull("content");
+        }
+        return message;
+    }
+
+    private ObjectNode buildToolResultMessage(String toolCallId, String resultJson) {
+        ObjectNode message = objectMapper.createObjectNode();
+        message.put("role", "tool");
+        message.put("tool_call_id", toolCallId);
+        message.put("content", StringUtils.hasText(resultJson) ? resultJson : "{}");
+        return message;
+    }
+
     private String extractOllamaContent(JsonNode root) {
         String content = root.path("message").path("content").asText("");
         if (!hasRawText(content)) {
@@ -698,7 +907,7 @@ public class AIProviderServiceImpl extends ServiceImpl<AIProviderMapper, AIProvi
             return "";
         }
 
-        String content = firstChoice.path("message").path("content").asText("");
+        String content = extractMessageContent(firstChoice.path("message"));
         if (!hasRawText(content)) {
             content = firstChoice.path("text").asText("");
         }
@@ -714,14 +923,41 @@ public class AIProviderServiceImpl extends ServiceImpl<AIProviderMapper, AIProvi
             return "";
         }
 
-        String delta = firstChoice.path("delta").path("content").asText("");
+        String delta = extractMessageContent(firstChoice.path("delta"));
         if (!hasRawText(delta)) {
-            delta = firstChoice.path("message").path("content").asText("");
+            delta = extractMessageContent(firstChoice.path("message"));
         }
         if (!hasRawText(delta)) {
             delta = firstChoice.path("text").asText("");
         }
         return delta;
+    }
+
+    private String extractMessageContent(JsonNode messageNode) {
+        if (messageNode == null || messageNode.isMissingNode() || messageNode.isNull()) {
+            return "";
+        }
+        JsonNode contentNode = messageNode.path("content");
+        if (contentNode.isTextual()) {
+            return contentNode.asText("");
+        }
+        if (contentNode.isArray()) {
+            StringBuilder builder = new StringBuilder();
+            for (JsonNode item : contentNode) {
+                if (item == null || item.isNull()) {
+                    continue;
+                }
+                String type = item.path("type").asText("");
+                if (!StringUtils.hasText(type) || "text".equals(type)) {
+                    String text = item.path("text").asText(item.asText(""));
+                    if (hasRawText(text)) {
+                        builder.append(text);
+                    }
+                }
+            }
+            return builder.toString();
+        }
+        return contentNode.asText("");
     }
 
     private JsonNode getFirstChoice(JsonNode root) {
@@ -769,6 +1005,34 @@ public class AIProviderServiceImpl extends ServiceImpl<AIProviderMapper, AIProvi
 
     private boolean hasRawText(String value) {
         return value != null && !value.isEmpty();
+    }
+
+    private String executeToolSafely(Function<ToolCallRequest, String> toolExecutor, ToolCallRequest request) {
+        try {
+            String result = toolExecutor.apply(request);
+            return StringUtils.hasText(result) ? result.trim() : "{}";
+        } catch (Exception exception) {
+            return writeToolErrorJson("tool_execution_failed", exception.getMessage());
+        }
+    }
+
+    private String writeToolErrorJson(String code, String message) {
+        try {
+            ObjectNode error = objectMapper.createObjectNode();
+            error.put("error", code);
+            error.put("message", StringUtils.hasText(message) ? message.trim() : "工具执行失败");
+            return objectMapper.writeValueAsString(error);
+        } catch (Exception exception) {
+            return "{\"error\":\"" + code + "\"}";
+        }
+    }
+
+    private String compactError(String responseBody) {
+        if (!StringUtils.hasText(responseBody)) {
+            return "";
+        }
+        String compact = responseBody.replaceAll("\\s+", " ").trim();
+        return compact.length() > 240 ? compact.substring(0, 240) + "..." : compact;
     }
 
     private double resolveTemperature(AIProvider provider, Double overrideTemperature) {

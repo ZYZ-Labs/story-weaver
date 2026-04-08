@@ -201,7 +201,38 @@ export interface AIWritingRecord {
   selectedProviderId?: number | null
   selectedModel?: string
   promptSnapshot?: string
+  directorDecisionId?: number | null
   status?: string
+  createTime?: string
+}
+
+export interface AIDirectorDecisionRequest {
+  chapterId: number
+  currentContent?: string
+  userInstruction?: string
+  writingType?: string
+  entryPoint?: string
+  sourceType?: string
+  forceRefresh?: boolean
+  selectedProviderId?: number | null
+  selectedModel?: string
+}
+
+export interface AIDirectorDecision {
+  id: number
+  projectId?: number | null
+  chapterId: number
+  sourceType?: string
+  entryPoint?: string
+  stage?: string
+  writingMode?: string
+  targetWordCount?: number | null
+  decisionSummary?: string
+  decisionPack?: Record<string, unknown> | null
+  selectedProviderId?: number | null
+  selectedModel?: string
+  status?: string
+  errorMessage?: string
   createTime?: string
 }
 
