@@ -3,7 +3,7 @@ FROM node:20-alpine AS build
 WORKDIR /app/front
 
 COPY front/package.json front/package-lock.json ./
-RUN npm ci
+RUN npm ci --registry=https://registry.npmmirror.com --verbose
 
 COPY front/ ./
 
