@@ -218,6 +218,36 @@ export interface AIDirectorDecisionRequest {
   selectedModel?: string
 }
 
+export interface AIDirectorSelectedModule {
+  module: string
+  weight?: number | null
+  required?: boolean
+  topK?: number | null
+  fields?: string[]
+}
+
+export interface AIDirectorDecisionPack {
+  version?: string
+  chapterId?: number | null
+  projectId?: number | null
+  entryPoint?: string
+  stage?: string
+  writingMode?: string
+  targetWordCount?: number | null
+  decisionSummary?: string
+  selectedModules?: AIDirectorSelectedModule[]
+  requiredFacts?: string[]
+  prohibitedMoves?: string[]
+  writerHints?: string[]
+}
+
+export interface AIDirectorToolTrace {
+  id?: string
+  name?: string
+  argumentsJson?: string
+  resultJson?: string
+}
+
 export interface AIDirectorDecision {
   id: number
   projectId?: number | null
@@ -228,7 +258,8 @@ export interface AIDirectorDecision {
   writingMode?: string
   targetWordCount?: number | null
   decisionSummary?: string
-  decisionPack?: Record<string, unknown> | null
+  decisionPack?: AIDirectorDecisionPack | null
+  toolTrace?: AIDirectorToolTrace[] | null
   selectedProviderId?: number | null
   selectedModel?: string
   status?: string

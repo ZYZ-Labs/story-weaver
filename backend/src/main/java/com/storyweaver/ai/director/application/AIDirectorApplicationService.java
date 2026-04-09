@@ -7,5 +7,7 @@ public interface AIDirectorApplicationService {
 
     AIDirectorDecisionVO decide(Long userId, AIDirectorDecisionRequestDTO requestDTO);
 
+    AIDirectorDecisionVO getDecision(Long userId, Long decisionId);
+
     AIDirectorDecisionVO getLatestDecision(Long userId, Long chapterId);
 }

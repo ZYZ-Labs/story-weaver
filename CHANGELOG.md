@@ -1,5 +1,32 @@
 # Changelog
 
+## 2026-04-09
+
+### AI Director
+
+- 新增 AI 总导决策精确查询接口 `GET /api/ai-director/{decisionId}`，前端可按生成记录绑定的 `directorDecisionId` 读取本轮真实决策，而不是回退到章节级最新记录猜测。
+- 写作中心与章节页补齐“本轮总导”只读摘要卡片，展示阶段、模式、目标字数、模块选择、硬约束、禁止事项、写作提示和工具调用调试信息。
+- 流式工作流日志补齐 `director` 阶段语义；当开启 `ai.director.debug_expose_decision` 时，会输出总导概览、决策摘要、已选模块、约束和工具调用日志。
+- AI 写作流式前端修正 `complete` 事件的最终记录返回，避免 SSE 在拿到最终记录后继续等待导致结果丢失。
+
+### Workflow UX
+
+- 补齐 AI 写作工作流的 `prepare`、`context` 阶段中文映射。
+- 在修订稿通过 `replace` 事件覆盖正文时，追加“已应用修订稿”的显式日志提示。
+- 统一写作中心和章节页初稿助手的工作流说明文案，确保两处展示语义一致。
+
+### Docs & Archive
+
+- 更新 `docs/agent-context.md`、AI 总导需求/进度文档，当前主线收敛到真实兼容 Provider 的 tool calling 联调。
+- 将已完成的 `REQ-20260408-writing-workflow-ui-bug` 需求、计划、进度文档转入 `docs/archive/`。
+- 归档旧版顶层计划文档，保留历史背景但不再作为恢复入口。
+
+### Verification
+
+- 通过 `mvn -f backend/pom.xml -DskipTests compile` 验证后端编译。
+- 通过 `cd front && npm run build` 验证前端构建。
+- 前端构建仍存在现有 chunk size warning，但不影响本次功能交付。
+
 ## 2026-04-03
 
 ### Plan Status

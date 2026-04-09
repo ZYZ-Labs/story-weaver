@@ -208,6 +208,15 @@ public class AIDirectorApplicationServiceImpl implements AIDirectorApplicationSe
         return decision == null ? null : toVO(decision, extractDecisionSummary(decision.getDecisionPackJson()));
     }
 
+    @Override
+    public AIDirectorDecisionVO getDecision(Long userId, Long decisionId) {
+        if (decisionId == null) {
+            return null;
+        }
+        AIDirectorDecision decision = aiDirectorDecisionMapper.findByIdAndUserId(decisionId, userId);
+        return decision == null ? null : toVO(decision, extractDecisionSummary(decision.getDecisionPackJson()));
+    }
+
     private ModelDecision buildModelDecision(
             Long userId,
             AIDirectorDecisionRequestDTO requestDTO,
@@ -644,6 +653,7 @@ public class AIDirectorApplicationServiceImpl implements AIDirectorApplicationSe
         vo.setTargetWordCount(decision.getTargetWordCount());
         vo.setDecisionSummary(decisionSummary);
         vo.setDecisionPack(readJson(decision.getDecisionPackJson()));
+        vo.setToolTrace(readJson(decision.getToolTraceJson()));
         vo.setSelectedProviderId(decision.getSelectedProviderId());
         vo.setSelectedModel(decision.getSelectedModel());
         vo.setStatus(decision.getStatus());

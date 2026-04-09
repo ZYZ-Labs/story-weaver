@@ -220,10 +220,18 @@ public class AIWritingServiceImpl extends ServiceImpl<AIWritingRecordMapper, AIW
         String selectedModel = selection.model();
         String promptSnapshot = resolvePromptSnapshot(requestDTO.getPromptSnapshot(), writingType);
         Project project = chapter.getProjectId() == null ? null : projectService.getById(chapter.getProjectId());
+        boolean exposeDirectorDebug = getConfiguredBoolean("ai.director.debug_expose_decision", false);
+        if (exposeDirectorDebug) {
+            emitStage(eventConsumer, "director", "started", "正在生成总导决策并选择本轮上下文模块");
+        }
         AIDirectorDecisionVO directorDecision = aiDirectorApplicationService.decide(
                 userId,
                 buildDirectorDecisionRequest(requestDTO, writingType, currentContent, userInstruction)
         );
+        if (exposeDirectorDebug) {
+            emitStage(eventConsumer, "director", "completed", resolveDirectorStageMessage(directorDecision));
+            emitDirectorDecisionLogs(eventConsumer, directorDecision);
+        }
         WritingContextBundle contextBundle = buildContextBundle(
                 userId,
                 project,
@@ -518,6 +526,129 @@ public class AIWritingServiceImpl extends ServiceImpl<AIWritingRecordMapper, AIW
         return parts.isEmpty()
                 ? "背景讨论已检查，但没有提炼出稳定的写作约束"
                 : "已整理背景讨论：" + String.join("，", parts);
+    }
+
+    private String resolveDirectorStageMessage(AIDirectorDecisionVO directorDecision) {
+        if (directorDecision == null) {
+            return "总导决策未返回可用结果";
+        }
+        if ("fallback".equalsIgnoreCase(directorDecision.getStatus())) {
+            return "总导已回退到启发式决策";
+        }
+        return "总导决策已生成并写入本轮创作上下文";
+    }
+
+    private void emitDirectorDecisionLogs(Consumer<AIWritingStreamEventVO> eventConsumer, AIDirectorDecisionVO directorDecision) {
+        if (eventConsumer == null || directorDecision == null) {
+            return;
+        }
+
+        emitLog(eventConsumer, "director", buildDirectorOverviewLog(directorDecision));
+        if (StringUtils.hasText(directorDecision.getDecisionSummary())) {
+            emitLog(eventConsumer, "director", "决策摘要：" + limit(directorDecision.getDecisionSummary(), 220));
+        }
+
+        String moduleLog = buildDirectorModuleLog(directorDecision);
+        if (StringUtils.hasText(moduleLog)) {
+            emitLog(eventConsumer, "director", moduleLog);
+        }
+
+        emitDirectorConstraintLog(eventConsumer, "硬约束", readDecisionPackStrings(directorDecision, "requiredFacts"));
+        emitDirectorConstraintLog(eventConsumer, "禁止事项", readDecisionPackStrings(directorDecision, "prohibitedMoves"));
+        emitDirectorConstraintLog(eventConsumer, "写作提示", readDecisionPackStrings(directorDecision, "writerHints"));
+
+        String toolTraceLog = buildDirectorToolTraceLog(directorDecision);
+        if (StringUtils.hasText(toolTraceLog)) {
+            emitLog(eventConsumer, "director", toolTraceLog);
+        }
+
+        if (StringUtils.hasText(directorDecision.getErrorMessage())) {
+            emitLog(eventConsumer, "director", "附加信息：" + limit(directorDecision.getErrorMessage(), 220));
+        }
+    }
+
+    private String buildDirectorOverviewLog(AIDirectorDecisionVO directorDecision) {
+        List<String> parts = new ArrayList<>();
+        if (StringUtils.hasText(directorDecision.getStage())) {
+            parts.add("stage=" + directorDecision.getStage().trim());
+        }
+        if (StringUtils.hasText(directorDecision.getWritingMode())) {
+            parts.add("mode=" + directorDecision.getWritingMode().trim());
+        }
+        if (directorDecision.getTargetWordCount() != null && directorDecision.getTargetWordCount() > 0) {
+            parts.add("target=" + directorDecision.getTargetWordCount());
+        }
+        if (StringUtils.hasText(directorDecision.getStatus())) {
+            parts.add("status=" + directorDecision.getStatus().trim());
+        }
+        if (StringUtils.hasText(directorDecision.getSelectedModel())) {
+            parts.add("model=" + directorDecision.getSelectedModel().trim());
+        }
+        return parts.isEmpty()
+                ? "总导已完成本轮决策。"
+                : "总导概览：" + String.join(" | ", parts);
+    }
+
+    private String buildDirectorModuleLog(AIDirectorDecisionVO directorDecision) {
+        if (directorDecision.getDecisionPack() == null || directorDecision.getDecisionPack().isNull()) {
+            return "";
+        }
+        JsonNode selectedModules = directorDecision.getDecisionPack().path("selectedModules");
+        if (!selectedModules.isArray() || selectedModules.isEmpty()) {
+            return "";
+        }
+
+        List<String> modules = new ArrayList<>();
+        for (JsonNode module : selectedModules) {
+            String moduleName = module.path("module").asText("").trim();
+            if (!StringUtils.hasText(moduleName)) {
+                continue;
+            }
+
+            List<String> details = new ArrayList<>();
+            if (module.path("required").asBoolean(false)) {
+                details.add("required");
+            }
+            if (module.hasNonNull("weight")) {
+                details.add("w=" + module.path("weight").asDouble());
+            }
+            if (module.hasNonNull("topK")) {
+                details.add("topK=" + module.path("topK").asInt());
+            }
+            modules.add(details.isEmpty() ? moduleName : moduleName + "(" + String.join(",", details) + ")");
+        }
+
+        return modules.isEmpty() ? "" : "已选模块：" + limit(String.join("、", modules), 260);
+    }
+
+    private void emitDirectorConstraintLog(
+            Consumer<AIWritingStreamEventVO> eventConsumer,
+            String label,
+            List<String> items) {
+        if (items == null || items.isEmpty()) {
+            return;
+        }
+        emitLog(eventConsumer, "director", label + "：" + limit(String.join("；", items), 240));
+    }
+
+    private String buildDirectorToolTraceLog(AIDirectorDecisionVO directorDecision) {
+        if (directorDecision.getToolTrace() == null || directorDecision.getToolTrace().isNull()) {
+            return "";
+        }
+        JsonNode toolTrace = directorDecision.getToolTrace();
+        if (!toolTrace.isArray() || toolTrace.isEmpty()) {
+            return "";
+        }
+
+        Set<String> toolNames = new LinkedHashSet<>();
+        for (JsonNode trace : toolTrace) {
+            String toolName = trace.path("name").asText("").trim();
+            if (StringUtils.hasText(toolName)) {
+                toolNames.add(toolName);
+            }
+        }
+
+        return toolNames.isEmpty() ? "" : "工具调用：" + String.join("、", toolNames);
     }
 
     private AIWritingResponseVO persistGeneratedRecord(PreparedGenerationContext context, String generatedContent) {
@@ -1257,6 +1388,18 @@ public class AIWritingServiceImpl extends ServiceImpl<AIWritingRecordMapper, AIW
         } catch (NumberFormatException exception) {
             return fallback;
         }
+    }
+
+    private boolean getConfiguredBoolean(String key, boolean fallback) {
+        String value = systemConfigService.getConfigValue(key);
+        if (!StringUtils.hasText(value)) {
+            return fallback;
+        }
+        return switch (value.trim().toLowerCase(Locale.ROOT)) {
+            case "1", "true", "yes", "on" -> true;
+            case "0", "false", "no", "off" -> false;
+            default -> fallback;
+        };
     }
 
     private Long parseLong(String value) {

@@ -3,27 +3,28 @@
 - Req ID: REQ-20260408-ai-director-layer
 - Status: In Progress
 - Created At: 2026-04-08 Asia/Shanghai
-- Updated At: 2026-04-08 Asia/Shanghai
+- Updated At: 2026-04-09 Asia/Shanghai
 
 ## 当前快照
 
-- Current Phase: 真实 tool calling 与设置页入口已落地，进入联调与可视化收尾
-- Current Task: 验证兼容 Provider 的 tool calling 表现，并评估补写作页只读决策摘要
-- Last Completed: 已把 `AIProviderService`、总导工具执行器和前端 director 配置入口打通
-- Next Action: 结合真实 Provider 做一次端到端决策验证，并决定是否在写作页展示最新 `decision pack` 摘要
+- Current Phase: 总导决策摘要与调试日志展示已落地，进入真实 Provider 联调
+- Current Task: 验证兼容 Provider 的 tool calling 表现
+- Last Completed: 已补写作中心与章节页的总导摘要卡片、调试日志展示和按决策 ID 的查询能力
+- Next Action: 结合真实 Provider 做一次端到端决策验证，重点确认 tool call schema 与实际返回稳定性
 - Blockers:
   - 决策层工具调用当前仅支持兼容 `/v1/chat/completions` 的 Provider，真实联调结果仍未知
-  - 决策摘要前端展示还没做，当前只能通过接口和记录表查看
 - Latest Verified:
   - 已实现 `AIProviderService.generateTextWithTools(...)`，支持基于兼容 chat completions 的工具循环
   - 已实现总导工具执行器，覆盖章节快照、大纲、剧情、因果、世界观、人物、背包、知识、背景聊天摘要
   - 已实现总导层模型决策解析与失败回退启发式 fallback
   - 已补前端系统设置中的 director Provider / Model / 开关 / 限制项配置
+  - 已补 `GET /api/ai-director/{decisionId}`，前端可按生成记录精确读取对应总导决策
+  - 已补写作中心与章节页的总导摘要卡片，展示阶段、模式、模块、约束和工具调用调试信息
+  - 已补流式工作流日志中的 `director` 阶段映射，并在开启调试开关时输出总导概览、模块与工具调用日志
   - 已执行 `mvn -f backend/pom.xml -DskipTests compile`，后端编译通过
   - 已执行 `npm run build`，前端构建通过
 - Latest Unverified:
   - 尚未验证真实 Provider 返回的 tool call schema 是否与当前兼容实现完全一致
-  - 尚未补写作页对最新总导决策摘要的只读展示
 
 ## 关键节点记录
 
@@ -148,3 +149,34 @@
 - 下一步:
   - 用真实兼容 Provider 做一次端到端决策验证
   - 评估是否补写作页只读决策摘要
+
+### [2026-04-09 Asia/Shanghai] 完成总导决策摘要与调试日志展示收尾
+- 背景:
+  - 前一阶段已经完成总导层真实 tool calling 和设置页配置，但写作页仍缺少对总导决策的只读展示，调试信息也只能从数据库或接口侧查看。
+- 本次完成:
+  - 新增 `GET /api/ai-director/{decisionId}`，支持按生成记录中的 `directorDecisionId` 精确查询决策详情
+  - 为 `AIDirectorDecisionVO` 暴露 `toolTrace`，前端可直接展示工具调用参数与结果摘要
+  - 新增前端总导摘要卡片，并接入写作中心与章节页两个写作入口
+  - 在流式日志面板补齐 `director` 阶段语义，生成过程中可看到总导概览、约束、模块和工具调用日志
+- 修改文件:
+  - `backend/src/main/java/com/storyweaver/ai/director/application/AIDirectorApplicationService.java`
+  - `backend/src/main/java/com/storyweaver/ai/director/application/impl/AIDirectorApplicationServiceImpl.java`
+  - `backend/src/main/java/com/storyweaver/controller/AIDirectorController.java`
+  - `backend/src/main/java/com/storyweaver/repository/AIDirectorDecisionMapper.java`
+  - `backend/src/main/java/com/storyweaver/domain/vo/AIDirectorDecisionVO.java`
+  - `backend/src/main/java/com/storyweaver/service/impl/AIWritingServiceImpl.java`
+  - `front/src/components/AIDirectorDecisionCard.vue`
+  - `front/src/components/AIProcessLogPanel.vue`
+  - `front/src/views/writing/WritingView.vue`
+  - `front/src/views/chapter/ChapterListView.vue`
+  - `front/src/api/ai-director.ts`
+  - `front/src/api/ai-writing.ts`
+  - `front/src/types/index.ts`
+- 验证:
+  - 执行 `mvn -f backend/pom.xml -DskipTests compile` 成功
+  - 执行 `npm run build` 成功
+- 风险/遗留:
+  - 前端展示已可用，但真实 Provider 是否稳定返回当前兼容的 tool call 结构仍需联调确认
+  - 调试日志默认受 `ai.director.debug_expose_decision` 控制，未开启时主要依赖只读摘要卡片查看结果
+- 下一步:
+  - 用真实兼容 Provider 做一次端到端决策验证

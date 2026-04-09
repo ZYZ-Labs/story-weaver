@@ -40,6 +40,22 @@ public class AIDirectorController {
         return ResponseEntity.ok(Map.of("code", 200, "message", "决策成功", "data", decision));
     }
 
+    @GetMapping("/{decisionId}")
+    public ResponseEntity<Map<String, Object>> getDecision(
+            @PathVariable Long decisionId,
+            @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
+            Authentication authentication) {
+        if (!AuthHeaderSupport.hasValidBearerToken(authorizationHeader)) {
+            return AuthHeaderSupport.unauthorizedResponse();
+        }
+        Long userId = SecurityUtils.getCurrentUserId(authentication);
+        AIDirectorDecisionVO decision = aiDirectorApplicationService.getDecision(userId, decisionId);
+        if (decision == null) {
+            return ResponseEntity.status(404).body(Map.of("code", 404, "message", "总导决策不存在"));
+        }
+        return ResponseEntity.ok(Map.of("code", 200, "message", "获取成功", "data", decision));
+    }
+
     @GetMapping("/chapter/{chapterId}/latest")
     public ResponseEntity<Map<String, Object>> getLatestDecision(
             @PathVariable Long chapterId,

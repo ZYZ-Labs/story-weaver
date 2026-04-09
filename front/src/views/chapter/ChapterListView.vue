@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 
+import AIDirectorDecisionCard from '@/components/AIDirectorDecisionCard.vue'
 import AIProcessLogPanel from '@/components/AIProcessLogPanel.vue'
 import AIWritingChatPanel from '@/components/AIWritingChatPanel.vue'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
@@ -696,7 +697,7 @@ async function confirmDelete() {
                 <MarkdownContent :source="displayChapterAiStreamingContent" empty-text="暂时还没有生成内容。" />
               </div>
               <div v-else class="text-medium-emphasis">
-                生成中的正文会显示在这里。右侧过程日志会先展示准备上下文、背景整理、规划、写作、自检和修订进度，不会让页面看起来像卡住。
+                生成中的正文会显示在这里。右侧过程日志会先展示总导决策、准备上下文、背景整理、规划、写作、自检和修订进度，不会让页面看起来像卡住。
               </div>
             </div>
 
@@ -735,6 +736,13 @@ async function confirmDelete() {
             </div>
           </v-card-text>
         </v-card>
+
+        <AIDirectorDecisionCard
+          v-if="currentPreview"
+          :decision-id="displayChapterAiLatestRecord?.directorDecisionId"
+          :loading="displayChapterAiGenerating"
+          title="本轮总导"
+        />
 
         <AIProcessLogPanel
           v-if="currentPreview"

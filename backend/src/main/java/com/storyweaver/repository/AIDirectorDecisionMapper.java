@@ -21,4 +21,16 @@ public interface AIDirectorDecisionMapper extends BaseMapper<AIDirectorDecision>
     AIDirectorDecision findLatestByChapterIdAndUserId(
             @Param("chapterId") Long chapterId,
             @Param("userId") Long userId);
+
+    @Select("""
+            SELECT *
+            FROM ai_director_decision
+            WHERE id = #{decisionId}
+              AND user_id = #{userId}
+              AND deleted = 0
+            LIMIT 1
+            """)
+    AIDirectorDecision findByIdAndUserId(
+            @Param("decisionId") Long decisionId,
+            @Param("userId") Long userId);
 }

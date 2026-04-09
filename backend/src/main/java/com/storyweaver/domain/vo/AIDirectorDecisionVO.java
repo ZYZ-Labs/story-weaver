@@ -28,6 +28,8 @@ public class AIDirectorDecisionVO {
 
     private JsonNode decisionPack;
 
+    private JsonNode toolTrace;
+
     private Long selectedProviderId;
 
     private String selectedModel;

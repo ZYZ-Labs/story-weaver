@@ -3,7 +3,7 @@
 - Req ID: REQ-20260408-writing-workflow-ui-bug
 - Status: Fixed
 - Created At: 2026-04-08 Asia/Shanghai
-- Updated At: 2026-04-08 Asia/Shanghai
+- Updated At: 2026-04-09 Asia/Shanghai
 
 ## 背景
 
@@ -57,3 +57,4 @@
 - [2026-04-08 Asia/Shanghai] 已确认问题更偏向“工作流语义反馈不足”和“修订应用缺乏可见性”，而非流式正文完全无法更新。
 - [2026-04-08 Asia/Shanghai] 已进入代码修复阶段，优先修改共享流状态与日志面板，确保写作中心和章节页同时受益。
 - [2026-04-08 Asia/Shanghai] 已完成前端修复并通过 `npm run build` 验证，当前问题进入已修复状态。
+- [2026-04-09 Asia/Shanghai] 修复已提交到 git，提交号为 `b9c797d`，相关需求/计划/进度文档转入归档。
