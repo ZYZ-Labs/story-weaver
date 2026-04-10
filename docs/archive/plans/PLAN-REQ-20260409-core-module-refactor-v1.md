@@ -2,9 +2,9 @@
 
 - Req ID: REQ-20260409-core-module-refactor
 - Plan Version: v1
-- Status: In Progress
+- Status: Archived
 - Created At: 2026-04-09 Asia/Shanghai
-- Updated At: 2026-04-09 Asia/Shanghai
+- Updated At: 2026-04-10 Asia/Shanghai
 
 ## 实施范围
 

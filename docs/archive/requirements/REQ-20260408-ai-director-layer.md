@@ -1,9 +1,9 @@
 # AI 总导编排层
 
 - Req ID: REQ-20260408-ai-director-layer
-- Status: In Progress
+- Status: Archived
 - Created At: 2026-04-08 Asia/Shanghai
-- Updated At: 2026-04-09 Asia/Shanghai
+- Updated At: 2026-04-10 Asia/Shanghai
 
 ## 背景
 
@@ -75,3 +75,4 @@
 - [2026-04-08 Asia/Shanghai] 已完成 v1 第一批后端骨架：决策记录表结构、实体/Mapper/DTO/VO、最小决策服务与接口、系统配置与模型路由接入。
 - [2026-04-08 Asia/Shanghai] 已接入 provider 级真实 tool calling、总导工具白名单和模型决策解析，并在系统设置页暴露 director 专属 Provider / Model / 限制项配置。
 - [2026-04-09 Asia/Shanghai] 确认 v1 继续补齐写作中心与章节页的只读总导摘要，以及基于 `ai.director.debug_expose_decision` 的调试日志可视化，不等待真实 Provider 联调后再做。
+- [2026-04-10 Asia/Shanghai] 该需求文档归档。已实现部分继续保留在系统中，但后续主线不再以“独立总导层扩展”为核心，而转向 `REQ-20260409-generation-reliability-refactor` 的生成可靠性与故事锚点治理。

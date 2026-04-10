@@ -1,16 +1,16 @@
 # Story 核心模块重构 进度记录
 
 - Req ID: REQ-20260409-core-module-refactor
-- Status: In Progress
+- Status: Archived
 - Created At: 2026-04-09 Asia/Shanghai
-- Updated At: 2026-04-09 Asia/Shanghai
+- Updated At: 2026-04-10 Asia/Shanghai
 
 ## 当前快照
 
-- Current Phase: Step 2 AI 读取链路第一批适配已落地，待进入联调与行为验证阶段
-- Current Task: 继续核对 AI 写作上下文 / 总导工具对新结构的命中情况，并补端到端验证
-- Last Completed: 已完成 AI 写作 prompt 与总导工具的第一批新结构适配，使 `outlineId / storyBeat / POV / roleType / 世界观关联` 开始进入 AI 读取链路
-- Next Action: 结合真实章节数据验证 AI 写作与总导决策的上下文命中，并收口剩余兼容细节
+- Current Phase: 已归档，相关结构改造保留为底层资产
+- Current Task: 无
+- Last Completed: 已完成第一批后端结构改造、前端兼容改造与 AI 读取链路适配
+- Next Action: 后续如继续利用这些结构成果，统一并入 `REQ-20260409-generation-reliability-refactor`
 - Blockers:
   - 暂无硬阻塞；主要风险在于旧 CSV / JSON 数据迁移质量
 - Latest Verified:
@@ -35,6 +35,24 @@
   - 尚未实际执行 `012/013/014` 脚本
   - 尚未做浏览器侧手工回归验证，当前仅完成构建验证
   - AI 写作上下文与 AI 总导层虽已开始读取新结构，但尚未做真实章节场景的行为验证
+
+### [2026-04-10 Asia/Shanghai] 归档 Story 核心模块重构主线文档
+- 背景:
+  - 用户要求后续只保留“生成可靠性与故事锚点重构”为主线，原有底层结构化重构文档改为归档参考。
+- 本次完成:
+  - 归档 requirement / plan / mapping / progress 文档
+  - 保留已落地的字段、关系表和兼容逻辑作为后续主线的实现基础
+- 修改文件:
+  - `docs/archive/requirements/REQ-20260409-core-module-refactor.md`
+  - `docs/archive/plans/PLAN-REQ-20260409-core-module-refactor-v1.md`
+  - `docs/archive/plans/PLAN-REQ-20260409-core-module-refactor-mapping-v1.md`
+  - `docs/archive/progress/PROGRESS-REQ-20260409-core-module-refactor.md`
+- 验证:
+  - 已确认原需求中已落地的结构化成果，仍可作为新主线的底层依赖
+- 风险/遗留:
+  - 结构改造相关 SQL 与真实数据回填仍未正式执行
+- 下一步:
+  - 以“减法、对话式采集、结构化摘要沉淀”为方向修订新主线计划
 
 ## 关键节点记录
 

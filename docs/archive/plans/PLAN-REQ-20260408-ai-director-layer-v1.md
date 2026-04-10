@@ -2,9 +2,9 @@
 
 - Req ID: REQ-20260408-ai-director-layer
 - Plan Version: v1
-- Status: In Progress
+- Status: Archived
 - Created At: 2026-04-08 Asia/Shanghai
-- Updated At: 2026-04-08 Asia/Shanghai
+- Updated At: 2026-04-10 Asia/Shanghai
 
 ## 实施范围
 

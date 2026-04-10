@@ -2,9 +2,9 @@
 
 - Req ID: REQ-20260409-core-module-refactor
 - Mapping Version: v1
-- Status: Drafted
+- Status: Archived
 - Created At: 2026-04-09 Asia/Shanghai
-- Updated At: 2026-04-09 Asia/Shanghai
+- Updated At: 2026-04-10 Asia/Shanghai
 
 ## 目标
 

@@ -1,16 +1,16 @@
 # AI 总导编排层 进度记录
 
 - Req ID: REQ-20260408-ai-director-layer
-- Status: In Progress
+- Status: Archived
 - Created At: 2026-04-08 Asia/Shanghai
-- Updated At: 2026-04-09 Asia/Shanghai
+- Updated At: 2026-04-10 Asia/Shanghai
 
 ## 当前快照
 
-- Current Phase: 总导决策摘要与调试日志展示已落地，进入真实 Provider 联调
-- Current Task: 验证兼容 Provider 的 tool calling 表现
-- Last Completed: 已补写作中心与章节页的总导摘要卡片、调试日志展示和按决策 ID 的查询能力
-- Next Action: 结合真实 Provider 做一次端到端决策验证，重点确认 tool call schema 与实际返回稳定性
+- Current Phase: 已归档，相关实现保留但不再作为当前主线推进
+- Current Task: 无
+- Last Completed: 已完成总导层主链路接入、配置接入和可视化展示
+- Next Action: 如需继续治理真实 Provider 兼容性，统一并入 `REQ-20260409-generation-reliability-refactor`
 - Blockers:
   - 决策层工具调用当前仅支持兼容 `/v1/chat/completions` 的 Provider，真实联调结果仍未知
 - Latest Verified:
@@ -25,6 +25,23 @@
   - 已执行 `npm run build`，前端构建通过
 - Latest Unverified:
   - 尚未验证真实 Provider 返回的 tool call schema 是否与当前兼容实现完全一致
+
+### [2026-04-10 Asia/Shanghai] 归档 AI 总导层主线文档
+- 背景:
+  - 用户要求将其余 requirement / plan / progress 文档归档，后续以“生成可靠性与故事锚点重构”为唯一主线继续推进。
+- 本次完成:
+  - 归档 AI 总导层 requirement / plan / progress 文档
+  - 保留已实现能力，但不再以“继续扩展总导层”为主线推进
+- 修改文件:
+  - `docs/archive/requirements/REQ-20260408-ai-director-layer.md`
+  - `docs/archive/plans/PLAN-REQ-20260408-ai-director-layer-v1.md`
+  - `docs/archive/progress/PROGRESS-REQ-20260408-ai-director-layer.md`
+- 验证:
+  - 已确认线上真实样本的主要问题已从“是否有总导”转为“生成可靠性与故事锚点不足”
+- 风险/遗留:
+  - 真实 Provider 的 tool-calling 兼容问题仍存在，但后续按新主线统一治理
+- 下一步:
+  - 由 `REQ-20260409-generation-reliability-refactor` 接管相关遗留问题
 
 ## 关键节点记录
 

@@ -2,9 +2,9 @@
 
 - Req ID: REQ-20260409-generation-reliability-refactor
 - Plan Version: v1
-- Status: Planned
+- Status: Archived
 - Created At: 2026-04-09 Asia/Shanghai
-- Updated At: 2026-04-09 Asia/Shanghai
+- Updated At: 2026-04-10 Asia/Shanghai
 
 ## 实施范围
 
