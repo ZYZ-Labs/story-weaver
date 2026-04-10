@@ -37,7 +37,7 @@ public class AIDirectorController {
         }
         Long userId = SecurityUtils.getCurrentUserId(authentication);
         AIDirectorDecisionVO decision = aiDirectorApplicationService.decide(userId, requestDTO);
-        return ResponseEntity.ok(Map.of("code", 200, "message", "决策成功", "data", decision));
+        return ResponseEntity.ok(Map.of("code", 200, "message", "决策完成", "data", decision));
     }
 
     @GetMapping("/{decisionId}")

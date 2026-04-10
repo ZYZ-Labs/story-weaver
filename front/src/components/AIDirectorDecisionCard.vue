@@ -137,6 +137,7 @@ function formatWritingMode(value?: string | null) {
 
 function formatStatus(value?: string | null) {
   const mapping: Record<string, string> = {
+    tool_success: '工具决策成功',
     generated: '已生成',
     applied: '已应用',
     fallback: '回退',
@@ -183,6 +184,11 @@ function formatTraceBody(value?: string) {
   }
   return normalized.length > 500 ? `${normalized.slice(0, 500)}...` : normalized
 }
+
+function formatFallbackMessage() {
+  const reason = decision.value?.failureReason || decision.value?.errorMessage
+  return reason ? `本轮总导回退到了启发式决策。原因：${reason}` : '本轮总导回退到了启发式决策。'
+}
 </script>
 
 <template>
@@ -213,6 +219,10 @@ function formatTraceBody(value?: string) {
 
         <div class="text-body-2 mt-4">
           {{ decision.decisionSummary || decisionPack?.decisionSummary || '本轮总导没有返回额外摘要。' }}
+        </div>
+
+        <div v-if="decision.selectedAnchorSummary" class="text-caption text-medium-emphasis mt-2">
+          {{ decision.selectedAnchorSummary }}
         </div>
 
         <div class="text-caption text-medium-emphasis mt-3">
@@ -261,15 +271,15 @@ function formatTraceBody(value?: string) {
         </div>
 
         <v-alert
-          v-if="decision.status === 'fallback' || decision.errorMessage"
+          v-if="decision.mode === 'fallback' || decision.status === 'fallback' || decision.failureReason || decision.errorMessage"
           type="warning"
           variant="tonal"
           class="mt-4"
         >
           {{
-            decision.status === 'fallback'
-              ? '本轮总导回退到了启发式决策。'
-              : decision.errorMessage
+            decision.mode === 'fallback' || decision.status === 'fallback'
+              ? formatFallbackMessage()
+              : decision.failureReason || decision.errorMessage
           }}
         </v-alert>
 
@@ -278,7 +288,7 @@ function formatTraceBody(value?: string) {
             <v-expansion-panel-title>
               调试日志
               <span class="text-caption text-medium-emphasis ml-2">
-                {{ toolTrace.length }} 次工具调用
+                {{ decision.toolCallCount ?? toolTrace.length }} 次工具调用
                 <template v-if="toolNames.length">· {{ toolNames.join('、') }}</template>
               </span>
             </v-expansion-panel-title>

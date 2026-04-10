@@ -36,7 +36,15 @@ public class AIDirectorDecisionVO {
 
     private String status;
 
+    private String mode;
+
     private String errorMessage;
+
+    private String failureReason;
+
+    private String selectedAnchorSummary;
+
+    private Integer toolCallCount;
 
     private LocalDateTime createTime;
 }

@@ -132,7 +132,17 @@ public class AIDirectorApplicationServiceImpl implements AIDirectorApplicationSe
         String errorMessage = null;
 
         if (!isDirectorEnabled()) {
-            assembled = buildHeuristicDecision(chapter, outline, requestDTO, entryPoint, heuristicStage, writingMode, hasBackgroundContext);
+            assembled = buildHeuristicDecision(
+                    chapter,
+                    outline,
+                    requestDTO,
+                    entryPoint,
+                    heuristicStage,
+                    writingMode,
+                    hasBackgroundContext,
+                    List.of(),
+                    true
+            );
             finalStage = heuristicStage;
             finalWritingMode = writingMode;
             status = "fallback";
@@ -165,13 +175,28 @@ public class AIDirectorApplicationServiceImpl implements AIDirectorApplicationSe
                 );
                 finalStage = modelDecision.stage();
                 finalWritingMode = modelDecision.writingMode();
-                status = "generated";
+                status = "tool_success";
             } catch (Exception exception) {
-                assembled = buildHeuristicDecision(chapter, outline, requestDTO, entryPoint, heuristicStage, writingMode, hasBackgroundContext);
+                List<AIProviderService.ToolCallTrace> fallbackToolTraces = exception instanceof DirectorDecisionException directorException
+                        ? directorException.toolTraces()
+                        : List.of();
+                assembled = buildHeuristicDecision(
+                        chapter,
+                        outline,
+                        requestDTO,
+                        entryPoint,
+                        heuristicStage,
+                        writingMode,
+                        hasBackgroundContext,
+                        fallbackToolTraces,
+                        false
+                );
                 finalStage = heuristicStage;
                 finalWritingMode = writingMode;
                 status = "fallback";
-                errorMessage = compactError(exception.getMessage());
+                errorMessage = exception instanceof DirectorDecisionException directorException
+                        ? compactError(directorException.getMessage(), directorException.rawResponse())
+                        : compactError(exception.getMessage(), null);
             }
         }
 
@@ -248,15 +273,20 @@ public class AIDirectorApplicationServiceImpl implements AIDirectorApplicationSe
                 getConfiguredInt("ai.director.max_tool_calls", 4),
                 toolRequest -> directorToolExecutor.execute(toolContext, toolRequest)
         );
-        return parseModelDecision(
-                result.finalText(),
-                chapter,
-                outline,
-                heuristicStage,
-                writingMode,
-                hasBackgroundContext,
-                result.toolCalls()
-        );
+        List<AIProviderService.ToolCallTrace> toolTraces = result.toolCalls() == null ? List.of() : result.toolCalls();
+        try {
+            return parseModelDecision(
+                    result.finalText(),
+                    chapter,
+                    outline,
+                    heuristicStage,
+                    writingMode,
+                    hasBackgroundContext,
+                    toolTraces
+            );
+        } catch (Exception exception) {
+            throw new DirectorDecisionException(exception.getMessage(), result.finalText(), toolTraces, exception);
+        }
     }
 
     private ModelDecision parseModelDecision(
@@ -322,17 +352,42 @@ public class AIDirectorApplicationServiceImpl implements AIDirectorApplicationSe
             String entryPoint,
             String stage,
             String writingMode,
-            boolean hasBackgroundContext) {
+            boolean hasBackgroundContext,
+            List<AIProviderService.ToolCallTrace> toolTraces,
+            boolean disabledMode) {
         List<DirectorDecisionPackAssembler.DirectorModuleSelection> selectedModules = selectModules(chapter, outline, stage, hasBackgroundContext);
-        return directorDecisionPackAssembler.assemble(
+        DirectorDecisionPackAssembler.DecisionDefaults defaults = directorDecisionPackAssembler.createDefaults(
                 chapter,
                 outline,
-                requestDTO,
+                stage,
+                writingMode,
+                hasBackgroundContext
+        );
+        String decisionSummary = disabledMode
+                ? directorDecisionPackAssembler.buildDecisionSummary(stage, writingMode, selectedModules, hasBackgroundContext)
+                : "总导已执行真实模型决策，但最终返回格式不可解析，当前回退到启发式 decision pack。";
+
+        Object toolTracePayload = (toolTraces == null || toolTraces.isEmpty())
+                ? List.of(Map.of(
+                "mode", "heuristic",
+                "message", disabledMode
+                        ? "当前版本使用后端规则生成 decision pack。"
+                        : "真实模型返回不可解析结果，当前已退回启发式 decision pack。"
+        ))
+                : toolTraces;
+
+        return directorDecisionPackAssembler.assembleResolvedDecision(
+                chapter,
                 entryPoint,
                 stage,
                 writingMode,
+                defaults.targetWordCount(),
                 selectedModules,
-                hasBackgroundContext
+                defaults.requiredFacts(),
+                defaults.prohibitedMoves(),
+                defaults.writerHints(),
+                decisionSummary,
+                toolTracePayload
         );
     }
 
@@ -643,11 +698,15 @@ public class AIDirectorApplicationServiceImpl implements AIDirectorApplicationSe
         return StringUtils.hasText(value) ? value.trim() : fallback;
     }
 
-    private String compactError(String message) {
+    private String compactError(String message, String rawResponse) {
         if (!StringUtils.hasText(message)) {
             return "总导层生成失败，已退回启发式 fallback。";
         }
         String compact = message.replaceAll("\\s+", " ").trim();
+        String responsePreview = previewResponse(rawResponse);
+        if (StringUtils.hasText(responsePreview)) {
+            compact = compact + " | response=" + responsePreview;
+        }
         return compact.length() > 240 ? compact.substring(0, 240) + "..." : compact;
     }
 
@@ -662,12 +721,19 @@ public class AIDirectorApplicationServiceImpl implements AIDirectorApplicationSe
         vo.setWritingMode(decision.getWritingMode());
         vo.setTargetWordCount(decision.getTargetWordCount());
         vo.setDecisionSummary(decisionSummary);
-        vo.setDecisionPack(readJson(decision.getDecisionPackJson()));
-        vo.setToolTrace(readJson(decision.getToolTraceJson()));
+        JsonNode decisionPack = readJson(decision.getDecisionPackJson());
+        JsonNode toolTrace = readJson(decision.getToolTraceJson());
+        String normalizedStatus = normalizeDecisionStatus(decision.getStatus());
+        vo.setDecisionPack(decisionPack);
+        vo.setToolTrace(toolTrace);
         vo.setSelectedProviderId(decision.getSelectedProviderId());
         vo.setSelectedModel(decision.getSelectedModel());
-        vo.setStatus(decision.getStatus());
+        vo.setStatus(normalizedStatus);
+        vo.setMode(normalizedStatus);
         vo.setErrorMessage(decision.getErrorMessage());
+        vo.setFailureReason(decision.getErrorMessage());
+        vo.setSelectedAnchorSummary(buildSelectedAnchorSummary(decisionPack));
+        vo.setToolCallCount(countToolCalls(toolTrace));
         vo.setCreateTime(decision.getCreateTime());
         return vo;
     }
@@ -687,6 +753,111 @@ public class AIDirectorApplicationServiceImpl implements AIDirectorApplicationSe
         JsonNode decisionPack = readJson(decisionPackJson);
         JsonNode summaryNode = decisionPack.path("decisionSummary");
         return summaryNode.isMissingNode() || summaryNode.isNull() ? "" : summaryNode.asText("");
+    }
+
+    private String normalizeDecisionStatus(String rawStatus) {
+        if (!StringUtils.hasText(rawStatus)) {
+            return "";
+        }
+        String normalized = rawStatus.trim().toLowerCase(Locale.ROOT);
+        return switch (normalized) {
+            case "generated", "tool_success" -> "tool_success";
+            case "fallback" -> "fallback";
+            default -> rawStatus.trim();
+        };
+    }
+
+    private String buildSelectedAnchorSummary(JsonNode decisionPack) {
+        if (decisionPack == null || decisionPack.isNull() || decisionPack.isMissingNode()) {
+            return "";
+        }
+
+        List<String> parts = new ArrayList<>();
+        String stage = decisionPack.path("stage").asText("").trim();
+        if (StringUtils.hasText(stage)) {
+            parts.add("阶段 " + stage);
+        }
+
+        JsonNode selectedModules = decisionPack.path("selectedModules");
+        if (selectedModules.isArray() && !selectedModules.isEmpty()) {
+            List<String> moduleNames = new ArrayList<>();
+            for (JsonNode module : selectedModules) {
+                String moduleName = module.path("module").asText("").trim();
+                if (StringUtils.hasText(moduleName)) {
+                    moduleNames.add(moduleName);
+                }
+            }
+            if (!moduleNames.isEmpty()) {
+                parts.add("模块 " + String.join("、", moduleNames));
+            }
+        }
+
+        JsonNode requiredFacts = decisionPack.path("requiredFacts");
+        if (requiredFacts.isArray() && !requiredFacts.isEmpty()) {
+            List<String> factSummaries = new ArrayList<>();
+            for (JsonNode fact : requiredFacts) {
+                if (factSummaries.size() >= 2) {
+                    break;
+                }
+                String value = fact.asText("").trim();
+                if (StringUtils.hasText(value)) {
+                    factSummaries.add(value);
+                }
+            }
+            if (!factSummaries.isEmpty()) {
+                parts.add("约束 " + String.join("；", factSummaries));
+            }
+        }
+        return String.join(" | ", parts);
+    }
+
+    private int countToolCalls(JsonNode toolTrace) {
+        if (toolTrace == null || toolTrace.isNull() || !toolTrace.isArray()) {
+            return 0;
+        }
+        int count = 0;
+        for (JsonNode trace : toolTrace) {
+            String name = trace.path("name").asText("").trim();
+            if (StringUtils.hasText(name)) {
+                count++;
+            }
+        }
+        return count;
+    }
+
+    private String previewResponse(String rawResponse) {
+        if (!StringUtils.hasText(rawResponse)) {
+            return "";
+        }
+        String normalized = structuredJsonSupport.stripJsonMarkdown(rawResponse).replaceAll("\\s+", " ").trim();
+        if (!StringUtils.hasText(normalized)) {
+            return "";
+        }
+        return normalized.length() > 80 ? normalized.substring(0, 80) + "..." : normalized;
+    }
+
+    private static final class DirectorDecisionException extends RuntimeException {
+
+        private final String rawResponse;
+        private final List<AIProviderService.ToolCallTrace> toolTraces;
+
+        private DirectorDecisionException(
+                String message,
+                String rawResponse,
+                List<AIProviderService.ToolCallTrace> toolTraces,
+                Throwable cause) {
+            super(message, cause);
+            this.rawResponse = rawResponse;
+            this.toolTraces = toolTraces == null ? List.of() : List.copyOf(toolTraces);
+        }
+
+        private String rawResponse() {
+            return rawResponse;
+        }
+
+        private List<AIProviderService.ToolCallTrace> toolTraces() {
+            return toolTraces;
+        }
     }
 
     private record ModelDecision(

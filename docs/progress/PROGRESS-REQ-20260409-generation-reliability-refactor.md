@@ -7,14 +7,13 @@
 
 ## 当前快照
 
-- Current Phase: 已完成主线收口，并进一步确认 `chat / generate` 的职责边界
-- Current Task: 准备进入 Step 1，先固定最小作者模型、摘要建议包协议、章节锚点模型、进度预测结果模型，以及聊天采集到最终生成的交接规则
-- Last Completed: 已根据 2026-04-10 的进一步讨论，把“按钮触发式进度预测”纳入专家 / 开发者模式范围，并确认正文主链不是持续会话式生成
-- Next Action: 先落 `SummarySuggestionPack / ChapterAnchorBundle / GenerationReadinessVO / StoryProgressSuggestionVO` 的协议和服务骨架
-- Next Action: 把“`chat` 采集澄清、`summary` 待确认、`generate` 最终成稿”的边界正式落实到接口与服务设计
+- Current Phase: Step 8 检查器已落地，等待真实项目复验
+- Current Task: 等部署后以 `旧日王座` 跑一致性检查报告并做端到端回归
+- Last Completed: 已新增 `StoryConsistencyInspector` 与项目级一致性报告接口
+- Next Action: 部署后调用 `/api/projects/{projectId}/story-consistency`，核对主角命名、POV、剧情推进和 trace 完整性
 - Blockers:
-  - 真实 Provider 下总导仍返回无效 JSON，兼容问题尚未定位到具体协议细节
-  - 需要在实现前确定摘要建议是复用现有聊天能力，还是独立做轻量整理助手
+  - Step 6 到 Step 8 的修复尚未部署到真实环境，`旧日王座` 样本还没有完成回归验证
+  - `StoryConsistencyInspector` 目前只有后端接口，还未接独立前端入口
 - Latest Verified:
   - 线上项目 `旧日王座` 的项目、世界观、大纲、人物、章节、剧情、因果数据已实际核对
   - 线上 `story.refactor.v1.*` 开关当前全部为 `false`
@@ -29,10 +28,60 @@
   - 已代码级确认：`/api/ai-writing/*` 主链是多阶段 `generate` 流水线，不是持续会话式正文生成
   - 已代码级确认：现有聊天子系统主要通过 `buildParticipationContext` 方式为生成链路提供背景摘要，而非直接复用实时会话
   - 已确认专家模式可以作为交互层级开关开放给普通作者主动启用
+  - 已新增 `com.storyweaver.story.generation` 包，落地 Step 1 的 4 个协议对象和 4 个最小服务骨架
+  - 已新增摘要建议接口：
+    - `/api/projects/{projectId}/story-brief/suggest`
+    - `/api/projects/{projectId}/characters/suggest`
+    - `/api/projects/{projectId}/chapters/{chapterId}/brief/suggest`
+  - 已新增统一确认写回接口：
+    - `/api/structured-summaries/apply`
+  - 已新增进度预测接口：
+    - `/api/projects/{projectId}/outlines/progress-suggest`
+    - `/api/projects/{projectId}/plotlines/progress-suggest`
+    - `/api/projects/{projectId}/chapters/progress-suggest`
+  - 已新增章节 readiness 与锚点接口：
+    - `/api/projects/{projectId}/chapters/{chapterId}/generation-readiness`
+    - `/api/projects/{projectId}/chapters/{chapterId}/anchors`
+  - 已增强 `StructuredJsonSupport.readRoot`，支持从混合文本中提取首个平衡 JSON 对象 / 数组
+  - 已增强 `AIDirectorApplicationServiceImpl`：
+    - 总导成功状态统一为 `tool_success`
+    - fallback 会保留真实 `toolTrace`
+    - fallback 原因会带上紧凑错误和响应预览
+    - 历史 `generated` 状态在 VO 层统一映射为 `tool_success`
+  - 已增强 `AIDirectorDecisionVO` 与前端类型：
+    - `mode`
+    - `failureReason`
+    - `selectedAnchorSummary`
+    - `toolCallCount`
+  - 已增强总导卡片展示：
+    - UI 可区分 `tool_success / fallback`
+    - fallback 时直接展示回退原因
+    - 调试日志可显示工具调用次数
+  - 已增强 `AIWritingRecord / AIWritingResponseVO`，新增 `generation_trace_json / generationTrace`
+  - 已增强 `AIWritingServiceImpl`：
+    - `prepareGeneration` 会先评估 generation readiness
+    - 生成 prompt 会显式携带章节锚点快照和 readiness 提示
+    - 生成记录会持久化 readiness / anchors / director / summaryTrace
+  - 已增强 `DatabaseMigrationInitializer`，启动时可自动补齐 `ai_writing_record.generation_trace_json`
+  - 已增强写作页：
+    - 最近一次生成可看到 readiness、总导模式和锚点摘要
+    - 日志语义已统一为“生成流水线日志”
+  - 已增强章节页日志文案，避免继续误判为持续聊天式正文生成
+  - 已新增 `StoryConsistencyInspector / StoryConsistencyReportVO / StoryConsistencyIssueVO`
+  - 已新增项目级一致性报告接口：
+    - `/api/projects/{projectId}/story-consistency`
+  - 一致性检查器当前可检查：
+    - 人物命名漂移风险
+    - POV 锚点缺失
+    - story beat 缺失
+    - 总导 fallback
+    - generation trace 不完整
+  - 已通过 `npm run type-check`
+  - 已完成多轮 `mvn -Dmaven.repo.local=/usr/local/project/github/story-weaver/.cache/m2 -f backend/pom.xml -DskipTests compile`
 - Latest Unverified:
-- 尚未对 DeepSeek 兼容协议做代码级修正验证
-- 尚未实现摘要建议 / 确认写回 / readiness / anchor pack / observability 增强
-- 尚未把工作流日志语义和真实执行模型对齐到前端展示
+  - 尚未在部署环境用真实 Provider 回归验证 Step 6 修复
+  - 前端尚未接入新的摘要建议 / 进度预测 / readiness / anchors 接口
+  - 尚未在 `旧日王座` 上调用新的 inspector 并完成端到端一致性复验
 
 ## 关键节点记录
 
@@ -137,3 +186,178 @@
   - 如果后续仍把聊天记录直接当正文生成输入，系统会继续保留“看似可补救，实则不可追踪”的不稳定性
 - 下一步:
   - 在 Step 1 固定交接协议，在 Step 7 修正写作页和日志展示语义
+
+### [2026-04-10 Asia/Shanghai] 完成 Step 1 后端协议对象与最小服务骨架
+
+- 背景:
+  - 用户要求先将文档主线调整提交 git 留档，再正式启动重构计划的 Step 1。
+- 本次完成:
+  - 提交文档归档与计划修订，commit 为 `ac8b6cf`
+  - 新增 `SummarySuggestionPack`
+  - 新增 `ChapterAnchorBundle`
+  - 新增 `GenerationReadinessVO`
+  - 新增 `StoryProgressSuggestionVO`
+  - 新增 `ConversationSummaryService`
+  - 新增 `ChapterAnchorResolver`
+  - 新增 `GenerationReadinessService`
+  - 新增 `StoryProgressPredictor`
+  - 为 `ChapterAnchorResolver`、`GenerationReadinessService`、`StoryProgressPredictor` 提供最小可运行实现
+  - 为 `ConversationSummaryService` 提供规则预整理骨架
+- 修改文件:
+  - `backend/src/main/java/com/storyweaver/story/generation/SummarySuggestionPack.java`
+  - `backend/src/main/java/com/storyweaver/story/generation/ChapterAnchorBundle.java`
+  - `backend/src/main/java/com/storyweaver/story/generation/GenerationReadinessVO.java`
+  - `backend/src/main/java/com/storyweaver/story/generation/StoryProgressSuggestionVO.java`
+  - `backend/src/main/java/com/storyweaver/story/generation/ConversationSummaryService.java`
+  - `backend/src/main/java/com/storyweaver/story/generation/ChapterAnchorResolver.java`
+  - `backend/src/main/java/com/storyweaver/story/generation/GenerationReadinessService.java`
+  - `backend/src/main/java/com/storyweaver/story/generation/StoryProgressPredictor.java`
+  - `backend/src/main/java/com/storyweaver/story/generation/impl/ConversationSummaryServiceImpl.java`
+  - `backend/src/main/java/com/storyweaver/story/generation/impl/ChapterAnchorResolverImpl.java`
+  - `backend/src/main/java/com/storyweaver/story/generation/impl/GenerationReadinessServiceImpl.java`
+  - `backend/src/main/java/com/storyweaver/story/generation/impl/StoryProgressPredictorImpl.java`
+- 验证:
+  - 已通过 `mvn -Dmaven.repo.local=/usr/local/project/github/story-weaver/.cache/m2 -f backend/pom.xml -DskipTests compile`
+- 风险/遗留:
+  - `ConversationSummaryService` 当前仍是规则预整理，不是模型驱动摘要
+  - `StoryProgressPredictor` 当前为启发式判断，后续需结合真实样本再调参
+  - `GenerationReadinessService` 还未接到现有接口与前端页面
+- 下一步:
+  - 进入 Step 2，新增摘要建议接口与确认写回接口
+
+### [2026-04-10 Asia/Shanghai] 完成 Step 2 到 Step 5 的后端接口接入
+
+- 背景:
+  - Step 1 的 generation 协议和最小服务骨架已经完成，接下来需要把摘要建议、确认写回、进度预测、章节 readiness 与 anchors 真正暴露成可调用后端接口。
+- 本次完成:
+  - 新增 `SummarySuggestionRequestDTO`
+  - 新增 `StructuredSummaryApplyRequestDTO`
+  - 新增 `StoryProgressSuggestRequestDTO`
+  - 新增 `ChapterAnchorUpdateRequestDTO`
+  - 新增 `StructuredSummaryApplyService` 与 `StructuredSummaryApplyResult`
+  - 新增 `ChapterAnchorWriteService` 与 `ChapterAnchorUpdateResult`
+  - 新增 `StructuredSummaryController`
+  - 新增 `StoryProgressController`
+  - 新增 `ChapterGenerationController`
+  - 将项目 / 人物 / 章节摘要建议接口接到 `ConversationSummaryService`
+  - 将统一确认写回接口接到 `StructuredSummaryApplyService`
+  - 将进度预测接口接到 `StoryProgressPredictor`
+  - 将 readiness / anchors 查询与 anchors 写回接到 `GenerationReadinessService / ChapterAnchorResolver / ChapterAnchorWriteService`
+- 修改文件:
+  - `backend/src/main/java/com/storyweaver/domain/dto/SummarySuggestionRequestDTO.java`
+  - `backend/src/main/java/com/storyweaver/domain/dto/StructuredSummaryApplyRequestDTO.java`
+  - `backend/src/main/java/com/storyweaver/domain/dto/StoryProgressSuggestRequestDTO.java`
+  - `backend/src/main/java/com/storyweaver/domain/dto/ChapterAnchorUpdateRequestDTO.java`
+  - `backend/src/main/java/com/storyweaver/story/generation/StructuredSummaryApplyResult.java`
+  - `backend/src/main/java/com/storyweaver/story/generation/StructuredSummaryApplyService.java`
+  - `backend/src/main/java/com/storyweaver/story/generation/ChapterAnchorUpdateResult.java`
+  - `backend/src/main/java/com/storyweaver/story/generation/ChapterAnchorWriteService.java`
+  - `backend/src/main/java/com/storyweaver/story/generation/impl/StructuredSummaryApplyServiceImpl.java`
+  - `backend/src/main/java/com/storyweaver/story/generation/impl/ChapterAnchorWriteServiceImpl.java`
+  - `backend/src/main/java/com/storyweaver/controller/StructuredSummaryController.java`
+  - `backend/src/main/java/com/storyweaver/controller/StoryProgressController.java`
+  - `backend/src/main/java/com/storyweaver/controller/ChapterGenerationController.java`
+- 验证:
+  - 已通过 `mvn -Dmaven.repo.local=/usr/local/project/github/story-weaver/.cache/m2 -f backend/pom.xml -DskipTests compile`
+- 风险/遗留:
+  - `StructuredSummaryApplyService` 当前使用规则化字段映射，尚未引入更细的字段冲突检测
+  - `StoryProgressPredictor` 仍为启发式版本
+  - 前端尚未接入这批接口
+- 下一步:
+  - 进入 Step 6，开始治理总导真实兼容性与 fallback 语义
+
+### [2026-04-10 Asia/Shanghai] 完成 Step 6 总导兼容性与 fallback 可见性治理
+
+- 背景:
+  - `旧日王座` 线上样本显示 6 条总导记录全部 `fallback`，错误一致为“总导层返回内容不是有效 JSON”；需要先把真实模型调用和启发式回退明确区分，并把失败原因透给前后端。
+- 本次完成:
+  - 增强 `StructuredJsonSupport.readRoot`，支持从混合文本中提取首个平衡 JSON 片段
+  - 调整 `AIDirectorApplicationServiceImpl`
+  - 总导成功状态改为 `tool_success`
+  - fallback 时保留真实工具调用轨迹，不再全部覆盖成纯启发式日志
+  - fallback 错误补充紧凑响应预览，便于定位真实 Provider 返回问题
+  - 在 VO 层补充 `mode / failureReason / selectedAnchorSummary / toolCallCount`
+  - 前端总导卡片可区分 `tool_success / fallback`，并直接显示回退原因和工具调用次数
+  - 总导接口返回文案从“决策成功”调整为“决策完成”
+- 修改文件:
+  - `backend/src/main/java/com/storyweaver/ai/application/support/StructuredJsonSupport.java`
+  - `backend/src/main/java/com/storyweaver/ai/director/application/impl/AIDirectorApplicationServiceImpl.java`
+  - `backend/src/main/java/com/storyweaver/domain/vo/AIDirectorDecisionVO.java`
+  - `backend/src/main/java/com/storyweaver/controller/AIDirectorController.java`
+  - `front/src/types/index.ts`
+  - `front/src/components/AIDirectorDecisionCard.vue`
+- 验证:
+  - 已通过 `mvn -Dmaven.repo.local=/usr/local/project/github/story-weaver/.cache/m2 -f backend/pom.xml -DskipTests compile`
+  - 已通过 `cd front && npm run type-check`
+  - 已通过 `git diff --check`
+- 风险/遗留:
+  - 这轮只完成了代码级兼容与可见性治理，还未在真实部署环境复验 DeepSeek / 实际 Provider 返回
+  - 写作主链仍未消费新的总导可观测字段与章节锚点摘要
+- 下一步:
+  - 进入 Step 7，把 readiness、anchor snapshot、summary trace 和总导模式显式接入写作链路与日志展示
+
+### [2026-04-10 Asia/Shanghai] 完成 Step 7 写作链路追踪与日志语义对齐
+
+- 背景:
+  - Step 6 已解决总导 `tool_success / fallback` 语义，但写作主链仍然无法回答“本次生成到底消费了哪些锚点、就绪度如何、背景摘要有没有参与”，同时前端仍容易把多阶段生成误解为持续聊天。
+- 本次完成:
+  - 为 `ai_writing_record` 新增 `generation_trace_json` 持久化字段
+  - 为 `AIWritingRecord / AIWritingResponseVO / front/src/types` 新增 generation trace 结构
+  - 在 `AIWritingServiceImpl.prepareGeneration` 中接入 `GenerationReadinessService`
+  - 在写作 prompt 中增加“章节锚点快照”与“生成就绪度”段落
+  - 在生成记录中持久化：
+    - readiness
+    - anchors
+    - director mode / summary
+    - summaryTrace / chatParticipation 计数
+  - 写作页增加本轮 trace 摘要展示
+  - `AIProcessLogPanel` 与写作页、章节页文案统一调整为“生成流水线日志”
+- 修改文件:
+  - `backend/src/main/java/com/storyweaver/domain/entity/AIWritingRecord.java`
+  - `backend/src/main/java/com/storyweaver/domain/vo/AIWritingResponseVO.java`
+  - `backend/src/main/java/com/storyweaver/config/DatabaseMigrationInitializer.java`
+  - `backend/src/main/java/com/storyweaver/service/impl/AIWritingServiceImpl.java`
+  - `front/src/types/index.ts`
+  - `front/src/components/AIProcessLogPanel.vue`
+  - `front/src/views/writing/WritingView.vue`
+  - `front/src/views/chapter/ChapterListView.vue`
+- 验证:
+  - 已通过 `mvn -Dmaven.repo.local=/usr/local/project/github/story-weaver/.cache/m2 -f backend/pom.xml -DskipTests compile`
+  - 已通过 `cd front && npm run type-check`
+  - 已通过 `git diff --check`
+- 风险/遗留:
+  - 这轮仍是代码级落地，尚未在真实部署环境验证新 trace 是否能完整反映 `旧日王座` 样本
+  - 摘要建议 / 进度预测 / readiness / anchors 的独立前端入口还未接入
+- 下一步:
+  - 进入 Step 8，实现 `StoryConsistencyInspector` 并结合 `旧日王座` 做端到端一致性回归
+
+### [2026-04-10 Asia/Shanghai] 完成 Step 8 的一致性检查器后端落地
+
+- 背景:
+  - Step 7 已让生成链路可回放，但还缺一个项目级视角来集中回答“哪些章节最不稳、具体为什么不稳”，也无法在部署后快速对 `旧日王座` 做一致性回归。
+- 本次完成:
+  - 新增 `StoryConsistencyInspector`
+  - 新增 `StoryConsistencyReportVO`
+  - 新增 `StoryConsistencyIssueVO`
+  - 新增 `StoryConsistencyController`
+  - 新增项目级接口 `/api/projects/{projectId}/story-consistency`
+  - 检查器当前可分析：
+    - 人物命名漂移风险
+    - POV 锚点缺失
+    - story beat 缺失
+    - 总导 fallback 率
+    - generation trace 完整度
+- 修改文件:
+  - `backend/src/main/java/com/storyweaver/story/generation/StoryConsistencyInspector.java`
+  - `backend/src/main/java/com/storyweaver/story/generation/StoryConsistencyIssueVO.java`
+  - `backend/src/main/java/com/storyweaver/story/generation/StoryConsistencyReportVO.java`
+  - `backend/src/main/java/com/storyweaver/story/generation/impl/StoryConsistencyInspectorImpl.java`
+  - `backend/src/main/java/com/storyweaver/controller/StoryConsistencyController.java`
+- 验证:
+  - 已通过 `mvn -Dmaven.repo.local=/usr/local/project/github/story-weaver/.cache/m2 -f backend/pom.xml -DskipTests compile`
+  - 已通过 `git diff --check`
+- 风险/遗留:
+  - 这轮只完成了检查器和报告接口，尚未在真实部署环境对 `旧日王座` 跑新报告
+  - 检查器目前以“项目内可验证信号”为主，还不是全文语义级角色识别器
+- 下一步:
+  - 等部署后直接调用 inspector 接口，结合 `旧日王座` 做新的端到端一致性复验

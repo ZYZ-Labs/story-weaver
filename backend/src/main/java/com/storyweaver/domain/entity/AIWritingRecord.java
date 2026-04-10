@@ -36,6 +36,8 @@ public class AIWritingRecord {
 
     private Long directorDecisionId;
 
+    private String generationTraceJson;
+
     private String status;
 
     @TableField(fill = FieldFill.INSERT)
@@ -125,6 +127,14 @@ public class AIWritingRecord {
 
     public void setDirectorDecisionId(Long directorDecisionId) {
         this.directorDecisionId = directorDecisionId;
+    }
+
+    public String getGenerationTraceJson() {
+        return generationTraceJson;
+    }
+
+    public void setGenerationTraceJson(String generationTraceJson) {
+        this.generationTraceJson = generationTraceJson;
     }
 
     public String getStatus() {

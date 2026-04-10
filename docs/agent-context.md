@@ -20,17 +20,19 @@
 ## Current Next Action
 
 - 以 `docs/reports/REPORT-20260409-old-throne-live-review.md` 为问题基线，以 `PLAN-REQ-20260409-generation-reliability-refactor-v2` 为唯一主线继续推进。
-- 下一步先固定最小作者模型、摘要建议包协议与章节锚点模型，避免一边实现一边重新讨论前台到底该暴露什么。
+- Step 8 的 inspector 已落地：项目级一致性报告接口已可用，下一步是在部署后对 `旧日王座` 跑真实回归。
 - 所有后续改动都优先服务于“做减法、对话式采集、摘要确认后结构化沉淀、提高生成可靠性”，而不是继续平行扩模块。
 - 当前已确认正文生成主链是多阶段 `generate` 流水线，而不是持续会话式 chat；后续实现应坚持“`chat` 采集澄清，`generate` 最终成稿”的边界。
 
 ## Current Blockers
 
-- 线上项目 `旧日王座` 的 6 条 `ai_director_decision` 全部为 `fallback`，错误一致为 `总导层返回内容不是有效 JSON`，说明真实 Provider 兼容性未闭环。
+- `旧日王座` 的历史总导记录显示真实 Provider 曾稳定触发 `总导层返回内容不是有效 JSON`；代码级兼容已补，但尚未部署回归。
 - 线上 `story.refactor.v1.*` 开关仍全部为 `false`，历史结构改造尚未真正成为主读路径。
 - 真实项目章节存在锚点缺失：多个章节无 `outline_id` / `main_pov_character_id` / `chapter_character` 绑定，已直接影响生成一致性。
-- 当前需要先确定摘要建议流是复用现有聊天能力，还是独立做轻量整理助手，否则后续接口边界容易反复变动。
-- 当前仍需决定摘要建议入口是复用现有聊天 UI，还是独立做轻量整理助手；但架构边界已经明确，二者都不能直接替代最终正文生成主链。
+- `com.storyweaver.story.generation` 已存在基础协议与服务骨架，后续新增接口应优先复用这层，而不是把逻辑直接散落回 controller 或 `AIWritingServiceImpl`。
+- 新的后端接口已存在但前端尚未接入，包括摘要建议、确认写回、进度预测、章节 readiness 与 anchors。
+- `StoryConsistencyInspector` 已实现，但 `旧日王座` 还没有跑新的端到端回归。
+- inspector 目前只有后端接口 `/api/projects/{projectId}/story-consistency`，还没有独立前端入口。
 
 ## Resume Reading Order
 
@@ -50,3 +52,6 @@
 - 当前首个真实验收样本仍为项目 `旧日王座`（`project.id = 28`）。
 - 该样本已确认存在：总导 100% fallback、章节锚点缺失、人物命名漂移、结构开关未切到主读路径等问题。
 - 本需求的旧版计划 `PLAN-REQ-20260409-generation-reliability-refactor-v1.md` 已归档，当前有效计划为 `v2`。
+- Step 6 已完成代码级兼容治理：总导成功统一为 `tool_success`，fallback 保留真实 tool trace，并在前端暴露 failure reason。
+- Step 7 已完成代码级接入：写作记录新增 `generation_trace_json`，写作 prompt 显式带入 readiness 与 anchor snapshot，前端日志统一改为“生成流水线”语义。
+- Step 8 已完成检查器后端落地：可按项目查看人物命名漂移风险、POV 缺失、story beat 缺失、总导 fallback 和 generation trace 完整度。

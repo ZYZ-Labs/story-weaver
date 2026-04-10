@@ -12,7 +12,7 @@ const props = withDefaults(
   {
     logs: () => [],
     loading: false,
-    title: '过程日志',
+    title: '生成流水线日志',
   },
 )
 
@@ -107,7 +107,7 @@ function formatMeta(item: AIWritingStreamLogItem) {
         </div>
       </div>
       <div v-else class="text-medium-emphasis">
-        模型在总导决策、准备上下文、整理背景、规划、写作、自检和修订时，阶段更新会显示在这里。
+        这里展示的是一次结果导向的生成流水线，不是持续会话式正文聊天。总导、准备、背景整理、规划、写作、自检和修订的阶段更新都会显示在这里。
       </div>
     </v-card-text>
   </v-card>

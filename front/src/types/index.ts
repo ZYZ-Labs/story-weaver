@@ -210,6 +210,48 @@ export interface AIWritingStreamState {
   logs: AIWritingStreamLogItem[]
 }
 
+export interface AIWritingGenerationTrace {
+  readiness?: {
+    score?: number
+    status?: string
+    blockingIssues?: string[]
+    warnings?: string[]
+    recommendedModules?: string[]
+  }
+  anchors?: {
+    chapterOutlineId?: number | null
+    volumeOutlineId?: number | null
+    mainPovCharacterId?: number | null
+    mainPovCharacterName?: string
+    requiredCharacterNames?: string[]
+    storyBeatTitles?: string[]
+    relatedWorldSettingNames?: string[]
+    chapterSummary?: string
+    anchorSources?: Record<string, string>
+    anchorSummary?: string
+  }
+  director?: {
+    decisionId?: number | null
+    status?: string
+    mode?: string
+    model?: string
+    decisionSummary?: string
+    selectedAnchorSummary?: string
+  }
+  summaryTrace?: {
+    promptSnapshotPreview?: string
+    userInstructionPreview?: string
+    chatParticipation?: {
+      active?: boolean
+      worldFactsCount?: number
+      characterConstraintsCount?: number
+      plotGuidanceCount?: number
+      writingPreferencesCount?: number
+      hardConstraintsCount?: number
+    }
+  }
+}
+
 export interface AIWritingRecord {
   id: number
   chapterId: number
@@ -221,6 +263,7 @@ export interface AIWritingRecord {
   selectedModel?: string
   promptSnapshot?: string
   directorDecisionId?: number | null
+  generationTrace?: AIWritingGenerationTrace | null
   status?: string
   createTime?: string
 }
@@ -282,7 +325,11 @@ export interface AIDirectorDecision {
   selectedProviderId?: number | null
   selectedModel?: string
   status?: string
+  mode?: string
   errorMessage?: string
+  failureReason?: string
+  selectedAnchorSummary?: string
+  toolCallCount?: number
   createTime?: string
 }
 

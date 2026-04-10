@@ -561,7 +561,7 @@ async function confirmDelete() {
 <template>
   <PageContainer
     title="章节管理"
-    description="维护章节顺序和正文内容，并在右侧直接生成初稿、查看过程日志、沉淀背景聊天。"
+    description="维护章节顺序和正文内容，并在右侧直接生成初稿、查看生成流水线日志、沉淀背景聊天。"
   >
     <template #actions>
       <v-btn color="primary" prepend-icon="mdi-plus" :disabled="!currentProjectId" @click="openCreate">
@@ -804,7 +804,7 @@ async function confirmDelete() {
                 <MarkdownContent :source="displayChapterAiStreamingContent" empty-text="暂时还没有生成内容。" />
               </div>
               <div v-else class="text-medium-emphasis">
-                生成中的正文会显示在这里。右侧过程日志会先展示总导决策、准备上下文、背景整理、规划、写作、自检和修订进度，不会让页面看起来像卡住。
+                生成中的正文会显示在这里。右侧展示的是生成流水线日志，会依次呈现总导、准备、背景整理、规划、写作、自检和修订进度。
               </div>
             </div>
 
@@ -855,7 +855,7 @@ async function confirmDelete() {
           v-if="currentPreview"
           :logs="displayChapterAiLogs"
           :loading="displayChapterAiGenerating"
-          title="初稿工作流日志"
+          title="初稿生成流水线日志"
         />
 
         <AIWritingChatPanel

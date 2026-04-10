@@ -13,7 +13,7 @@ import { useProjectStore } from '@/stores/project'
 import { useProviderStore } from '@/stores/provider'
 import { useSettingsStore } from '@/stores/settings'
 import { useWritingStore } from '@/stores/writing'
-import type { AIWritingRecord } from '@/types'
+import type { AIWritingGenerationTrace, AIWritingRecord } from '@/types'
 import { resolveOutputLengthProfile } from '@/utils/ai-model'
 import { formatDateTime } from '@/utils/format'
 import { readStorage, storageKeys, writeStorage } from '@/utils/storage'
@@ -123,6 +123,9 @@ const displayStreamingContent = computed(() => sharedStreamState.value.content |
 const displayLogs = computed(() => sharedStreamState.value.logs || [])
 const displayLastGeneratedRecord = computed<AIWritingRecord | null>(
   () => sharedStreamState.value.lastRecord || lastGeneratedRecord.value || writingStore.records[0] || null,
+)
+const displayGenerationTrace = computed<AIWritingGenerationTrace | null>(
+  () => displayLastGeneratedRecord.value?.generationTrace || null,
 )
 
 watch(
@@ -301,6 +304,38 @@ function getProviderName(providerId?: number | null) {
   return providerStore.providers.find((item) => item.id === providerId)?.name || '自动选择'
 }
 
+function getReadinessStatusLabel(value?: string) {
+  const mapping: Record<string, string> = {
+    ready: '可生成',
+    warning: '需确认',
+    blocked: '锚点不足',
+  }
+  return mapping[value || ''] || value || '未知'
+}
+
+function getDirectorModeLabel(value?: string) {
+  const mapping: Record<string, string> = {
+    tool_success: '工具决策成功',
+    generated: '工具决策成功',
+    fallback: '启发式回退',
+  }
+  return mapping[value || ''] || value || '未知'
+}
+
+function buildTraceChatSummary(trace?: AIWritingGenerationTrace | null) {
+  const chat = trace?.summaryTrace?.chatParticipation
+  if (!chat?.active) {
+    return ''
+  }
+  return [
+    `世界观 ${chat.worldFactsCount || 0} 条`,
+    `人物约束 ${chat.characterConstraintsCount || 0} 条`,
+    `剧情推进 ${chat.plotGuidanceCount || 0} 条`,
+    `写作偏好 ${chat.writingPreferencesCount || 0} 条`,
+    `硬约束 ${chat.hardConstraintsCount || 0} 条`,
+  ].join('，')
+}
+
 async function generate() {
   if (!chapterStore.currentChapter?.id) {
     return
@@ -370,7 +405,7 @@ async function rejectRecord(record: AIWritingRecord) {
 <template>
   <PageContainer
     title="写作中心"
-    description="在这里发起受控写作流程，并通过过程日志和背景聊天持续补充上下文。"
+    description="在这里发起受控写作流程，并通过生成流水线日志和背景聊天持续补充上下文。"
   >
     <EmptyState
       v-if="!projectId"
@@ -447,12 +482,39 @@ async function rejectRecord(record: AIWritingRecord) {
               <MarkdownContent :source="displayStreamingContent" empty-text="暂时还没有生成内容。" />
             </div>
             <div v-else class="text-medium-emphasis">
-              最终正文会显示在这里。右侧过程日志会先展示总导决策、准备上下文、背景整理、规划、写作、自检和修订进度，不会让页面看起来像卡住。
+              最终正文会显示在这里。右侧展示的是生成流水线日志，会依次呈现总导、准备、背景整理、规划、写作、自检和修订进度。
             </div>
 
             <div v-if="displayLastGeneratedRecord" class="text-caption text-medium-emphasis mt-3">
               最近一次生成：{{ formatDateTime(displayLastGeneratedRecord.createTime) }}
             </div>
+
+            <v-alert v-if="displayGenerationTrace" type="info" variant="tonal" class="mt-3">
+              <div class="d-flex flex-wrap ga-2">
+                <v-chip size="small" color="primary" variant="tonal">
+                  就绪度：{{ getReadinessStatusLabel(displayGenerationTrace.readiness?.status) }}
+                  <template v-if="displayGenerationTrace.readiness?.score !== undefined">
+                    / {{ displayGenerationTrace.readiness?.score }}
+                  </template>
+                </v-chip>
+                <v-chip
+                  v-if="displayGenerationTrace.director?.mode"
+                  size="small"
+                  color="secondary"
+                  variant="tonal"
+                >
+                  总导：{{ getDirectorModeLabel(displayGenerationTrace.director?.mode) }}
+                </v-chip>
+              </div>
+
+              <div v-if="displayGenerationTrace.anchors?.anchorSummary" class="text-body-2 mt-2">
+                {{ displayGenerationTrace.anchors?.anchorSummary }}
+              </div>
+
+              <div v-if="buildTraceChatSummary(displayGenerationTrace)" class="text-caption text-medium-emphasis mt-2">
+                背景摘要参与：{{ buildTraceChatSummary(displayGenerationTrace) }}
+              </div>
+            </v-alert>
           </v-card-text>
         </v-card>
 
@@ -624,7 +686,7 @@ async function rejectRecord(record: AIWritingRecord) {
         <AIProcessLogPanel
           :logs="displayLogs"
           :loading="displayGenerating"
-          title="工作流日志"
+          title="生成流水线日志"
         />
 
         <AIWritingChatPanel

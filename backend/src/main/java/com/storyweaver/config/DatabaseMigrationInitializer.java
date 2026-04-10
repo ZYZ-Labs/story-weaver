@@ -157,6 +157,11 @@ public class DatabaseMigrationInitializer implements ApplicationRunner {
             ADD INDEX idx_ai_writing_record_director_decision_id (director_decision_id)
             """;
 
+    private static final String ALTER_AI_WRITING_RECORD_ADD_GENERATION_TRACE_JSON_SQL = """
+            ALTER TABLE ai_writing_record
+            ADD COLUMN generation_trace_json JSON NULL
+            """;
+
     private static final String UPSERT_ITEM_PROVIDER_CONFIG_SQL = """
             INSERT INTO system_config (config_key, config_value, description)
             VALUES ('item_ai_provider_id', '', '物品生成默认 Provider ID')
@@ -335,6 +340,8 @@ public class DatabaseMigrationInitializer implements ApplicationRunner {
             boolean aiWritingRecordTableExists = tableExists(connection, "ai_writing_record");
             boolean directorDecisionColumnExists = aiWritingRecordTableExists
                     && columnExists(connection, "ai_writing_record", "director_decision_id");
+            boolean generationTraceColumnExists = aiWritingRecordTableExists
+                    && columnExists(connection, "ai_writing_record", "generation_trace_json");
 
             try (Statement statement = connection.createStatement()) {
                 if (!sessionTableExists) {
@@ -360,6 +367,10 @@ public class DatabaseMigrationInitializer implements ApplicationRunner {
                 if (aiWritingRecordTableExists && !directorDecisionColumnExists) {
                     log.warn("检测到 ai_writing_record.director_decision_id 缺失，开始自动补齐。");
                     statement.execute(ALTER_AI_WRITING_RECORD_ADD_DIRECTOR_DECISION_ID_SQL);
+                }
+                if (aiWritingRecordTableExists && !generationTraceColumnExists) {
+                    log.warn("检测到 ai_writing_record.generation_trace_json 缺失，开始自动补齐。");
+                    statement.execute(ALTER_AI_WRITING_RECORD_ADD_GENERATION_TRACE_JSON_SQL);
                 }
 
                 statement.execute(UPSERT_ITEM_PROVIDER_CONFIG_SQL);

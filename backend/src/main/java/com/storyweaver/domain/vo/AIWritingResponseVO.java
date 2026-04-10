@@ -1,5 +1,6 @@
 package com.storyweaver.domain.vo;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import lombok.Data;
 
 import java.time.LocalDateTime;
@@ -26,6 +27,8 @@ public class AIWritingResponseVO {
     private String promptSnapshot;
 
     private Long directorDecisionId;
+
+    private JsonNode generationTrace;
 
     private String status;
 
@@ -109,6 +112,14 @@ public class AIWritingResponseVO {
 
     public void setDirectorDecisionId(Long directorDecisionId) {
         this.directorDecisionId = directorDecisionId;
+    }
+
+    public JsonNode getGenerationTrace() {
+        return generationTrace;
+    }
+
+    public void setGenerationTrace(JsonNode generationTrace) {
+        this.generationTrace = generationTrace;
     }
 
     public String getStatus() {

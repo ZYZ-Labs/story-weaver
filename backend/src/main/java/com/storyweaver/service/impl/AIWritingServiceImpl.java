@@ -3,7 +3,10 @@ package com.storyweaver.service.impl;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.NullNode;
 import com.storyweaver.ai.director.application.AIDirectorApplicationService;
 import com.storyweaver.domain.dto.AIDirectorDecisionRequestDTO;
 import com.storyweaver.domain.dto.AIWritingRequestDTO;
@@ -37,6 +40,9 @@ import com.storyweaver.service.PlotService;
 import com.storyweaver.service.ProjectService;
 import com.storyweaver.service.SystemConfigService;
 import com.storyweaver.service.WorldSettingService;
+import com.storyweaver.story.generation.ChapterAnchorBundle;
+import com.storyweaver.story.generation.GenerationReadinessService;
+import com.storyweaver.story.generation.GenerationReadinessVO;
 import org.springframework.beans.BeanUtils;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
@@ -74,6 +80,8 @@ public class AIWritingServiceImpl extends ServiceImpl<AIWritingRecordMapper, AIW
     private final AIModelRoutingService aiModelRoutingService;
     private final AIWritingChatService aiWritingChatService;
     private final AIDirectorApplicationService aiDirectorApplicationService;
+    private final GenerationReadinessService generationReadinessService;
+    private final ObjectMapper objectMapper;
 
     public AIWritingServiceImpl(
             ChapterService chapterService,
@@ -89,7 +97,9 @@ public class AIWritingServiceImpl extends ServiceImpl<AIWritingRecordMapper, AIW
             ItemMapper itemMapper,
             AIModelRoutingService aiModelRoutingService,
             AIWritingChatService aiWritingChatService,
-            AIDirectorApplicationService aiDirectorApplicationService) {
+            AIDirectorApplicationService aiDirectorApplicationService,
+            GenerationReadinessService generationReadinessService,
+            ObjectMapper objectMapper) {
         this.chapterService = chapterService;
         this.knowledgeDocumentService = knowledgeDocumentService;
         this.aiProviderService = aiProviderService;
@@ -104,6 +114,8 @@ public class AIWritingServiceImpl extends ServiceImpl<AIWritingRecordMapper, AIW
         this.aiModelRoutingService = aiModelRoutingService;
         this.aiWritingChatService = aiWritingChatService;
         this.aiDirectorApplicationService = aiDirectorApplicationService;
+        this.generationReadinessService = generationReadinessService;
+        this.objectMapper = objectMapper;
     }
 
     @Override
@@ -221,6 +233,10 @@ public class AIWritingServiceImpl extends ServiceImpl<AIWritingRecordMapper, AIW
         String selectedModel = selection.model();
         String promptSnapshot = resolvePromptSnapshot(requestDTO.getPromptSnapshot(), writingType);
         Project project = chapter.getProjectId() == null ? null : projectService.getById(chapter.getProjectId());
+        GenerationReadinessVO readiness = generationReadinessService.evaluate(userId, chapter.getId());
+        ChapterAnchorBundle anchorBundle = readiness.getResolvedAnchors();
+        emitGenerationReadinessLogs(eventConsumer, readiness);
+        emitAnchorSnapshotLog(eventConsumer, anchorBundle);
         boolean exposeDirectorDebug = getConfiguredBoolean("ai.director.debug_expose_decision", false);
         if (exposeDirectorDebug) {
             emitStage(eventConsumer, "director", "started", "正在生成总导决策并选择本轮上下文模块");
@@ -237,6 +253,7 @@ public class AIWritingServiceImpl extends ServiceImpl<AIWritingRecordMapper, AIW
                 userId,
                 project,
                 chapter,
+                anchorBundle,
                 userInstruction,
                 provider,
                 selectedModel,
@@ -252,8 +269,11 @@ public class AIWritingServiceImpl extends ServiceImpl<AIWritingRecordMapper, AIW
                 selectedModel,
                 promptSnapshot,
                 buildSystemPrompt(promptSnapshot),
-                buildUserPrompt(project, chapter, contextBundle, directorDecision, currentContent, writingType, userInstruction),
+                buildUserPrompt(project, chapter, contextBundle, anchorBundle, readiness, directorDecision, currentContent, writingType, userInstruction),
+                contextBundle,
                 directorDecision,
+                readiness,
+                anchorBundle,
                 normalizeMaxTokens(requestDTO.getMaxTokens())
         );
     }
@@ -278,14 +298,17 @@ public class AIWritingServiceImpl extends ServiceImpl<AIWritingRecordMapper, AIW
             Long userId,
             Project project,
             Chapter chapter,
+            ChapterAnchorBundle anchorBundle,
             String userInstruction,
             AIProvider provider,
             String selectedModel,
             Consumer<AIWritingStreamEventVO> eventConsumer) {
-        List<String> requiredCharacters = chapter.getRequiredCharacterNames() == null
-                ? List.of()
-                : chapter.getRequiredCharacterNames();
-        List<CharacterInventorySummary> characterInventories = buildRequiredCharacterInventories(chapter);
+        List<String> requiredCharacters = anchorBundle != null
+                && anchorBundle.getRequiredCharacterNames() != null
+                && !anchorBundle.getRequiredCharacterNames().isEmpty()
+                ? anchorBundle.getRequiredCharacterNames()
+                : chapter.getRequiredCharacterNames() == null ? List.of() : chapter.getRequiredCharacterNames();
+        List<CharacterInventorySummary> characterInventories = buildRequiredCharacterInventories(chapter, anchorBundle);
         AIWritingChatParticipationVO chatParticipation = buildChatParticipationContext(
                 userId,
                 chapter,
@@ -309,6 +332,10 @@ public class AIWritingServiceImpl extends ServiceImpl<AIWritingRecordMapper, AIW
             relatedWorldSettingIds.addAll(currentOutline.getRelatedWorldSettingIdList() == null ? List.of() : currentOutline.getRelatedWorldSettingIdList());
         }
         relatedPlotIds.addAll(chapter.getStoryBeatIds() == null ? List.of() : chapter.getStoryBeatIds());
+        if (anchorBundle != null) {
+            relatedPlotIds.addAll(anchorBundle.getStoryBeatIds() == null ? List.of() : anchorBundle.getStoryBeatIds());
+            relatedWorldSettingIds.addAll(anchorBundle.getRelatedWorldSettingIds() == null ? List.of() : anchorBundle.getRelatedWorldSettingIds());
+        }
 
         List<Plot> allPlots = plotService.getProjectPlots(project.getId());
         Map<Long, Plot> plotMap = allPlots.stream()
@@ -373,6 +400,7 @@ public class AIWritingServiceImpl extends ServiceImpl<AIWritingRecordMapper, AIW
                 safe(chapter.getSummary(), ""),
                 userInstruction,
                 chapter.getStoryBeatTitles() == null ? "" : String.join(" ", chapter.getStoryBeatTitles()),
+                anchorBundle == null || anchorBundle.getStoryBeatTitles() == null ? "" : String.join(" ", anchorBundle.getStoryBeatTitles()),
                 currentOutline == null ? "" : safe(currentOutline.getSummary(), currentOutline.getTitle()),
                 currentOutline == null ? "" : safe(currentOutline.getStageGoal(), ""));
         List<KnowledgeDocument> knowledgeDocuments = StringUtils.hasText(retrievalQuery)
@@ -390,15 +418,16 @@ public class AIWritingServiceImpl extends ServiceImpl<AIWritingRecordMapper, AIW
         );
     }
 
-    private List<CharacterInventorySummary> buildRequiredCharacterInventories(Chapter chapter) {
+    private List<CharacterInventorySummary> buildRequiredCharacterInventories(Chapter chapter, ChapterAnchorBundle anchorBundle) {
         if (chapter == null
                 || chapter.getProjectId() == null
-                || chapter.getRequiredCharacterIds() == null
-                || chapter.getRequiredCharacterIds().isEmpty()) {
+                || anchorBundle == null
+                || anchorBundle.getRequiredCharacterIds() == null
+                || anchorBundle.getRequiredCharacterIds().isEmpty()) {
             return List.of();
         }
 
-        List<Long> characterIds = chapter.getRequiredCharacterIds().stream()
+        List<Long> characterIds = anchorBundle.getRequiredCharacterIds().stream()
                 .filter(Objects::nonNull)
                 .toList();
         if (characterIds.isEmpty()) {
@@ -429,7 +458,7 @@ public class AIWritingServiceImpl extends ServiceImpl<AIWritingRecordMapper, AIW
                         .filter(item -> item != null && !Integer.valueOf(1).equals(item.getDeleted()))
                         .collect(Collectors.toMap(ItemDefinition::getId, item -> item, (left, right) -> left, LinkedHashMap::new));
 
-        Map<Long, String> characterNameMap = buildRequiredCharacterNameMap(chapter);
+        Map<Long, String> characterNameMap = buildRequiredCharacterNameMap(anchorBundle);
         Map<Long, List<String>> itemSummariesByCharacter = new LinkedHashMap<>();
         for (CharacterInventoryItem inventoryItem : inventoryItems) {
             Long characterId = inventoryItem.getCharacterId();
@@ -460,14 +489,14 @@ public class AIWritingServiceImpl extends ServiceImpl<AIWritingRecordMapper, AIW
         return result;
     }
 
-    private Map<Long, String> buildRequiredCharacterNameMap(Chapter chapter) {
+    private Map<Long, String> buildRequiredCharacterNameMap(ChapterAnchorBundle anchorBundle) {
         Map<Long, String> nameMap = new LinkedHashMap<>();
-        List<Long> requiredCharacterIds = chapter.getRequiredCharacterIds() == null
+        List<Long> requiredCharacterIds = anchorBundle == null || anchorBundle.getRequiredCharacterIds() == null
                 ? List.of()
-                : chapter.getRequiredCharacterIds();
-        List<String> requiredCharacterNames = chapter.getRequiredCharacterNames() == null
+                : anchorBundle.getRequiredCharacterIds();
+        List<String> requiredCharacterNames = anchorBundle == null || anchorBundle.getRequiredCharacterNames() == null
                 ? List.of()
-                : chapter.getRequiredCharacterNames();
+                : anchorBundle.getRequiredCharacterNames();
 
         for (int index = 0; index < requiredCharacterIds.size(); index++) {
             Long characterId = requiredCharacterIds.get(index);
@@ -568,12 +597,36 @@ public class AIWritingServiceImpl extends ServiceImpl<AIWritingRecordMapper, AIW
                 : "已整理背景讨论：" + String.join("，", parts);
     }
 
+    private void emitGenerationReadinessLogs(Consumer<AIWritingStreamEventVO> eventConsumer, GenerationReadinessVO readiness) {
+        if (eventConsumer == null || readiness == null) {
+            return;
+        }
+
+        emitLog(eventConsumer, "prepare", "生成就绪度：" + readiness.getStatus() + " / " + readiness.getScore());
+        if (readiness.getBlockingIssues() != null && !readiness.getBlockingIssues().isEmpty()) {
+            emitLog(eventConsumer, "prepare", "阻塞项：" + limit(String.join("；", readiness.getBlockingIssues()), 260));
+        }
+        if (readiness.getWarnings() != null && !readiness.getWarnings().isEmpty()) {
+            emitLog(eventConsumer, "prepare", "预警：" + limit(String.join("；", readiness.getWarnings()), 260));
+        }
+    }
+
+    private void emitAnchorSnapshotLog(Consumer<AIWritingStreamEventVO> eventConsumer, ChapterAnchorBundle anchorBundle) {
+        if (eventConsumer == null || anchorBundle == null) {
+            return;
+        }
+        String summary = buildAnchorSummary(anchorBundle);
+        if (StringUtils.hasText(summary)) {
+            emitLog(eventConsumer, "prepare", "锚点快照：" + limit(summary, 260));
+        }
+    }
+
     private String resolveDirectorStageMessage(AIDirectorDecisionVO directorDecision) {
         if (directorDecision == null) {
             return "总导决策未返回可用结果";
         }
         if ("fallback".equalsIgnoreCase(directorDecision.getStatus())) {
-            return "总导已回退到启发式决策";
+            return "总导已回退到启发式决策，本轮仍继续走生成流水线";
         }
         return "总导决策已生成并写入本轮创作上下文";
     }
@@ -707,6 +760,7 @@ public class AIWritingServiceImpl extends ServiceImpl<AIWritingRecordMapper, AIW
         record.setSelectedModel(context.selectedModel());
         record.setPromptSnapshot(context.promptSnapshot());
         record.setDirectorDecisionId(context.directorDecision() == null ? null : context.directorDecision().getId());
+        record.setGenerationTraceJson(buildGenerationTraceJson(context));
         record.setStatus("draft");
 
         save(record);
@@ -785,6 +839,8 @@ public class AIWritingServiceImpl extends ServiceImpl<AIWritingRecordMapper, AIW
             Project project,
             Chapter chapter,
             WritingContextBundle contextBundle,
+            ChapterAnchorBundle anchorBundle,
+            GenerationReadinessVO readiness,
             AIDirectorDecisionVO directorDecision,
             String currentContent,
             String writingType,
@@ -821,17 +877,24 @@ public class AIWritingServiceImpl extends ServiceImpl<AIWritingRecordMapper, AIW
         if (StringUtils.hasText(chapter.getOutlineTitle())) {
             builder.append("绑定大纲：").append(chapter.getOutlineTitle().trim()).append('\n');
         }
-        if (StringUtils.hasText(chapter.getMainPovCharacterName())) {
-            builder.append("主 POV 人物：").append(chapter.getMainPovCharacterName().trim()).append('\n');
+        String mainPovName = StringUtils.hasText(chapter.getMainPovCharacterName())
+                ? chapter.getMainPovCharacterName().trim()
+                : anchorBundle == null ? "" : safe(anchorBundle.getMainPovCharacterName(), "");
+        if (StringUtils.hasText(mainPovName)) {
+            builder.append("主 POV 人物：").append(mainPovName).append('\n');
         }
-        if (chapter.getStoryBeatTitles() != null && !chapter.getStoryBeatTitles().isEmpty()) {
-            builder.append("剧情节拍：").append(String.join("、", chapter.getStoryBeatTitles())).append('\n');
+        List<String> storyBeatTitles = chapter.getStoryBeatTitles() != null && !chapter.getStoryBeatTitles().isEmpty()
+                ? chapter.getStoryBeatTitles()
+                : anchorBundle == null ? List.of() : anchorBundle.getStoryBeatTitles();
+        if (storyBeatTitles != null && !storyBeatTitles.isEmpty()) {
+            builder.append("剧情节拍：").append(String.join("、", storyBeatTitles)).append('\n');
         }
         if (!contextBundle.requiredCharacters().isEmpty()) {
             builder.append("本章必须出现人物：").append(String.join("、", contextBundle.requiredCharacters())).append('\n');
         }
         appendInlineConstraint(builder, "背景补充人物约束", contextBundle.chatParticipation().getCharacterConstraints());
         appendInlineConstraint(builder, "背景补充硬性约束", contextBundle.chatParticipation().getHardConstraints());
+        appendAnchorSnapshotSection(builder, anchorBundle, readiness);
         builder.append(resolveWritingIntent(writingType));
         appendDirectorDecisionSection(builder, directorDecision);
 
@@ -873,6 +936,40 @@ public class AIWritingServiceImpl extends ServiceImpl<AIWritingRecordMapper, AIW
         }
 
         return builder.toString();
+    }
+
+    private void appendAnchorSnapshotSection(
+            StringBuilder builder,
+            ChapterAnchorBundle anchorBundle,
+            GenerationReadinessVO readiness) {
+        if (anchorBundle == null) {
+            return;
+        }
+
+        builder.append("\n【章节锚点快照】\n");
+        if (anchorBundle.getChapterOutlineId() != null) {
+            builder.append("章纲 ID：").append(anchorBundle.getChapterOutlineId()).append('\n');
+        }
+        if (anchorBundle.getVolumeOutlineId() != null) {
+            builder.append("卷纲 ID：").append(anchorBundle.getVolumeOutlineId()).append('\n');
+        }
+        if (StringUtils.hasText(anchorBundle.getChapterSummary())) {
+            builder.append("章节 brief：").append(limit(anchorBundle.getChapterSummary(), 180)).append('\n');
+        }
+        if (StringUtils.hasText(anchorBundle.getMainPovCharacterName())) {
+            builder.append("稳定 POV：").append(anchorBundle.getMainPovCharacterName().trim()).append('\n');
+        }
+        if (anchorBundle.getRequiredCharacterNames() != null && !anchorBundle.getRequiredCharacterNames().isEmpty()) {
+            builder.append("稳定必出人物：").append(String.join("、", anchorBundle.getRequiredCharacterNames())).append('\n');
+        }
+        if (anchorBundle.getStoryBeatTitles() != null && !anchorBundle.getStoryBeatTitles().isEmpty()) {
+            builder.append("稳定剧情锚点：").append(String.join("、", anchorBundle.getStoryBeatTitles())).append('\n');
+        }
+        if (readiness != null) {
+            builder.append("生成就绪度：").append(readiness.getStatus()).append(" / ").append(readiness.getScore()).append('\n');
+            appendInlineConstraint(builder, "生成前阻塞项", readiness.getBlockingIssues());
+            appendInlineConstraint(builder, "生成前警告", readiness.getWarnings());
+        }
     }
 
     private void appendDirectorDecisionSection(StringBuilder builder, AIDirectorDecisionVO directorDecision) {
@@ -1547,7 +1644,8 @@ public class AIWritingServiceImpl extends ServiceImpl<AIWritingRecordMapper, AIW
 
     private AIWritingResponseVO convertToVO(AIWritingRecord record) {
         AIWritingResponseVO vo = new AIWritingResponseVO();
-        BeanUtils.copyProperties(record, vo);
+        BeanUtils.copyProperties(record, vo, "generationTrace");
+        vo.setGenerationTrace(readJson(record.getGenerationTraceJson()));
         return vo;
     }
 
@@ -1562,9 +1660,116 @@ public class AIWritingServiceImpl extends ServiceImpl<AIWritingRecordMapper, AIW
         target.setSelectedModel(source.getSelectedModel());
         target.setPromptSnapshot(null);
         target.setDirectorDecisionId(source.getDirectorDecisionId());
+        target.setGenerationTrace(source.getGenerationTrace());
         target.setStatus(source.getStatus());
         target.setCreateTime(source.getCreateTime());
         return target;
+    }
+
+    private String buildGenerationTraceJson(PreparedGenerationContext context) {
+        Map<String, Object> root = new LinkedHashMap<>();
+
+        GenerationReadinessVO readiness = context.readiness();
+        if (readiness != null) {
+            Map<String, Object> readinessTrace = new LinkedHashMap<>();
+            readinessTrace.put("score", readiness.getScore());
+            readinessTrace.put("status", readiness.getStatus());
+            readinessTrace.put("blockingIssues", readiness.getBlockingIssues());
+            readinessTrace.put("warnings", readiness.getWarnings());
+            readinessTrace.put("recommendedModules", readiness.getRecommendedModules());
+            root.put("readiness", readinessTrace);
+        }
+
+        ChapterAnchorBundle anchorBundle = context.anchorBundle();
+        if (anchorBundle != null) {
+            Map<String, Object> anchorTrace = new LinkedHashMap<>();
+            anchorTrace.put("chapterOutlineId", anchorBundle.getChapterOutlineId());
+            anchorTrace.put("volumeOutlineId", anchorBundle.getVolumeOutlineId());
+            anchorTrace.put("mainPovCharacterId", anchorBundle.getMainPovCharacterId());
+            anchorTrace.put("mainPovCharacterName", anchorBundle.getMainPovCharacterName());
+            anchorTrace.put("requiredCharacterNames", anchorBundle.getRequiredCharacterNames());
+            anchorTrace.put("storyBeatTitles", anchorBundle.getStoryBeatTitles());
+            anchorTrace.put("relatedWorldSettingNames", anchorBundle.getRelatedWorldSettingNames());
+            anchorTrace.put("chapterSummary", anchorBundle.getChapterSummary());
+            anchorTrace.put("anchorSources", anchorBundle.getAnchorSources());
+            anchorTrace.put("anchorSummary", buildAnchorSummary(anchorBundle));
+            root.put("anchors", anchorTrace);
+        }
+
+        AIDirectorDecisionVO directorDecision = context.directorDecision();
+        if (directorDecision != null) {
+            Map<String, Object> directorTrace = new LinkedHashMap<>();
+            directorTrace.put("decisionId", directorDecision.getId());
+            directorTrace.put("status", directorDecision.getStatus());
+            directorTrace.put("mode", directorDecision.getMode());
+            directorTrace.put("model", directorDecision.getSelectedModel());
+            directorTrace.put("decisionSummary", directorDecision.getDecisionSummary());
+            directorTrace.put("selectedAnchorSummary", directorDecision.getSelectedAnchorSummary());
+            root.put("director", directorTrace);
+        }
+
+        WritingContextBundle contextBundle = context.contextBundle();
+        AIWritingChatParticipationVO participation = contextBundle == null
+                ? AIWritingChatParticipationVO.empty()
+                : contextBundle.chatParticipation();
+        Map<String, Object> summaryTrace = new LinkedHashMap<>();
+        summaryTrace.put("promptSnapshotPreview", preview(context.promptSnapshot(), 180));
+        summaryTrace.put("userInstructionPreview", preview(context.userInstruction(), 180));
+        Map<String, Object> participationTrace = new LinkedHashMap<>();
+        participationTrace.put("active", participation != null && participation.hasContent());
+        participationTrace.put("worldFactsCount", participation == null ? 0 : participation.getWorldFacts().size());
+        participationTrace.put("characterConstraintsCount", participation == null ? 0 : participation.getCharacterConstraints().size());
+        participationTrace.put("plotGuidanceCount", participation == null ? 0 : participation.getPlotGuidance().size());
+        participationTrace.put("writingPreferencesCount", participation == null ? 0 : participation.getWritingPreferences().size());
+        participationTrace.put("hardConstraintsCount", participation == null ? 0 : participation.getHardConstraints().size());
+        summaryTrace.put("chatParticipation", participationTrace);
+        root.put("summaryTrace", summaryTrace);
+
+        try {
+            return objectMapper.writeValueAsString(root);
+        } catch (JsonProcessingException exception) {
+            return "{}";
+        }
+    }
+
+    private JsonNode readJson(String rawJson) {
+        if (!StringUtils.hasText(rawJson)) {
+            return NullNode.getInstance();
+        }
+        try {
+            return objectMapper.readTree(rawJson);
+        } catch (Exception exception) {
+            return NullNode.getInstance();
+        }
+    }
+
+    private String buildAnchorSummary(ChapterAnchorBundle anchorBundle) {
+        if (anchorBundle == null) {
+            return "";
+        }
+
+        List<String> parts = new ArrayList<>();
+        if (StringUtils.hasText(anchorBundle.getMainPovCharacterName())) {
+            parts.add("POV " + anchorBundle.getMainPovCharacterName().trim());
+        }
+        if (anchorBundle.getRequiredCharacterNames() != null && !anchorBundle.getRequiredCharacterNames().isEmpty()) {
+            parts.add("人物 " + String.join("、", anchorBundle.getRequiredCharacterNames()));
+        }
+        if (anchorBundle.getStoryBeatTitles() != null && !anchorBundle.getStoryBeatTitles().isEmpty()) {
+            parts.add("节拍 " + String.join("、", anchorBundle.getStoryBeatTitles()));
+        }
+        if (StringUtils.hasText(anchorBundle.getChapterSummary())) {
+            parts.add("brief " + preview(anchorBundle.getChapterSummary(), 80));
+        }
+        return String.join(" | ", parts);
+    }
+
+    private String preview(String value, int maxLength) {
+        if (!StringUtils.hasText(value)) {
+            return "";
+        }
+        String normalized = value.replaceAll("\\s+", " ").trim();
+        return normalized.length() > maxLength ? normalized.substring(0, maxLength) + "..." : normalized;
     }
 
     private record PreparedGenerationContext(
@@ -1577,7 +1782,10 @@ public class AIWritingServiceImpl extends ServiceImpl<AIWritingRecordMapper, AIW
             String promptSnapshot,
             String systemPrompt,
             String userPrompt,
+            WritingContextBundle contextBundle,
             AIDirectorDecisionVO directorDecision,
+            GenerationReadinessVO readiness,
+            ChapterAnchorBundle anchorBundle,
             Integer maxTokens) {
     }
 
