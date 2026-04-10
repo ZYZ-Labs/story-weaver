@@ -33,7 +33,7 @@ public class DirectorDecisionPackAssembler {
             String writingMode,
             List<DirectorModuleSelection> selectedModules,
             boolean hasBackgroundContext) {
-        DecisionDefaults defaults = createDefaults(chapter, outline, stage, writingMode, hasBackgroundContext);
+        DecisionDefaults defaults = createDefaults(chapter, outline, requestDTO, stage, writingMode, hasBackgroundContext);
         return assembleResolvedDecision(
                 chapter,
                 entryPoint,
@@ -55,14 +55,15 @@ public class DirectorDecisionPackAssembler {
     public DecisionDefaults createDefaults(
             Chapter chapter,
             Outline outline,
+            AIDirectorDecisionRequestDTO requestDTO,
             String stage,
             String writingMode,
             boolean hasBackgroundContext) {
         return new DecisionDefaults(
                 resolveTargetWordCount(writingMode, stage),
-                buildRequiredFacts(chapter, outline, hasBackgroundContext),
-                buildProhibitedMoves(chapter, outline),
-                buildWriterHints(stage, writingMode, hasBackgroundContext)
+                buildRequiredFacts(chapter, outline, requestDTO, hasBackgroundContext),
+                buildProhibitedMoves(chapter, outline, requestDTO),
+                buildWriterHints(stage, writingMode, requestDTO, hasBackgroundContext)
         );
     }
 
@@ -140,7 +141,11 @@ public class DirectorDecisionPackAssembler {
         return 1300;
     }
 
-    private List<String> buildRequiredFacts(Chapter chapter, Outline outline, boolean hasBackgroundContext) {
+    private List<String> buildRequiredFacts(
+            Chapter chapter,
+            Outline outline,
+            AIDirectorDecisionRequestDTO requestDTO,
+            boolean hasBackgroundContext) {
         List<String> facts = new ArrayList<>();
         if (chapter.getRequiredCharacterNames() != null && !chapter.getRequiredCharacterNames().isEmpty()) {
             facts.add("本章必出人物：" + String.join("、", chapter.getRequiredCharacterNames()));
@@ -154,10 +159,16 @@ public class DirectorDecisionPackAssembler {
         if (hasBackgroundContext) {
             facts.add("已存在背景聊天约束，本轮写作需优先遵循稳定设定与硬约束。");
         }
+        if (requestDTO != null && requestDTO.getReaderRevealGoals() != null && !requestDTO.getReaderRevealGoals().isEmpty()) {
+            facts.add("本轮必须先揭晓给读者：" + String.join("；", requestDTO.getReaderRevealGoals()));
+        }
         return new ArrayList<>(new LinkedHashSet<>(facts));
     }
 
-    private List<String> buildProhibitedMoves(Chapter chapter, Outline outline) {
+    private List<String> buildProhibitedMoves(
+            Chapter chapter,
+            Outline outline,
+            AIDirectorDecisionRequestDTO requestDTO) {
         List<String> moves = new ArrayList<>();
         if (chapter.getRequiredCharacterNames() != null && !chapter.getRequiredCharacterNames().isEmpty()) {
             moves.add("不要遗漏本章必出人物。");
@@ -169,10 +180,17 @@ public class DirectorDecisionPackAssembler {
             moves.add("不要在未完成本章目标前过早结束场景。");
         }
         moves.add("不要引入与既有设定直接冲突的新事实。");
+        if (requestDTO != null && requestDTO.getForbiddenReaderAssumptions() != null) {
+            moves.addAll(requestDTO.getForbiddenReaderAssumptions());
+        }
         return new ArrayList<>(new LinkedHashSet<>(moves));
     }
 
-    private List<String> buildWriterHints(String stage, String writingMode, boolean hasBackgroundContext) {
+    private List<String> buildWriterHints(
+            String stage,
+            String writingMode,
+            AIDirectorDecisionRequestDTO requestDTO,
+            boolean hasBackgroundContext) {
         List<String> hints = new ArrayList<>();
         if ("opening".equals(stage)) {
             hints.add("优先交代场景、人物状态和冲突起点。");
@@ -188,6 +206,9 @@ public class DirectorDecisionPackAssembler {
         }
         if (hasBackgroundContext) {
             hints.add("背景聊天里的稳定偏好应优先高于临时发挥。");
+        }
+        if (requestDTO != null && "cold_open".equals(requestDTO.getOpeningMode())) {
+            hints.add("当前是空章起稿或冷开场，必须先完成读者定向，不要像从章节中段切入。");
         }
         if (hints.isEmpty()) {
             hints.add("优先服务当前章节目标和已确认约束。");

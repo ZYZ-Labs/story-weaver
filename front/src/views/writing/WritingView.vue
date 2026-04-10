@@ -4,16 +4,30 @@ import { computed, onMounted, reactive, ref, watch } from 'vue'
 import AIDirectorDecisionCard from '@/components/AIDirectorDecisionCard.vue'
 import AIProcessLogPanel from '@/components/AIProcessLogPanel.vue'
 import AIWritingChatPanel from '@/components/AIWritingChatPanel.vue'
+import ChapterAnchorPanel from '@/components/ChapterAnchorPanel.vue'
 import EmptyState from '@/components/EmptyState.vue'
+import GenerationReadinessCard from '@/components/GenerationReadinessCard.vue'
 import MarkdownContent from '@/components/MarkdownContent.vue'
 import MarkdownEditor from '@/components/MarkdownEditor.vue'
 import PageContainer from '@/components/PageContainer.vue'
+import StructuredCreationSuggestionPanel from '@/components/StructuredCreationSuggestionPanel.vue'
+import {
+  applyStructuredCreation,
+  getChapterAnchors,
+  getChapterGenerationReadiness,
+} from '@/api/story-generation'
 import { useChapterStore } from '@/stores/chapter'
 import { useProjectStore } from '@/stores/project'
 import { useProviderStore } from '@/stores/provider'
 import { useSettingsStore } from '@/stores/settings'
 import { useWritingStore } from '@/stores/writing'
-import type { AIWritingGenerationTrace, AIWritingRecord } from '@/types'
+import type {
+  AIWritingGenerationTrace,
+  AIWritingRecord,
+  ChapterAnchorBundle,
+  GenerationReadiness,
+  StructuredCreationSuggestion,
+} from '@/types'
 import { resolveOutputLengthProfile } from '@/utils/ai-model'
 import { formatDateTime } from '@/utils/format'
 import { readStorage, storageKeys, writeStorage } from '@/utils/storage'
@@ -35,6 +49,13 @@ const errorMessage = ref('')
 const streamingContent = ref('')
 const lastGeneratedRecord = ref<AIWritingRecord | null>(null)
 const lastModelSignature = ref('')
+const supportLoading = ref(false)
+const chapterReadiness = ref<GenerationReadiness | null>(null)
+const chapterAnchors = ref<ChapterAnchorBundle | null>(null)
+const applyingCreationKeys = ref<string[]>([])
+const resolvedCreationKeys = ref<string[]>([])
+const creationActionMessage = ref('')
+const creationActionError = ref('')
 
 const draftForm = reactive({
   writingType: 'draft',
@@ -127,6 +148,39 @@ const displayLastGeneratedRecord = computed<AIWritingRecord | null>(
 const displayGenerationTrace = computed<AIWritingGenerationTrace | null>(
   () => displayLastGeneratedRecord.value?.generationTrace || null,
 )
+const displayReadiness = computed<GenerationReadiness | null>(() => {
+  const traceReadiness = displayGenerationTrace.value?.readiness
+  if (traceReadiness) {
+    return {
+      ...traceReadiness,
+      resolvedAnchors: chapterReadiness.value?.resolvedAnchors,
+    }
+  }
+  return chapterReadiness.value
+})
+const displayAnchors = computed<ChapterAnchorBundle | null>(() => {
+  const traceAnchors = displayGenerationTrace.value?.anchors
+  if (traceAnchors) {
+    return {
+      chapterOutlineId: traceAnchors.chapterOutlineId,
+      volumeOutlineId: traceAnchors.volumeOutlineId,
+      mainPovCharacterId: traceAnchors.mainPovCharacterId,
+      mainPovCharacterName: traceAnchors.mainPovCharacterName,
+      requiredCharacterNames: traceAnchors.requiredCharacterNames,
+      storyBeatTitles: traceAnchors.storyBeatTitles,
+      relatedWorldSettingNames: traceAnchors.relatedWorldSettingNames,
+      chapterSummary: traceAnchors.chapterSummary,
+      anchorSources: traceAnchors.anchorSources,
+    }
+  }
+  return chapterAnchors.value
+})
+const displayReaderReveal = computed(() => displayGenerationTrace.value?.readerReveal || null)
+const displayCreationSuggestions = computed(() =>
+  (displayGenerationTrace.value?.creationSuggestions || []).filter(
+    (item) => !resolvedCreationKeys.value.includes(buildCreationSuggestionKey(item)),
+  ),
+)
 
 watch(
   projectId,
@@ -142,10 +196,16 @@ watch(
 watch(
   chapterId,
   async (id) => {
+    resolvedCreationKeys.value = []
+    creationActionMessage.value = ''
+    creationActionError.value = ''
+    chapterReadiness.value = null
+    chapterAnchors.value = null
+
     if (!id) {
       return
     }
-    await writingStore.fetchByChapter(id).catch(() => undefined)
+    await Promise.allSettled([writingStore.fetchByChapter(id), loadChapterSupport()])
   },
   { immediate: true },
 )
@@ -267,7 +327,7 @@ function buildPromptSnapshot() {
 }
 
 function buildInstruction() {
-  const parts = [buildPromptSnapshot()]
+  const parts: string[] = []
 
   if (currentRequiredCharacters.value.length) {
     parts.push(`本章必出人物：${currentRequiredCharacters.value.join('、')}`)
@@ -336,6 +396,75 @@ function buildTraceChatSummary(trace?: AIWritingGenerationTrace | null) {
   ].join('，')
 }
 
+function buildCreationSuggestionKey(suggestion: StructuredCreationSuggestion) {
+  return [
+    suggestion.entityType,
+    suggestion.sourceChapterId || '',
+    suggestion.summary || '',
+    JSON.stringify(suggestion.candidateFields || {}),
+  ].join('|')
+}
+
+function getCreationEntityLabel(entityType?: string) {
+  const mapping: Record<string, string> = {
+    character: '人物',
+    causality: '因果',
+    plot: '剧情',
+  }
+  return mapping[entityType || ''] || entityType || '对象'
+}
+
+function buildRecordPreview(content?: string) {
+  const normalized = content?.replace(/\s+/g, ' ').trim() || ''
+  if (!normalized) {
+    return ''
+  }
+  return normalized.length > 220 ? `${normalized.slice(0, 220)}...` : normalized
+}
+
+async function loadChapterSupport() {
+  if (!projectId.value || !chapterId.value) {
+    chapterReadiness.value = null
+    chapterAnchors.value = null
+    return
+  }
+
+  supportLoading.value = true
+  try {
+    const [readinessResult, anchorsResult] = await Promise.allSettled([
+      getChapterGenerationReadiness(projectId.value, chapterId.value),
+      getChapterAnchors(projectId.value, chapterId.value),
+    ])
+
+    chapterReadiness.value = readinessResult.status === 'fulfilled' ? readinessResult.value : null
+    chapterAnchors.value = anchorsResult.status === 'fulfilled' ? anchorsResult.value : null
+  } finally {
+    supportLoading.value = false
+  }
+}
+
+async function applyCreationSuggestion(suggestion: StructuredCreationSuggestion) {
+  if (!projectId.value) {
+    return
+  }
+
+  const key = buildCreationSuggestionKey(suggestion)
+  creationActionError.value = ''
+  creationActionMessage.value = ''
+  applyingCreationKeys.value = [...applyingCreationKeys.value, key]
+
+  try {
+    const result = await applyStructuredCreation(projectId.value, { suggestion })
+    resolvedCreationKeys.value = [...resolvedCreationKeys.value, key]
+    creationActionMessage.value = `已创建${getCreationEntityLabel(result.entityType)}档案 #${result.createdId}，可以继续到对应管理页补全配置。`
+    await loadChapterSupport()
+  } catch (error) {
+    creationActionError.value = error instanceof Error ? error.message : '创建待确认对象失败'
+  } finally {
+    applyingCreationKeys.value = applyingCreationKeys.value.filter((item) => item !== key)
+  }
+}
+
 async function generate() {
   if (!chapterStore.currentChapter?.id) {
     return
@@ -345,6 +474,9 @@ async function generate() {
   errorMessage.value = ''
   streamingContent.value = ''
   lastGeneratedRecord.value = null
+  resolvedCreationKeys.value = []
+  creationActionMessage.value = ''
+  creationActionError.value = ''
 
   try {
     const record = await writingStore.generateStream(
@@ -369,6 +501,7 @@ async function generate() {
     )
     lastGeneratedRecord.value = record
     streamingContent.value = record.generatedContent
+    await loadChapterSupport()
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : 'AI 生成失败'
   } finally {
@@ -468,6 +601,18 @@ async function rejectRecord(record: AIWritingRecord) {
           </v-card-text>
         </v-card>
 
+        <div class="writing-support-grid">
+          <GenerationReadinessCard
+            :readiness="displayReadiness"
+            :loading="supportLoading"
+          />
+          <ChapterAnchorPanel
+            :anchors="displayAnchors"
+            :reader-reveal="displayReaderReveal"
+            :loading="supportLoading"
+          />
+        </div>
+
         <v-card class="soft-panel">
           <v-card-title>生成预览</v-card-title>
           <v-card-text>
@@ -518,17 +663,31 @@ async function rejectRecord(record: AIWritingRecord) {
           </v-card-text>
         </v-card>
 
+        <v-alert v-if="creationActionMessage" type="success" variant="tonal">
+          {{ creationActionMessage }}
+        </v-alert>
+
+        <v-alert v-if="creationActionError" type="error" variant="tonal">
+          {{ creationActionError }}
+        </v-alert>
+
+        <StructuredCreationSuggestionPanel
+          :suggestions="displayCreationSuggestions"
+          :applying-keys="applyingCreationKeys"
+          @apply="applyCreationSuggestion"
+        />
+
         <v-card class="soft-panel">
           <v-card-title>最近生成记录</v-card-title>
-          <v-list v-if="writingStore.records.length" lines="three">
+          <v-list v-if="writingStore.records.length" lines="three" class="recent-record-list">
             <v-list-item
               v-for="record in writingStore.records"
               :key="record.id"
               :title="`${getWritingTypeLabel(record.writingType)} · ${getRecordStatusLabel(record.status)}`"
             >
               <template #subtitle>
-                <div class="mt-2">
-                  <MarkdownContent :source="record.generatedContent" empty-text="暂无生成内容。" compact />
+                <div class="record-preview-text mt-2">
+                  {{ buildRecordPreview(record.generatedContent) || '暂无生成内容。' }}
                 </div>
               </template>
               <template #append>
@@ -579,7 +738,7 @@ async function rejectRecord(record: AIWritingRecord) {
             />
 
             <v-row class="mt-1">
-              <v-col cols="12" md="6">
+              <v-col cols="12">
                 <v-select
                   v-model="draftForm.selectedProviderId"
                   label="模型服务"
@@ -588,7 +747,7 @@ async function rejectRecord(record: AIWritingRecord) {
                   item-value="id"
                 />
               </v-col>
-              <v-col cols="12" md="6">
+              <v-col cols="12">
                 <v-combobox
                   v-model="draftForm.selectedModel"
                   label="对话模型"
@@ -705,9 +864,15 @@ async function rejectRecord(record: AIWritingRecord) {
 <style scoped>
 .writing-layout {
   display: grid;
-  grid-template-columns: minmax(0, 1.4fr) minmax(360px, 0.95fr);
+  grid-template-columns: minmax(0, 1.5fr) minmax(320px, 0.92fr);
   gap: 16px;
   align-items: start;
+}
+
+.writing-support-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
 }
 
 .writing-main-stack,
@@ -724,6 +889,21 @@ async function rejectRecord(record: AIWritingRecord) {
   background: rgba(var(--v-theme-surface-variant), 0.28);
   white-space: pre-wrap;
   line-height: 1.8;
+}
+
+.record-preview-text {
+  line-height: 1.75;
+  color: rgba(var(--v-theme-on-surface), 0.78);
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 5;
+  overflow: hidden;
+}
+
+@media (max-width: 1320px) {
+  .writing-support-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (max-width: 1100px) {

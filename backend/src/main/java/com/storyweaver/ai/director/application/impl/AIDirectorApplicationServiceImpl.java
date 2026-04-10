@@ -277,6 +277,7 @@ public class AIDirectorApplicationServiceImpl implements AIDirectorApplicationSe
         try {
             return parseModelDecision(
                     result.finalText(),
+                    requestDTO,
                     chapter,
                     outline,
                     heuristicStage,
@@ -291,6 +292,7 @@ public class AIDirectorApplicationServiceImpl implements AIDirectorApplicationSe
 
     private ModelDecision parseModelDecision(
             String rawResponse,
+            AIDirectorDecisionRequestDTO requestDTO,
             Chapter chapter,
             Outline outline,
             String heuristicStage,
@@ -311,6 +313,7 @@ public class AIDirectorApplicationServiceImpl implements AIDirectorApplicationSe
         DirectorDecisionPackAssembler.DecisionDefaults defaults = directorDecisionPackAssembler.createDefaults(
                 chapter,
                 outline,
+                requestDTO,
                 stage,
                 writingMode,
                 hasBackgroundContext
@@ -359,6 +362,7 @@ public class AIDirectorApplicationServiceImpl implements AIDirectorApplicationSe
         DirectorDecisionPackAssembler.DecisionDefaults defaults = directorDecisionPackAssembler.createDefaults(
                 chapter,
                 outline,
+                requestDTO,
                 stage,
                 writingMode,
                 hasBackgroundContext
@@ -417,12 +421,21 @@ public class AIDirectorApplicationServiceImpl implements AIDirectorApplicationSe
         builder.append("章节序号：").append(chapter.getOrderNum() == null ? 0 : chapter.getOrderNum()).append('\n');
         builder.append("请求写作模式：").append(writingMode).append('\n');
         builder.append("启发式阶段参考：").append(heuristicStage).append('\n');
+        if (StringUtils.hasText(requestDTO.getOpeningMode())) {
+            builder.append("开场模式：").append(requestDTO.getOpeningMode()).append('\n');
+        }
         String currentContent = normalizeText(
                 StringUtils.hasText(requestDTO.getCurrentContent()) ? requestDTO.getCurrentContent() : chapter.getContent()
         );
         builder.append("当前正文长度：").append(currentContent.length()).append('\n');
         builder.append("有无章节大纲：").append(outline == null ? "无" : "有").append('\n');
         builder.append("有无背景聊天：").append(hasBackgroundContext ? "有" : "无").append('\n');
+        if (requestDTO.getReaderRevealGoals() != null && !requestDTO.getReaderRevealGoals().isEmpty()) {
+            builder.append("本轮先要揭晓给读者：").append(String.join("；", requestDTO.getReaderRevealGoals())).append('\n');
+        }
+        if (requestDTO.getForbiddenReaderAssumptions() != null && !requestDTO.getForbiddenReaderAssumptions().isEmpty()) {
+            builder.append("禁止默认前情：").append(String.join("；", requestDTO.getForbiddenReaderAssumptions())).append('\n');
+        }
         if (StringUtils.hasText(requestDTO.getUserInstruction())) {
             builder.append("用户补充要求：").append(requestDTO.getUserInstruction().trim()).append('\n');
         }

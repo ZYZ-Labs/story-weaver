@@ -6,6 +6,8 @@ import com.storyweaver.service.ChapterService;
 import com.storyweaver.service.CharacterService;
 import com.storyweaver.service.ProjectService;
 import com.storyweaver.story.generation.ConversationSummaryService;
+import com.storyweaver.story.generation.StructuredCreationSuggestion;
+import com.storyweaver.story.generation.StructuredCreationSuggestionService;
 import com.storyweaver.story.generation.SummarySuggestionPack;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
@@ -23,21 +25,24 @@ public class ConversationSummaryServiceImpl implements ConversationSummaryServic
     private final ProjectService projectService;
     private final CharacterService characterService;
     private final ChapterService chapterService;
+    private final StructuredCreationSuggestionService structuredCreationSuggestionService;
 
     public ConversationSummaryServiceImpl(
             ProjectService projectService,
             CharacterService characterService,
-            ChapterService chapterService) {
+            ChapterService chapterService,
+            StructuredCreationSuggestionService structuredCreationSuggestionService) {
         this.projectService = projectService;
         this.characterService = characterService;
         this.chapterService = chapterService;
+        this.structuredCreationSuggestionService = structuredCreationSuggestionService;
     }
 
     @Override
     public SummarySuggestionPack suggestProjectBrief(Long userId, Long projectId, String inputText) {
         requireProjectAccess(projectId, userId);
 
-        SummarySuggestionPack pack = buildPack("project", inputText);
+        SummarySuggestionPack pack = buildPack(userId, projectId, null, "project", inputText);
         if (StringUtils.hasText(pack.getCanonSummaryText())) {
             pack.putStructuredField("description", pack.getCanonSummaryText());
         }
@@ -58,7 +63,7 @@ public class ConversationSummaryServiceImpl implements ConversationSummaryServic
             }
         }
 
-        SummarySuggestionPack pack = buildPack("character", inputText);
+        SummarySuggestionPack pack = buildPack(userId, projectId, null, "character", inputText);
         if (StringUtils.hasText(pack.getCanonSummaryText())) {
             pack.putStructuredField("description", pack.getCanonSummaryText());
         }
@@ -73,19 +78,35 @@ public class ConversationSummaryServiceImpl implements ConversationSummaryServic
             throw new IllegalArgumentException("章节不存在或无权访问");
         }
 
-        SummarySuggestionPack pack = buildPack("chapter", inputText);
+        SummarySuggestionPack pack = buildPack(userId, projectId, chapterId, "chapter", inputText);
         if (StringUtils.hasText(pack.getCanonSummaryText())) {
             pack.putStructuredField("summary", pack.getCanonSummaryText());
+        }
+        if (!pack.getReaderRevealGoals().isEmpty()) {
+            pack.putStructuredField("readerRevealGoals", pack.getReaderRevealGoals());
         }
         return pack;
     }
 
-    private SummarySuggestionPack buildPack(String scope, String inputText) {
+    private SummarySuggestionPack buildPack(Long userId, Long projectId, Long chapterId, String scope, String inputText) {
         SummarySuggestionPack pack = SummarySuggestionPack.empty(scope);
         String normalizedText = normalizeText(inputText);
         pack.setRawInputSummary(truncate(normalizedText, 240));
         pack.setCanonSummaryText(normalizedText);
         pack.addConfidenceHint("仅整理已明确表达的信息，未提及内容不会自动补全。");
+
+        if ("chapter".equals(scope)) {
+            buildChapterRevealGoals(pack, normalizedText);
+        }
+
+        for (StructuredCreationSuggestion suggestion : structuredCreationSuggestionService.suggestFromText(
+                userId,
+                projectId,
+                chapterId,
+                normalizedText
+        )) {
+            pack.addProposedCreate(suggestion);
+        }
 
         if (!StringUtils.hasText(normalizedText) || normalizedText.length() < 60) {
             for (String question : DEFAULT_SCOPE_QUESTIONS.getOrDefault(scope, List.of())) {
@@ -149,6 +170,30 @@ public class ConversationSummaryServiceImpl implements ConversationSummaryServic
         return text.substring(0, maxLength).trim();
     }
 
+    private void buildChapterRevealGoals(SummarySuggestionPack pack, String normalizedText) {
+        if (!StringUtils.hasText(normalizedText)) {
+            return;
+        }
+
+        for (String line : normalizedText.split("\n")) {
+            String trimmed = line.trim();
+            if (!StringUtils.hasText(trimmed)) {
+                continue;
+            }
+            if (trimmed.contains("第一次知道")
+                    || trimmed.contains("第一次意识到")
+                    || trimmed.contains("揭晓")
+                    || trimmed.contains("暴露")
+                    || trimmed.contains("发现")) {
+                pack.addReaderRevealGoal(trimmed);
+            }
+        }
+
+        if (pack.getReaderRevealGoals().isEmpty()) {
+            pack.addReaderRevealGoal("本章需要先让读者知道当前人物状态、场景和触发事件。");
+        }
+    }
+
     private static Map<String, List<String>> createDefaultQuestions() {
         Map<String, List<String>> questions = new LinkedHashMap<>();
         questions.put("project", List.of(
@@ -164,6 +209,7 @@ public class ConversationSummaryServiceImpl implements ConversationSummaryServic
         questions.put("chapter", List.of(
                 "这一章谁视角？",
                 "这一章必须发生什么？",
+                "这一章读者会第一次知道什么？",
                 "这一章写到哪里停？"
         ));
         return questions;

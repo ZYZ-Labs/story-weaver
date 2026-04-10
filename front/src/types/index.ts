@@ -230,6 +230,12 @@ export interface AIWritingGenerationTrace {
     anchorSources?: Record<string, string>
     anchorSummary?: string
   }
+  readerReveal?: {
+    openingMode?: string
+    readerKnownFacts?: string[]
+    revealTargets?: string[]
+    forbiddenAssumptions?: string[]
+  }
   director?: {
     decisionId?: number | null
     status?: string
@@ -250,6 +256,7 @@ export interface AIWritingGenerationTrace {
       hardConstraintsCount?: number
     }
   }
+  creationSuggestions?: StructuredCreationSuggestion[]
 }
 
 export interface AIWritingRecord {
@@ -278,6 +285,56 @@ export interface AIDirectorDecisionRequest {
   forceRefresh?: boolean
   selectedProviderId?: number | null
   selectedModel?: string
+  openingMode?: string
+  readerRevealGoals?: string[]
+  forbiddenReaderAssumptions?: string[]
+}
+
+export interface GenerationReadiness {
+  score?: number
+  status?: string
+  blockingIssues?: string[]
+  warnings?: string[]
+  recommendedModules?: string[]
+  resolvedAnchors?: ChapterAnchorBundle
+}
+
+export interface ChapterAnchorBundle {
+  chapterId?: number
+  projectId?: number
+  chapterOutlineId?: number | null
+  volumeOutlineId?: number | null
+  mainPovCharacterId?: number | null
+  mainPovCharacterName?: string
+  requiredCharacterIds?: number[]
+  requiredCharacterNames?: string[]
+  storyBeatIds?: number[]
+  storyBeatTitles?: string[]
+  relatedWorldSettingIds?: number[]
+  relatedWorldSettingNames?: string[]
+  chapterSummary?: string
+  chapterStatus?: string
+  anchorSources?: Record<string, string>
+}
+
+export interface StructuredCreationSuggestion {
+  entityType: string
+  operation?: string
+  summary?: string
+  candidateFields?: Record<string, unknown>
+  sourceExcerpt?: string
+  sourceChapterId?: number | null
+  requiresConfirmation?: boolean
+}
+
+export interface StructuredCreationApplyRequest {
+  suggestion: StructuredCreationSuggestion
+}
+
+export interface StructuredCreationApplyResult {
+  entityType: string
+  createdId: number
+  created: unknown
 }
 
 export interface AIDirectorSelectedModule {

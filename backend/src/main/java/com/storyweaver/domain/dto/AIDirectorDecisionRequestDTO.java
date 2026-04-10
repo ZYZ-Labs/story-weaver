@@ -3,6 +3,9 @@ package com.storyweaver.domain.dto;
 import jakarta.validation.constraints.NotNull;
 import lombok.Data;
 
+import java.util.ArrayList;
+import java.util.List;
+
 @Data
 public class AIDirectorDecisionRequestDTO {
 
@@ -24,4 +27,10 @@ public class AIDirectorDecisionRequestDTO {
     private Long selectedProviderId;
 
     private String selectedModel;
+
+    private String openingMode;
+
+    private List<String> readerRevealGoals = new ArrayList<>();
+
+    private List<String> forbiddenReaderAssumptions = new ArrayList<>();
 }

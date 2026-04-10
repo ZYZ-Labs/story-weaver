@@ -7,13 +7,16 @@
 
 ## 当前快照
 
-- Current Phase: Step 8 检查器已落地，等待真实项目复验
-- Current Task: 等部署后以 `旧日王座` 跑一致性检查报告并做端到端回归
-- Last Completed: 已新增 `StoryConsistencyInspector` 与项目级一致性报告接口
-- Next Action: 部署后调用 `/api/projects/{projectId}/story-consistency`，核对主角命名、POV、剧情推进和 trace 完整性
+- Current Phase: 已完成第二轮真实线上回归，确认 Step 9 / Step 10 已在线生效，但稳定性问题仍未收口
+- Current Task: 进入 P0 修复，优先处理“半句截断仍漏检”“blocked readiness 仍可生成”“总导真实兼容仍 fallback”三件事
+- Last Completed: 已完成 `旧日王座` 第二轮线上回归，确认新 trace 与新增对象建议链路已经进入线上主链
+- Next Action: 将结尾完整性检查提升为硬阻断，并让 `readiness=blocked` 真正阻止生成；随后补齐第 32-34 章锚点再复验
 - Blockers:
-  - Step 6 到 Step 8 的修复尚未部署到真实环境，`旧日王座` 样本还没有完成回归验证
-  - `StoryConsistencyInspector` 目前只有后端接口，还未接独立前端入口
+  - 新生成记录虽然已有 `readerReveal`，但结尾半句截断仍未被 `check / revise` 链路拦住
+  - `GenerationReadinessVO.status=blocked` 目前仍未真正阻止生成执行
+  - 总导在真实 DeepSeek 上依旧 `fallback`
+  - `StoryConsistencyInspector` 目前仍只有后端接口，还未接独立前端入口
+  - 摘要建议 / 进度预测虽然已有后端接口，但还未完成独立前端入口闭环
 - Latest Verified:
   - 线上项目 `旧日王座` 的项目、世界观、大纲、人物、章节、剧情、因果数据已实际核对
   - 线上 `story.refactor.v1.*` 开关当前全部为 `false`
@@ -76,12 +79,44 @@
     - story beat 缺失
     - 总导 fallback
     - generation trace 不完整
+  - 已完成 `旧日王座` 第一章首轮线上回归，并沉淀报告：
+    - `docs/reports/REPORT-20260410-old-throne-live-regression-round1.md`
+  - 已确认第一章问题并非“首稿完全失效”，而是首轮续写记录目标漂移、收束失败、并出现明显截断
+  - 已确认系统当前缺少“系统已知 != 读者已知”的揭晓边界控制
+  - 已确认 AI 即使创作出新人物 / 新因果，也还没有对应的结构化新增承接链路
+  - 已完成 Step 9 的代码落地：
+    - `AIWritingServiceImpl` 生成主链新增 `ReaderRevealConstraint`
+    - 总导请求、写作 prompt、审校规则已接入 `openingMode / readerRevealGoals / forbiddenReaderAssumptions`
+    - 空章起稿、第一章和首轮续写会显式带入“不要默认读者已知前情”的约束
+  - 已完成 Step 10 的代码落地：
+    - 新增 `StructuredCreationSuggestion / StructuredCreationApplyService`
+    - 已新增接口 `/api/projects/{projectId}/structured-creations/apply`
+    - 生成记录 trace 已可返回 `creationSuggestions`
+  - 已完成写作中心前端接入：
+    - 新增 `GenerationReadinessCard`
+    - 新增 `ChapterAnchorPanel`
+    - 新增 `StructuredCreationSuggestionPanel`
+    - 写作中心已接入 readiness / anchors / 待确认新增对象
+    - 已移除写作请求中对 prompt snapshot 的重复拼接
+    - 已修正最近生成记录和侧栏模型设置的排版拥挤问题
   - 已通过 `npm run type-check`
+  - 已通过 `cd front && npm run build`
   - 已完成多轮 `mvn -Dmaven.repo.local=/usr/local/project/github/story-weaver/.cache/m2 -f backend/pom.xml -DskipTests compile`
+  - 已完成第二轮线上回归并新增报告：
+    - `docs/reports/REPORT-20260410-old-throne-live-regression-round2.md`
+  - 已确认新部署版本的 fresh record `ai_writing_record.id=35` 已写入：
+    - `generationTrace.readerReveal`
+    - 新版 `director.mode`
+    - 完整 readiness / anchors / summaryTrace
+  - 已确认 `chapter 31` 的新生成记录开场承接更自然，不再像凭空切入
+  - 已确认摘要建议接口已在线返回 `proposedCreates`，可识别：
+    - 新因果候选
+    - 新人物候选
 - Latest Unverified:
-  - 尚未在部署环境用真实 Provider 回归验证 Step 6 修复
-  - 前端尚未接入新的摘要建议 / 进度预测 / readiness / anchors 接口
-  - 尚未在 `旧日王座` 上调用新的 inspector 并完成端到端一致性复验
+  - 尚未在线验证 `StructuredCreationApply` 的真实落库闭环，本轮仅验证了不落库的 `proposedCreates`
+  - 尚未完成“补齐第 32-34 章锚点后再生成”的新一轮样本复验
+  - `StoryConsistencyInspector` 仍未接独立前端入口
+  - 摘要建议 / 进度预测的独立前端入口仍未接完
 
 ## 关键节点记录
 
@@ -361,3 +396,115 @@
   - 检查器目前以“项目内可验证信号”为主，还不是全文语义级角色识别器
 - 下一步:
   - 等部署后直接调用 inspector 接口，结合 `旧日王座` 做新的端到端一致性复验
+
+### [2026-04-10 Asia/Shanghai] 完成第一章首轮线上回归，并扩展后续计划
+
+- 背景:
+  - 用户要求直接查看线上 `旧日王座` 的真实生成结果，并指出第一章“有点没头没尾”，希望定位这是不是写作链路本身的问题。
+- 本次完成:
+  - 调用线上 `story-consistency / generation-readiness / anchors / ai-writing / ai-director` 接口
+  - 对比第一章已接受记录与后续续写记录
+  - 确认 `ai_writing_record.id=27` 为可用首稿，`id=33` 才是目标漂移和收束失败的续写样本
+  - 确认当前系统缺少“系统已知 != 读者已知”的正文揭晓边界
+  - 确认 AI 新增人物 / 新因果尚无显式结构化新增承接链路
+  - 新增首轮线上回归报告
+  - 将上述两点写回 requirement / plan / agent-context
+- 修改文件:
+  - `docs/reports/REPORT-20260410-old-throne-live-regression-round1.md`
+  - `docs/requirements/REQ-20260409-generation-reliability-refactor.md`
+  - `docs/plans/PLAN-REQ-20260409-generation-reliability-refactor-v2.md`
+  - `docs/progress/PROGRESS-REQ-20260409-generation-reliability-refactor.md`
+  - `docs/agent-context.md`
+- 验证:
+  - 已实际读取线上 `旧日王座` 第一章生成记录、总导决策、锚点与一致性接口结果
+  - 已确认“像从中段开始”和“半句截断”属于当前写作边界缺失，而非单纯模型文风问题
+- 风险/遗留:
+  - 如果不补读者揭晓边界，后续空章起稿和首轮续写仍会持续出现“内容有料但不像一章”的问题
+  - 如果不补结构化新增链路，AI 创作的新人物 / 新因果仍会只存在于正文里，无法复用和校验
+- 下一步:
+  - 进入 Step 9 和 Step 10，补读者揭晓约束、起稿保护和待确认新增对象流程
+
+### [2026-04-10 Asia/Shanghai] 完成 Step 9 / Step 10 代码落地，并接入写作中心
+
+- 背景:
+  - 用户确认继续推进后续 step，并指出写作中心新增内容存在排版问题，需要在完成“读者揭晓边界”和“结构化新增确认流”的同时一起收口前端展示。
+- 本次完成:
+  - 为生成链路新增 `ReaderRevealConstraint`
+  - 在 `AIWritingServiceImpl` 中将 `openingMode / readerRevealGoals / forbiddenReaderAssumptions` 接入：
+    - 总导请求
+    - 写作 prompt
+    - 审校与修订触发规则
+  - 为空章起稿、第一章和续写场景增加“不要默认读者已知前情”的约束
+  - 为生成 trace 新增 `readerReveal / creationSuggestions`
+  - 新增 `StructuredCreationSuggestion / StructuredCreationApplyService / StructuredCreationController`
+  - 新增显式接口 `/api/projects/{projectId}/structured-creations/apply`
+  - 写作中心接入章节 readiness、锚点和待确认新增对象面板
+  - 修正写作中心的 prompt 重复拼接、最近记录过长撑高、侧栏模型设置拥挤等排版问题
+- 修改文件:
+  - `backend/src/main/java/com/storyweaver/service/impl/AIWritingServiceImpl.java`
+  - `backend/src/main/java/com/storyweaver/domain/dto/AIDirectorDecisionRequestDTO.java`
+  - `backend/src/main/java/com/storyweaver/ai/director/application/DirectorDecisionPackAssembler.java`
+  - `backend/src/main/java/com/storyweaver/ai/director/application/impl/AIDirectorApplicationServiceImpl.java`
+  - `backend/src/main/java/com/storyweaver/story/generation/ReaderRevealConstraint.java`
+  - `backend/src/main/java/com/storyweaver/story/generation/StructuredCreationSuggestion.java`
+  - `backend/src/main/java/com/storyweaver/story/generation/StructuredCreationApplyService.java`
+  - `backend/src/main/java/com/storyweaver/story/generation/StructuredCreationApplyResult.java`
+  - `backend/src/main/java/com/storyweaver/story/generation/StructuredCreationSuggestionService.java`
+  - `backend/src/main/java/com/storyweaver/story/generation/impl/StructuredCreationSuggestionServiceImpl.java`
+  - `backend/src/main/java/com/storyweaver/story/generation/impl/StructuredCreationApplyServiceImpl.java`
+  - `backend/src/main/java/com/storyweaver/controller/StructuredCreationController.java`
+  - `backend/src/main/java/com/storyweaver/story/generation/SummarySuggestionPack.java`
+  - `backend/src/main/java/com/storyweaver/story/generation/impl/ConversationSummaryServiceImpl.java`
+  - `front/src/types/index.ts`
+  - `front/src/api/story-generation.ts`
+  - `front/src/components/GenerationReadinessCard.vue`
+  - `front/src/components/ChapterAnchorPanel.vue`
+  - `front/src/components/StructuredCreationSuggestionPanel.vue`
+  - `front/src/views/writing/WritingView.vue`
+- 验证:
+  - 已通过 `mvn -Dmaven.repo.local=/usr/local/project/github/story-weaver/.cache/m2 -f backend/pom.xml -DskipTests compile`
+  - 已通过 `cd front && npm run type-check`
+  - 已通过 `cd front && npm run build`
+  - 已通过 `git diff --check`
+- 风险/遗留:
+  - 这轮仍属于本地代码与构建验证，尚未在真实部署环境确认 `旧日王座` 是否已改善“像从中段开始”和“半句截断”
+  - 待确认新增对象目前已可创建，但作者后续补完仍依赖进入人物 / 因果 / 剧情管理页完成
+- 下一步:
+  - 部署当前版本，并对 `旧日王座` 重新执行一致性与首章续写回归
+
+### [2026-04-10 Asia/Shanghai] 完成第二轮线上回归，确认 Step 9 / Step 10 已在线生效但仍需 P0 修复
+
+- 背景:
+  - 用户已部署当前版本，并要求直接基于线上站点继续验证 `旧日王座`。
+- 本次完成:
+  - 使用线上 JWT 调用真实 API，重新检查项目、章节、consistency、readiness、anchors 与写作记录
+  - 对第 31 章重新发起一次 fresh `continue` 生成，生成新记录 `ai_writing_record.id=35`
+  - 确认新记录已写入 `generationTrace.readerReveal`
+  - 确认 Step 10 的摘要建议接口已可返回 `proposedCreates`
+  - 新增第二轮线上回归报告
+- 修改文件:
+  - `docs/reports/REPORT-20260410-old-throne-live-regression-round2.md`
+  - `docs/progress/PROGRESS-REQ-20260409-generation-reliability-refactor.md`
+  - `docs/agent-context.md`
+- 验证:
+  - 已确认 fresh record `id=35` 在线上包含：
+    - `generationTrace.readerReveal`
+    - `generationTrace.director.mode`
+    - 完整 `readiness / anchors / summaryTrace`
+  - 已确认 fresh record 的开场承接比旧样本自然
+  - 已确认项目一致性接口仍显示：
+    - `score=0`
+    - `directorFallbackRate=100.0`
+    - `traceCoverageRate=25.0`
+    - `blockedReadinessCount=3`
+  - 已确认 fresh record 结尾仍停在半句，说明收束检查尚未兜住
+  - 已确认章节摘要建议接口可识别新因果和新人物候选
+- 风险/遗留:
+  - 总导真实兼容性问题仍未修复，当前只是 fallback 更可见
+  - `readiness=blocked` 仍可继续生成，错误工作流还没有被硬阻断
+  - 历史章节 32-34 仍缺少 brief / POV / 人物锚点，旧数据不会因为新版本部署而自动变好
+- 下一步:
+  - 进入 P0 修复：
+    - 结尾完整性硬阻断
+    - blocked readiness 阻止生成
+    - 继续处理总导 JSON 兼容

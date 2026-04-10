@@ -43,6 +43,9 @@ import com.storyweaver.service.WorldSettingService;
 import com.storyweaver.story.generation.ChapterAnchorBundle;
 import com.storyweaver.story.generation.GenerationReadinessService;
 import com.storyweaver.story.generation.GenerationReadinessVO;
+import com.storyweaver.story.generation.ReaderRevealConstraint;
+import com.storyweaver.story.generation.StructuredCreationSuggestion;
+import com.storyweaver.story.generation.StructuredCreationSuggestionService;
 import org.springframework.beans.BeanUtils;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
@@ -81,6 +84,7 @@ public class AIWritingServiceImpl extends ServiceImpl<AIWritingRecordMapper, AIW
     private final AIWritingChatService aiWritingChatService;
     private final AIDirectorApplicationService aiDirectorApplicationService;
     private final GenerationReadinessService generationReadinessService;
+    private final StructuredCreationSuggestionService structuredCreationSuggestionService;
     private final ObjectMapper objectMapper;
 
     public AIWritingServiceImpl(
@@ -99,6 +103,7 @@ public class AIWritingServiceImpl extends ServiceImpl<AIWritingRecordMapper, AIW
             AIWritingChatService aiWritingChatService,
             AIDirectorApplicationService aiDirectorApplicationService,
             GenerationReadinessService generationReadinessService,
+            StructuredCreationSuggestionService structuredCreationSuggestionService,
             ObjectMapper objectMapper) {
         this.chapterService = chapterService;
         this.knowledgeDocumentService = knowledgeDocumentService;
@@ -115,6 +120,7 @@ public class AIWritingServiceImpl extends ServiceImpl<AIWritingRecordMapper, AIW
         this.aiWritingChatService = aiWritingChatService;
         this.aiDirectorApplicationService = aiDirectorApplicationService;
         this.generationReadinessService = generationReadinessService;
+        this.structuredCreationSuggestionService = structuredCreationSuggestionService;
         this.objectMapper = objectMapper;
     }
 
@@ -235,6 +241,12 @@ public class AIWritingServiceImpl extends ServiceImpl<AIWritingRecordMapper, AIW
         Project project = chapter.getProjectId() == null ? null : projectService.getById(chapter.getProjectId());
         GenerationReadinessVO readiness = generationReadinessService.evaluate(userId, chapter.getId());
         ChapterAnchorBundle anchorBundle = readiness.getResolvedAnchors();
+        ReaderRevealConstraint readerRevealConstraint = buildReaderRevealConstraint(
+                chapter,
+                currentContent,
+                writingType,
+                anchorBundle
+        );
         emitGenerationReadinessLogs(eventConsumer, readiness);
         emitAnchorSnapshotLog(eventConsumer, anchorBundle);
         boolean exposeDirectorDebug = getConfiguredBoolean("ai.director.debug_expose_decision", false);
@@ -243,7 +255,13 @@ public class AIWritingServiceImpl extends ServiceImpl<AIWritingRecordMapper, AIW
         }
         AIDirectorDecisionVO directorDecision = aiDirectorApplicationService.decide(
                 userId,
-                buildDirectorDecisionRequest(requestDTO, writingType, currentContent, userInstruction)
+                buildDirectorDecisionRequest(
+                        requestDTO,
+                        writingType,
+                        currentContent,
+                        userInstruction,
+                        readerRevealConstraint
+                )
         );
         if (exposeDirectorDebug) {
             emitStage(eventConsumer, "director", "completed", resolveDirectorStageMessage(directorDecision));
@@ -261,6 +279,7 @@ public class AIWritingServiceImpl extends ServiceImpl<AIWritingRecordMapper, AIW
         );
 
         return new PreparedGenerationContext(
+                userId,
                 chapter,
                 currentContent,
                 writingType,
@@ -269,11 +288,23 @@ public class AIWritingServiceImpl extends ServiceImpl<AIWritingRecordMapper, AIW
                 selectedModel,
                 promptSnapshot,
                 buildSystemPrompt(promptSnapshot),
-                buildUserPrompt(project, chapter, contextBundle, anchorBundle, readiness, directorDecision, currentContent, writingType, userInstruction),
+                buildUserPrompt(
+                        project,
+                        chapter,
+                        contextBundle,
+                        anchorBundle,
+                        readiness,
+                        readerRevealConstraint,
+                        directorDecision,
+                        currentContent,
+                        writingType,
+                        userInstruction
+                ),
                 contextBundle,
                 directorDecision,
                 readiness,
                 anchorBundle,
+                readerRevealConstraint,
                 normalizeMaxTokens(requestDTO.getMaxTokens())
         );
     }
@@ -282,7 +313,8 @@ public class AIWritingServiceImpl extends ServiceImpl<AIWritingRecordMapper, AIW
             AIWritingRequestDTO requestDTO,
             String writingType,
             String currentContent,
-            String userInstruction) {
+            String userInstruction,
+            ReaderRevealConstraint readerRevealConstraint) {
         AIDirectorDecisionRequestDTO directorRequest = new AIDirectorDecisionRequestDTO();
         directorRequest.setChapterId(requestDTO.getChapterId());
         directorRequest.setCurrentContent(currentContent);
@@ -291,7 +323,48 @@ public class AIWritingServiceImpl extends ServiceImpl<AIWritingRecordMapper, AIW
         directorRequest.setEntryPoint(requestDTO.getEntryPoint());
         directorRequest.setSourceType("writing");
         directorRequest.setForceRefresh(false);
+        if (readerRevealConstraint != null) {
+            directorRequest.setOpeningMode(readerRevealConstraint.getOpeningMode());
+            directorRequest.setReaderRevealGoals(readerRevealConstraint.getRevealTargets());
+            directorRequest.setForbiddenReaderAssumptions(readerRevealConstraint.getForbiddenAssumptions());
+        }
         return directorRequest;
+    }
+
+    private ReaderRevealConstraint buildReaderRevealConstraint(
+            Chapter chapter,
+            String currentContent,
+            String writingType,
+            ChapterAnchorBundle anchorBundle) {
+        ReaderRevealConstraint constraint = new ReaderRevealConstraint();
+        constraint.setChapterId(chapter.getId());
+        constraint.setOpeningMode(StringUtils.hasText(currentContent) ? "chapter_continue" : "cold_open");
+
+        if (StringUtils.hasText(currentContent)) {
+            constraint.addReaderKnownFact("当前章节已经存在已写出的正文内容，只能默认承接已经写出来的事实。");
+        }
+
+        if (StringUtils.hasText(anchorBundle == null ? null : anchorBundle.getChapterSummary())) {
+            constraint.addRevealTarget("本章首先要让读者理解：" + preview(anchorBundle.getChapterSummary(), 100));
+        }
+        if (StringUtils.hasText(anchorBundle == null ? null : anchorBundle.getMainPovCharacterName())) {
+            constraint.addRevealTarget("先明确当前主要跟随的人物是 " + anchorBundle.getMainPovCharacterName().trim() + "。");
+        }
+        if (chapter.getOrderNum() != null && chapter.getOrderNum() == 1) {
+            constraint.addRevealTarget("这是第一章，必须先完成世界、人物状态和触发事件的初始定向。");
+        } else if (!StringUtils.hasText(currentContent)) {
+            constraint.addRevealTarget("即使是续写项目的新章节，也要先重新交代当前场景和人物状态。");
+        }
+        if ("draft".equals(writingType) && !StringUtils.hasText(currentContent)) {
+            constraint.addRevealTarget("前 20%-30% 需要交代当前场景、人物状态和本章触发点。");
+        }
+
+        constraint.addForbiddenAssumption("不要把项目设定、大纲、剧情或因果直接当成读者已经知道的前情。");
+        constraint.addForbiddenAssumption("只有正文里已经揭晓过的事实，才能按读者已知来承接。");
+        if (!StringUtils.hasText(currentContent)) {
+            constraint.addForbiddenAssumption("当前章节正文为空，不要像从章节中段直接切入。");
+        }
+        return constraint;
     }
 
     private WritingContextBundle buildContextBundle(
@@ -749,6 +822,12 @@ public class AIWritingServiceImpl extends ServiceImpl<AIWritingRecordMapper, AIW
         if (!StringUtils.hasText(normalizedContent)) {
             throw new IllegalStateException("模型没有返回可用的正文内容，请稍后重试");
         }
+        List<StructuredCreationSuggestion> creationSuggestions = structuredCreationSuggestionService.suggestFromText(
+                context.userId(),
+                context.chapter().getProjectId(),
+                context.chapter().getId(),
+                normalizedContent
+        );
 
         AIWritingRecord record = new AIWritingRecord();
         record.setChapterId(context.chapter().getId());
@@ -760,7 +839,7 @@ public class AIWritingServiceImpl extends ServiceImpl<AIWritingRecordMapper, AIW
         record.setSelectedModel(context.selectedModel());
         record.setPromptSnapshot(context.promptSnapshot());
         record.setDirectorDecisionId(context.directorDecision() == null ? null : context.directorDecision().getId());
-        record.setGenerationTraceJson(buildGenerationTraceJson(context));
+        record.setGenerationTraceJson(buildGenerationTraceJson(context, creationSuggestions));
         record.setStatus("draft");
 
         save(record);
@@ -841,6 +920,7 @@ public class AIWritingServiceImpl extends ServiceImpl<AIWritingRecordMapper, AIW
             WritingContextBundle contextBundle,
             ChapterAnchorBundle anchorBundle,
             GenerationReadinessVO readiness,
+            ReaderRevealConstraint readerRevealConstraint,
             AIDirectorDecisionVO directorDecision,
             String currentContent,
             String writingType,
@@ -895,6 +975,7 @@ public class AIWritingServiceImpl extends ServiceImpl<AIWritingRecordMapper, AIW
         appendInlineConstraint(builder, "背景补充人物约束", contextBundle.chatParticipation().getCharacterConstraints());
         appendInlineConstraint(builder, "背景补充硬性约束", contextBundle.chatParticipation().getHardConstraints());
         appendAnchorSnapshotSection(builder, anchorBundle, readiness);
+        appendReaderRevealSection(builder, readerRevealConstraint);
         builder.append(resolveWritingIntent(writingType));
         appendDirectorDecisionSection(builder, directorDecision);
 
@@ -970,6 +1051,20 @@ public class AIWritingServiceImpl extends ServiceImpl<AIWritingRecordMapper, AIW
             appendInlineConstraint(builder, "生成前阻塞项", readiness.getBlockingIssues());
             appendInlineConstraint(builder, "生成前警告", readiness.getWarnings());
         }
+    }
+
+    private void appendReaderRevealSection(StringBuilder builder, ReaderRevealConstraint readerRevealConstraint) {
+        if (readerRevealConstraint == null) {
+            return;
+        }
+
+        builder.append("\n【读者揭晓边界】\n");
+        if (StringUtils.hasText(readerRevealConstraint.getOpeningMode())) {
+            builder.append("开场模式：").append(readerRevealConstraint.getOpeningMode()).append('\n');
+        }
+        appendInlineConstraint(builder, "已揭晓事实", readerRevealConstraint.getReaderKnownFacts());
+        appendInlineConstraint(builder, "本轮应揭晓", readerRevealConstraint.getRevealTargets());
+        appendInlineConstraint(builder, "禁止默认前情", readerRevealConstraint.getForbiddenAssumptions());
     }
 
     private void appendDirectorDecisionSection(StringBuilder builder, AIDirectorDecisionVO directorDecision) {
@@ -1329,6 +1424,8 @@ public class AIWritingServiceImpl extends ServiceImpl<AIWritingRecordMapper, AIW
                         """
                         你是一名中文小说审校助手。
                         请检查章节正文是否遵循给定上下文和约束。
+                        如果正文开头像从章节中段直接切入、没有完成必要的读者定向，必须判为修订。
+                        如果正文结尾明显半句截断、场景收束未完成或停在不自然的位置，必须判为修订。
                         请严格按照以下格式返回：
                         结论：通过 或 修订
                         摘要：一句中文简述
@@ -1666,7 +1763,9 @@ public class AIWritingServiceImpl extends ServiceImpl<AIWritingRecordMapper, AIW
         return target;
     }
 
-    private String buildGenerationTraceJson(PreparedGenerationContext context) {
+    private String buildGenerationTraceJson(
+            PreparedGenerationContext context,
+            List<StructuredCreationSuggestion> creationSuggestions) {
         Map<String, Object> root = new LinkedHashMap<>();
 
         GenerationReadinessVO readiness = context.readiness();
@@ -1694,6 +1793,16 @@ public class AIWritingServiceImpl extends ServiceImpl<AIWritingRecordMapper, AIW
             anchorTrace.put("anchorSources", anchorBundle.getAnchorSources());
             anchorTrace.put("anchorSummary", buildAnchorSummary(anchorBundle));
             root.put("anchors", anchorTrace);
+        }
+
+        ReaderRevealConstraint readerRevealConstraint = context.readerRevealConstraint();
+        if (readerRevealConstraint != null) {
+            Map<String, Object> readerRevealTrace = new LinkedHashMap<>();
+            readerRevealTrace.put("openingMode", readerRevealConstraint.getOpeningMode());
+            readerRevealTrace.put("readerKnownFacts", readerRevealConstraint.getReaderKnownFacts());
+            readerRevealTrace.put("revealTargets", readerRevealConstraint.getRevealTargets());
+            readerRevealTrace.put("forbiddenAssumptions", readerRevealConstraint.getForbiddenAssumptions());
+            root.put("readerReveal", readerRevealTrace);
         }
 
         AIDirectorDecisionVO directorDecision = context.directorDecision();
@@ -1724,6 +1833,10 @@ public class AIWritingServiceImpl extends ServiceImpl<AIWritingRecordMapper, AIW
         participationTrace.put("hardConstraintsCount", participation == null ? 0 : participation.getHardConstraints().size());
         summaryTrace.put("chatParticipation", participationTrace);
         root.put("summaryTrace", summaryTrace);
+
+        if (creationSuggestions != null && !creationSuggestions.isEmpty()) {
+            root.put("creationSuggestions", creationSuggestions);
+        }
 
         try {
             return objectMapper.writeValueAsString(root);
@@ -1773,6 +1886,7 @@ public class AIWritingServiceImpl extends ServiceImpl<AIWritingRecordMapper, AIW
     }
 
     private record PreparedGenerationContext(
+            Long userId,
             Chapter chapter,
             String currentContent,
             String writingType,
@@ -1786,6 +1900,7 @@ public class AIWritingServiceImpl extends ServiceImpl<AIWritingRecordMapper, AIW
             AIDirectorDecisionVO directorDecision,
             GenerationReadinessVO readiness,
             ChapterAnchorBundle anchorBundle,
+            ReaderRevealConstraint readerRevealConstraint,
             Integer maxTokens) {
     }
 

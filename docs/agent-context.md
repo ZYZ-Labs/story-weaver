@@ -20,19 +20,30 @@
 ## Current Next Action
 
 - 以 `docs/reports/REPORT-20260409-old-throne-live-review.md` 为问题基线，以 `PLAN-REQ-20260409-generation-reliability-refactor-v2` 为唯一主线继续推进。
-- Step 8 的 inspector 已落地：项目级一致性报告接口已可用，下一步是在部署后对 `旧日王座` 跑真实回归。
+- Step 8 的 inspector 已经用于首轮真实回归，Step 9 / Step 10 现已完成第二轮真实回归；下一步进入 P0 修复。
 - 所有后续改动都优先服务于“做减法、对话式采集、摘要确认后结构化沉淀、提高生成可靠性”，而不是继续平行扩模块。
 - 当前已确认正文生成主链是多阶段 `generate` 流水线，而不是持续会话式 chat；后续实现应坚持“`chat` 采集澄清，`generate` 最终成稿”的边界。
+- 当前已确认“系统已知事实”和“读者已知事实”必须分离处理；否则空章起稿和首轮续写会继续呈现为从中段直接切入。
+- 当前已确认 AI 创作的新人物 / 新因果需要显式进入待确认创建流，而不是只留在正文文本里；现已提供写作中心内的待确认创建入口。
+- 第二轮线上回归已确认：
+  - `readerReveal` 已真实写入 fresh generation trace
+  - `proposedCreates` 已能在线返回
+  - 但 fresh record 仍可能半句截断，且总导在真实 DeepSeek 上仍然 fallback
 
 ## Current Blockers
 
-- `旧日王座` 的历史总导记录显示真实 Provider 曾稳定触发 `总导层返回内容不是有效 JSON`；代码级兼容已补，但尚未部署回归。
+- `旧日王座` 的历史总导记录显示真实 Provider 曾稳定触发 `总导层返回内容不是有效 JSON`；虽已完成首轮线上回归，但仍需结合下一轮修复再次复验。
 - 线上 `story.refactor.v1.*` 开关仍全部为 `false`，历史结构改造尚未真正成为主读路径。
 - 真实项目章节存在锚点缺失：多个章节无 `outline_id` / `main_pov_character_id` / `chapter_character` 绑定，已直接影响生成一致性。
 - `com.storyweaver.story.generation` 已存在基础协议与服务骨架，后续新增接口应优先复用这层，而不是把逻辑直接散落回 controller 或 `AIWritingServiceImpl`。
-- 新的后端接口已存在但前端尚未接入，包括摘要建议、确认写回、进度预测、章节 readiness 与 anchors。
-- `StoryConsistencyInspector` 已实现，但 `旧日王座` 还没有跑新的端到端回归。
+- 摘要建议、确认写回、进度预测等接口仍未完成独立前端入口；但写作中心已接入章节 readiness、锚点和待确认新增对象。
+- `StoryConsistencyInspector` 已实现，且已用于首轮线上回归；但还没有独立前端入口，也还没有覆盖新一轮修复后的复验。
 - inspector 目前只有后端接口 `/api/projects/{projectId}/story-consistency`，还没有独立前端入口。
+- 线上回归已确认：第一章首稿可用，但首轮续写记录存在目标漂移、收束失败和明显截断。
+- 第二轮线上回归已确认：Step 9 / Step 10 已进入线上主链，但当前仍存在三个硬 blocker：
+  - 结尾半句截断仍未被拦住
+  - `readiness=blocked` 仍可继续生成
+  - 总导真实 Provider 仍然 fallback
 
 ## Resume Reading Order
 
@@ -55,3 +66,9 @@
 - Step 6 已完成代码级兼容治理：总导成功统一为 `tool_success`，fallback 保留真实 tool trace，并在前端暴露 failure reason。
 - Step 7 已完成代码级接入：写作记录新增 `generation_trace_json`，写作 prompt 显式带入 readiness 与 anchor snapshot，前端日志统一改为“生成流水线”语义。
 - Step 8 已完成检查器后端落地：可按项目查看人物命名漂移风险、POV 缺失、story beat 缺失、总导 fallback 和 generation trace 完整度。
+- 首轮线上回归报告已新增：`docs/reports/REPORT-20260410-old-throne-live-regression-round1.md`。
+- 第二轮线上回归报告已新增：`docs/reports/REPORT-20260410-old-throne-live-regression-round2.md`。
+- 当前计划已扩展：除了原 Step 0-8 外，后续继续推进 Step 9 “读者揭晓边界与空章起稿保护”和 Step 10 “AI 新增结构对象确认流”。
+- Step 9 已本地落地：生成主链、总导请求、prompt 和审校规则都已接入 `ReaderRevealConstraint`。
+- Step 10 已本地落地：生成 trace 已可产出 `creationSuggestions`，且写作中心可直接创建待确认人物 / 因果 / 剧情对象。
+- 当前第一个 P0 目标不是再扩功能，而是把“结尾完整性硬阻断”和“blocked readiness 阻止生成”补上。
