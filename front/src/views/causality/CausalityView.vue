@@ -63,6 +63,24 @@ const relationshipOptions = [
   { title: '解决', value: 'resolves' },
   { title: '驱动', value: 'motivates' },
 ]
+const causalTypeOptions = [
+  { title: '触发', value: 'trigger' },
+  { title: '推进', value: 'lead_to' },
+  { title: '升级', value: 'escalate' },
+  { title: '阻断', value: 'block' },
+  { title: '反转', value: 'reverse' },
+  { title: '伏笔', value: 'foreshadow' },
+  { title: '回收', value: 'payoff' },
+]
+const triggerModeOptions = [
+  { title: '即时触发', value: 'instant' },
+  { title: '条件触发', value: 'conditional' },
+]
+const payoffStatusOptions = [
+  { title: '待回收', value: 'pending' },
+  { title: '部分回收', value: 'partial' },
+  { title: '已回收', value: 'resolved' },
+]
 
 const statusOptions = [
   { title: '规划中', value: 0 },
@@ -90,6 +108,11 @@ const form = reactive({
   causeEntityType: 'chapter',
   effectEntityType: 'plot',
   relationship: 'causes',
+  causalType: 'trigger',
+  triggerMode: 'instant',
+  payoffStatus: 'pending',
+  upstreamCauseIds: [] as number[],
+  downstreamEffectIds: [] as number[],
   strength: 60,
   conditions: '',
   tags: [] as string[],
@@ -169,6 +192,34 @@ function formatStoredEntityId(type: string, rawId: string) {
   return type === 'manual' ? rawId : `${type}-${rawId}`
 }
 
+function normalizeUiEntityType(type?: string, storedId?: string) {
+  if (type === 'story_beat') {
+    return 'plot'
+  }
+  if (type === 'state') {
+    if (storedId?.startsWith('knowledge-')) {
+      return 'knowledge'
+    }
+    if (storedId?.startsWith('writing-')) {
+      return 'writing'
+    }
+    if (storedId?.startsWith('manual-')) {
+      return 'manual'
+    }
+    if (storedId && ragStore.documents.some((item) => String(item.id) === storedId)) {
+      return 'knowledge'
+    }
+    if (storedId && writingStore.projectRecords.some((item) => String(item.id) === storedId)) {
+      return 'writing'
+    }
+    return 'manual'
+  }
+  if (type === 'storyBeat') {
+    return 'plot'
+  }
+  return type || 'manual'
+}
+
 function parseStoredEntityId(type: string, stored?: string) {
   if (!stored) return ''
   if (type === 'manual') return stored
@@ -205,7 +256,7 @@ function getWritingStatusLabel(value?: string) {
 }
 
 function getEntityOptions(type: string): EntityOption[] {
-  switch (type) {
+  switch (normalizeUiEntityType(type)) {
     case 'chapter':
       return chapterStore.chapters.map((item) => ({
         value: String(item.id),
@@ -259,10 +310,28 @@ function getStatusLabel(value?: number) {
 }
 
 function getDisplayEntity(type: string, storedId?: string, fallback = '未关联') {
-  const entityId = parseStoredEntityId(type, storedId)
+  const resolvedType = normalizeUiEntityType(type, storedId)
+  const entityId = parseStoredEntityId(resolvedType, storedId)
   if (!entityId) return fallback
-  const meta = getEntityMeta(type, entityId)
+  const meta = getEntityMeta(resolvedType, entityId)
   return meta?.title || storedId || fallback
+}
+
+function parseJsonNumberList(raw?: string) {
+  if (!raw?.trim()) {
+    return []
+  }
+  try {
+    const parsed = JSON.parse(raw)
+    if (!Array.isArray(parsed)) {
+      return []
+    }
+    return parsed
+      .map((item) => Number(item))
+      .filter((item) => Number.isFinite(item))
+  } catch {
+    return []
+  }
 }
 
 function syncAutoFields() {
@@ -310,6 +379,11 @@ function resetForm() {
     causeEntityType: 'chapter',
     effectEntityType: 'plot',
     relationship: 'causes',
+    causalType: 'trigger',
+    triggerMode: 'instant',
+    payoffStatus: 'pending',
+    upstreamCauseIds: [],
+    downstreamEffectIds: [],
     strength: 60,
     conditions: '',
     tags: [],
@@ -335,11 +409,22 @@ function openEdit(id: number) {
     description: target.description || '',
     causeType: target.causeType || 'event',
     effectType: target.effectType || 'result',
-    causeEntityId: parseStoredEntityId(target.causeEntityType || 'manual', target.causeEntityId),
-    effectEntityId: parseStoredEntityId(target.effectEntityType || 'manual', target.effectEntityId),
-    causeEntityType: target.causeEntityType || 'manual',
-    effectEntityType: target.effectEntityType || 'manual',
+    causeEntityId: parseStoredEntityId(
+      normalizeUiEntityType(target.causeEntityType, target.causeEntityId),
+      target.causeEntityId,
+    ),
+    effectEntityId: parseStoredEntityId(
+      normalizeUiEntityType(target.effectEntityType, target.effectEntityId),
+      target.effectEntityId,
+    ),
+    causeEntityType: normalizeUiEntityType(target.causeEntityType, target.causeEntityId),
+    effectEntityType: normalizeUiEntityType(target.effectEntityType, target.effectEntityId),
     relationship: target.relationship || 'causes',
+    causalType: target.causalType || 'trigger',
+    triggerMode: target.triggerMode || 'instant',
+    payoffStatus: target.payoffStatus || 'pending',
+    upstreamCauseIds: parseJsonNumberList(target.upstreamCauseIdsJson),
+    downstreamEffectIds: parseJsonNumberList(target.downstreamEffectIdsJson),
     strength: target.strength ?? 60,
     conditions: target.conditions || '',
     tags: splitCsv(target.tags),
@@ -362,6 +447,8 @@ async function submit() {
     ...form,
     causeEntityId: formatStoredEntityId(form.causeEntityType, form.causeEntityId),
     effectEntityId: formatStoredEntityId(form.effectEntityType, form.effectEntityId),
+    upstreamCauseIdsJson: JSON.stringify(form.upstreamCauseIds),
+    downstreamEffectIdsJson: JSON.stringify(form.downstreamEffectIds),
     tags: form.tags.join(','),
   }
 
@@ -425,7 +512,7 @@ async function confirmDelete() {
               <td>{{ getDisplayEntity(node.effectEntityType || 'manual', node.effectEntityId) }}</td>
               <td>{{ getRelationshipLabel(node.relationship || 'causes') }}</td>
               <td>{{ node.strength || 0 }}</td>
-              <td>{{ getStatusLabel(node.status) }}</td>
+              <td>{{ getStatusLabel(node.status) }} / {{ node.payoffStatus || 'pending' }}</td>
               <td>
                 <div class="d-flex ga-2">
                   <v-btn size="small" variant="text" @click="openEdit(node.id)">编辑</v-btn>
@@ -469,6 +556,15 @@ async function confirmDelete() {
                 v-model="form.relationship"
                 label="关系类型"
                 :items="relationshipOptions"
+                item-title="title"
+                item-value="value"
+              />
+            </v-col>
+            <v-col cols="12" md="4">
+              <v-select
+                v-model="form.causalType"
+                label="因果类型"
+                :items="causalTypeOptions"
                 item-title="title"
                 item-value="value"
               />
@@ -610,7 +706,51 @@ async function confirmDelete() {
               />
             </v-col>
             <v-col cols="12" md="6">
+              <v-select
+                v-model="form.triggerMode"
+                label="触发模式"
+                :items="triggerModeOptions"
+                item-title="title"
+                item-value="value"
+              />
+            </v-col>
+            <v-col cols="12" md="6">
+              <v-select
+                v-model="form.payoffStatus"
+                label="回收状态"
+                :items="payoffStatusOptions"
+                item-title="title"
+                item-value="value"
+              />
+            </v-col>
+            <v-col cols="12" md="6">
               <v-combobox v-model="form.tags" label="标签" multiple chips closable-chips />
+            </v-col>
+            <v-col cols="12" md="6">
+              <v-select
+                v-model="form.upstreamCauseIds"
+                label="上游原因节点"
+                :items="causalityStore.nodes.filter((item) => item.id !== editingId)"
+                item-title="name"
+                item-value="id"
+                multiple
+                chips
+                closable-chips
+                clearable
+              />
+            </v-col>
+            <v-col cols="12" md="6">
+              <v-select
+                v-model="form.downstreamEffectIds"
+                label="下游结果节点"
+                :items="causalityStore.nodes.filter((item) => item.id !== editingId)"
+                item-title="name"
+                item-value="id"
+                multiple
+                chips
+                closable-chips
+                clearable
+              />
             </v-col>
             <v-col cols="12">
               <MarkdownEditor

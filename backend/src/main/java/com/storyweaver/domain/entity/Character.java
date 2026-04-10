@@ -20,10 +20,27 @@ public class Character {
 
     private String description;
 
+    private String identity;
+
+    private String coreGoal;
+
+    private String growthArc;
+
+    private Long firstAppearanceChapterId;
+
+    private String activeStage;
+
+    private Integer isRetired;
+
     private String attributes;
+
+    private String advancedProfileJson;
 
     @TableField(exist = false)
     private String projectRole;
+
+    @TableField(exist = false)
+    private String roleType;
 
     @TableField(exist = false)
     private List<Long> projectIds;
@@ -65,11 +82,35 @@ public class Character {
     public String getDescription() { return description; }
     public void setDescription(String description) { this.description = description; }
 
+    public String getIdentity() { return identity; }
+    public void setIdentity(String identity) { this.identity = identity; }
+
+    public String getCoreGoal() { return coreGoal; }
+    public void setCoreGoal(String coreGoal) { this.coreGoal = coreGoal; }
+
+    public String getGrowthArc() { return growthArc; }
+    public void setGrowthArc(String growthArc) { this.growthArc = growthArc; }
+
+    public Long getFirstAppearanceChapterId() { return firstAppearanceChapterId; }
+    public void setFirstAppearanceChapterId(Long firstAppearanceChapterId) { this.firstAppearanceChapterId = firstAppearanceChapterId; }
+
+    public String getActiveStage() { return activeStage; }
+    public void setActiveStage(String activeStage) { this.activeStage = activeStage; }
+
+    public Integer getIsRetired() { return isRetired; }
+    public void setIsRetired(Integer isRetired) { this.isRetired = isRetired; }
+
     public String getAttributes() { return attributes; }
     public void setAttributes(String attributes) { this.attributes = attributes; }
 
+    public String getAdvancedProfileJson() { return advancedProfileJson; }
+    public void setAdvancedProfileJson(String advancedProfileJson) { this.advancedProfileJson = advancedProfileJson; }
+
     public String getProjectRole() { return projectRole; }
     public void setProjectRole(String projectRole) { this.projectRole = projectRole; }
+
+    public String getRoleType() { return roleType; }
+    public void setRoleType(String roleType) { this.roleType = roleType; }
 
     public List<Long> getProjectIds() { return projectIds; }
     public void setProjectIds(List<Long> projectIds) { this.projectIds = projectIds; }

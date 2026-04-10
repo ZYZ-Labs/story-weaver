@@ -11,7 +11,7 @@ export function getProjectCharacters(projectId: number) {
 
 export function createCharacter(
   projectId: number,
-  payload: Partial<Character> & { existingCharacterId?: number; projectRole?: string },
+  payload: Partial<Character> & { existingCharacterId?: number; projectRole?: string; roleType?: string },
 ) {
   return http.post<never, Character>(`/projects/${projectId}/characters`, payload)
 }
@@ -19,7 +19,7 @@ export function createCharacter(
 export function updateCharacter(
   projectId: number,
   characterId: number,
-  payload: Partial<Character> & { projectRole?: string },
+  payload: Partial<Character> & { projectRole?: string; roleType?: string },
 ) {
   return http.put(`/projects/${projectId}/characters/${characterId}`, payload)
 }

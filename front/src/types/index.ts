@@ -50,10 +50,21 @@ export interface Chapter {
   id: number
   projectId: number
   title: string
+  summary?: string
   content?: string
   orderNum?: number
   status?: number
+  chapterStatus?: string
   wordCount?: number
+  outlineId?: number | null
+  outlineTitle?: string
+  storyBeatIds?: number[]
+  storyBeatTitles?: string[]
+  prevChapterId?: number | null
+  nextChapterId?: number | null
+  mainPovCharacterId?: number | null
+  mainPovCharacterName?: string
+  readingTimeMinutes?: number
   requiredCharacterIds?: number[]
   requiredCharacterNames?: string[]
   createTime?: string
@@ -66,8 +77,16 @@ export interface Character {
   ownerUserId?: number
   name: string
   description?: string
+  identity?: string
+  coreGoal?: string
+  growthArc?: string
+  firstAppearanceChapterId?: number | null
+  activeStage?: string
+  isRetired?: boolean | number
   attributes?: string
+  advancedProfileJson?: string
   projectRole?: string
+  roleType?: string
   projectIds?: number[]
   projectNames?: string[]
   inventoryItemCount?: number
@@ -320,12 +339,18 @@ export interface Plot {
   description?: string
   content?: string
   plotType?: number
+  storyBeatType?: string
+  storyFunction?: string
   sequence?: number
   characters?: string
   locations?: string
   timeline?: string
   conflicts?: string
   resolutions?: string
+  eventResult?: string
+  prevBeatId?: number | null
+  nextBeatId?: number | null
+  outlinePriority?: number
   tags?: string
   status?: number
   createTime?: string
@@ -335,7 +360,11 @@ export interface Plot {
 export interface Outline {
   id: number
   projectId: number
+  outlineType?: string
+  parentOutlineId?: number | null
+  rootOutlineId?: number | null
   chapterId?: number | null
+  generatedChapterId?: number | null
   title?: string
   summary?: string
   content?: string
@@ -344,11 +373,18 @@ export interface Outline {
   turningPoints?: string
   expectedEnding?: string
   focusCharacterIds?: number[]
+  focusCharacterIdList?: number[]
   focusCharacterNames?: string[]
   relatedPlotIds?: number[]
+  relatedPlotIdList?: number[]
   relatedPlotTitles?: string[]
   relatedCausalityIds?: number[]
+  relatedCausalityIdList?: number[]
   relatedCausalityNames?: string[]
+  relatedWorldSettingIds?: number[]
+  relatedWorldSettingIdList?: number[]
+  relatedWorldSettingNames?: string[]
+  children?: Outline[]
   chapterTitle?: string
   status?: number
   orderNum?: number
@@ -368,6 +404,11 @@ export interface Causality {
   causeEntityType?: string
   effectEntityType?: string
   relationship?: string
+  causalType?: string
+  triggerMode?: string
+  payoffStatus?: string
+  upstreamCauseIdsJson?: string
+  downstreamEffectIdsJson?: string
   strength?: number
   conditions?: string
   tags?: string

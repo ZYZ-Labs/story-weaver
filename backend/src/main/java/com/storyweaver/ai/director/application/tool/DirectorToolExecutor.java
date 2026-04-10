@@ -28,6 +28,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -254,6 +255,14 @@ public class DirectorToolExecutor {
         payload.put("projectId", chapter.getProjectId());
         payload.put("title", safe(chapter.getTitle(), "未命名章节"));
         payload.put("orderNum", chapter.getOrderNum());
+        payload.put("summary", summarize(chapter.getSummary(), 180));
+        payload.put("chapterStatus", normalizeText(chapter.getChapterStatus()));
+        payload.put("outlineId", chapter.getOutlineId());
+        payload.put("outlineTitle", normalizeText(chapter.getOutlineTitle()));
+        payload.put("storyBeatIds", chapter.getStoryBeatIds() == null ? List.of() : chapter.getStoryBeatIds());
+        payload.put("storyBeatTitles", chapter.getStoryBeatTitles() == null ? List.of() : chapter.getStoryBeatTitles());
+        payload.put("mainPovCharacterId", chapter.getMainPovCharacterId());
+        payload.put("mainPovCharacterName", normalizeText(chapter.getMainPovCharacterName()));
         payload.put("wordCount", chapter.getWordCount() == null ? currentContent.length() : chapter.getWordCount());
         payload.put("requiredCharacterIds", chapter.getRequiredCharacterIds() == null ? List.of() : chapter.getRequiredCharacterIds());
         payload.put("requiredCharacterNames", chapter.getRequiredCharacterNames() == null ? List.of() : chapter.getRequiredCharacterNames());
@@ -279,6 +288,9 @@ public class DirectorToolExecutor {
         payload.put("projectId", outline.getProjectId());
         payload.put("chapterId", outline.getChapterId());
         payload.put("outlineId", outline.getId());
+        payload.put("outlineType", normalizeText(outline.getOutlineType()));
+        payload.put("parentOutlineId", outline.getParentOutlineId());
+        payload.put("rootOutlineId", outline.getRootOutlineId());
         payload.put("title", safe(outline.getTitle(), "未命名大纲"));
         payload.put("summary", summarize(outline.getSummary(), 240));
         payload.put("stageGoal", normalizeText(outline.getStageGoal()));
@@ -288,6 +300,8 @@ public class DirectorToolExecutor {
         payload.put("focusCharacterNames", outline.getFocusCharacterNames() == null ? List.of() : outline.getFocusCharacterNames());
         payload.put("relatedPlotIds", outline.getRelatedPlotIdList() == null ? List.of() : outline.getRelatedPlotIdList());
         payload.put("relatedCausalityIds", outline.getRelatedCausalityIdList() == null ? List.of() : outline.getRelatedCausalityIdList());
+        payload.put("relatedWorldSettingIds", outline.getRelatedWorldSettingIdList() == null ? List.of() : outline.getRelatedWorldSettingIdList());
+        payload.put("relatedWorldSettingNames", outline.getRelatedWorldSettingNames() == null ? List.of() : outline.getRelatedWorldSettingNames());
         payload.put("available", true);
         return payload;
     }
@@ -351,6 +365,15 @@ public class DirectorToolExecutor {
                     item.put("locations", normalizeText(plot.getLocations()));
                     item.put("timeline", normalizeText(plot.getTimeline()));
                     item.put("plotType", plot.getPlotType());
+                    item.put("storyBeatType", normalizeText(plot.getStoryBeatType()));
+                    item.put("storyFunction", normalizeText(plot.getStoryFunction()));
+                    item.put("eventResult", summarize(
+                            StringUtils.hasText(plot.getEventResult()) ? plot.getEventResult() : plot.getResolutions(),
+                            120
+                    ));
+                    item.put("prevBeatId", plot.getPrevBeatId());
+                    item.put("nextBeatId", plot.getNextBeatId());
+                    item.put("outlinePriority", plot.getOutlinePriority());
                     return item;
                 })
                 .toList();
@@ -405,6 +428,11 @@ public class DirectorToolExecutor {
                     result.put("strength", item.getStrength());
                     result.put("causeType", normalizeText(item.getCauseType()));
                     result.put("effectType", normalizeText(item.getEffectType()));
+                    result.put("causalType", normalizeText(item.getCausalType()));
+                    result.put("triggerMode", normalizeText(item.getTriggerMode()));
+                    result.put("payoffStatus", normalizeText(item.getPayoffStatus()));
+                    result.put("upstreamCauseIds", parseJsonOrText(item.getUpstreamCauseIdsJson()));
+                    result.put("downstreamEffectIds", parseJsonOrText(item.getDownstreamEffectIdsJson()));
                     return result;
                 })
                 .toList();
@@ -422,7 +450,19 @@ public class DirectorToolExecutor {
         }
 
         int topK = readTopK(arguments);
-        List<Map<String, Object>> payload = worldSettingService.getWorldSettingsByProjectId(context.project().getId()).stream()
+        Set<Long> relatedWorldSettingIds = context.outline() == null || context.outline().getRelatedWorldSettingIdList() == null
+                ? Set.of()
+                : new LinkedHashSet<>(context.outline().getRelatedWorldSettingIdList());
+        List<WorldSettingVO> worldSettings = worldSettingService.getWorldSettingsByProjectId(context.project().getId()).stream()
+                .filter(item -> relatedWorldSettingIds.isEmpty() || relatedWorldSettingIds.contains(item.getId()))
+                .limit(topK)
+                .toList();
+        if (worldSettings.isEmpty()) {
+            worldSettings = worldSettingService.getWorldSettingsByProjectId(context.project().getId()).stream()
+                    .limit(topK)
+                    .toList();
+        }
+        List<Map<String, Object>> payload = worldSettings.stream()
                 .limit(topK)
                 .map(item -> {
                     Map<String, Object> result = new LinkedHashMap<>();
@@ -463,6 +503,13 @@ public class DirectorToolExecutor {
                     result.put("description", summarize(item.getDescription(), 180));
                     result.put("attributes", parseJsonOrText(item.getAttributes()));
                     result.put("projectRole", normalizeText(item.getProjectRole()));
+                    result.put("roleType", normalizeText(item.getRoleType()));
+                    result.put("identity", normalizeText(item.getIdentity()));
+                    result.put("coreGoal", normalizeText(item.getCoreGoal()));
+                    result.put("growthArc", normalizeText(item.getGrowthArc()));
+                    result.put("activeStage", normalizeText(item.getActiveStage()));
+                    result.put("firstAppearanceChapterId", item.getFirstAppearanceChapterId());
+                    result.put("advancedProfile", parseJsonOrText(item.getAdvancedProfileJson()));
                     result.put("inventoryItemCount", item.getInventoryItemCount());
                     result.put("equippedItemCount", item.getEquippedItemCount());
                     result.put("rareItemCount", item.getRareItemCount());
@@ -506,7 +553,7 @@ public class DirectorToolExecutor {
                 .filter(Objects::nonNull)
                 .distinct()
                 .collect(Collectors.collectingAndThen(Collectors.toList(), itemIds -> itemIds.isEmpty()
-                        ? Map.of()
+                        ? Collections.emptyMap()
                         : itemMapper.selectBatchIds(itemIds).stream()
                                 .filter(item -> item != null && !Integer.valueOf(1).equals(item.getDeleted()))
                                 .collect(Collectors.toMap(ItemDefinition::getId, item -> item, (left, right) -> left, LinkedHashMap::new))));

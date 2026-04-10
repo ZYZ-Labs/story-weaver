@@ -20,7 +20,15 @@ public class Outline {
 
     private Long projectId;
 
+    private String outlineType;
+
+    private Long parentOutlineId;
+
+    private Long rootOutlineId;
+
     private Long chapterId;
+
+    private Long generatedChapterId;
 
     private String title;
 
@@ -42,12 +50,17 @@ public class Outline {
 
     private String relatedCausalityIds;
 
+    private String relatedWorldSettingIdsJson;
+
     private Integer status;
 
     private Integer orderNum;
 
     @TableField(exist = false)
     private String chapterTitle;
+
+    @TableField(exist = false)
+    private List<Outline> children;
 
     @TableField(exist = false)
     private List<Long> focusCharacterIdList;
@@ -66,6 +79,12 @@ public class Outline {
 
     @TableField(exist = false)
     private List<String> relatedCausalityNames;
+
+    @TableField(exist = false)
+    private List<Long> relatedWorldSettingIdList;
+
+    @TableField(exist = false)
+    private List<String> relatedWorldSettingNames;
 
     @TableField(fill = FieldFill.INSERT)
     private LocalDateTime createTime;

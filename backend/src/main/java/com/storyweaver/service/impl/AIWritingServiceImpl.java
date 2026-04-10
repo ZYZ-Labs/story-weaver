@@ -42,6 +42,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -297,21 +298,38 @@ public class AIWritingServiceImpl extends ServiceImpl<AIWritingRecordMapper, AIW
         }
 
         List<Outline> outlines = outlineService.getProjectOutlines(project.getId(), userId);
-        Outline currentOutline = outlines.stream()
-                .filter(item -> item.getChapterId() != null && item.getChapterId().equals(chapter.getId()))
-                .findFirst()
-                .orElse(null);
+        Outline currentOutline = resolveCurrentOutline(chapter, outlines);
 
         Set<Long> relatedPlotIds = new LinkedHashSet<>();
         Set<Long> relatedCausalityIds = new LinkedHashSet<>();
+        Set<Long> relatedWorldSettingIds = new LinkedHashSet<>();
         if (currentOutline != null) {
             relatedPlotIds.addAll(currentOutline.getRelatedPlotIdList() == null ? List.of() : currentOutline.getRelatedPlotIdList());
             relatedCausalityIds.addAll(currentOutline.getRelatedCausalityIdList() == null ? List.of() : currentOutline.getRelatedCausalityIdList());
+            relatedWorldSettingIds.addAll(currentOutline.getRelatedWorldSettingIdList() == null ? List.of() : currentOutline.getRelatedWorldSettingIdList());
         }
+        relatedPlotIds.addAll(chapter.getStoryBeatIds() == null ? List.of() : chapter.getStoryBeatIds());
 
         List<Plot> allPlots = plotService.getProjectPlots(project.getId());
-        List<Plot> relevantPlots = allPlots.stream()
-                .filter(item -> item.getChapterId() != null && item.getChapterId().equals(chapter.getId()) || relatedPlotIds.contains(item.getId()))
+        Map<Long, Plot> plotMap = allPlots.stream()
+                .filter(item -> item != null && item.getId() != null)
+                .collect(Collectors.toMap(Plot::getId, item -> item, (left, right) -> left, LinkedHashMap::new));
+        LinkedHashMap<Long, Plot> relevantPlotMap = new LinkedHashMap<>();
+        for (Long plotId : relatedPlotIds) {
+            Plot plot = plotMap.get(plotId);
+            if (plot != null) {
+                relevantPlotMap.put(plotId, plot);
+            }
+        }
+        for (Plot plot : allPlots) {
+            if (plot == null || plot.getId() == null) {
+                continue;
+            }
+            if (plot.getChapterId() != null && plot.getChapterId().equals(chapter.getId())) {
+                relevantPlotMap.put(plot.getId(), plot);
+            }
+        }
+        List<Plot> relevantPlots = relevantPlotMap.values().stream()
                 .limit(MAX_CONTEXT_ITEMS)
                 .collect(Collectors.toCollection(ArrayList::new));
         if (relevantPlots.isEmpty()) {
@@ -327,14 +345,36 @@ public class AIWritingServiceImpl extends ServiceImpl<AIWritingRecordMapper, AIW
             relevantCausalities = allCausalities.stream().limit(MAX_CONTEXT_ITEMS).toList();
         }
 
-        List<WorldSettingVO> worldSettings = worldSettingService.getWorldSettingsByProjectId(project.getId()).stream()
-                .limit(MAX_CONTEXT_ITEMS)
-                .toList();
+        List<WorldSettingVO> allWorldSettings = worldSettingService.getWorldSettingsByProjectId(project.getId());
+        Map<Long, WorldSettingVO> worldSettingMap = allWorldSettings.stream()
+                .filter(item -> item != null && item.getId() != null)
+                .collect(Collectors.toMap(WorldSettingVO::getId, item -> item, (left, right) -> left, LinkedHashMap::new));
+        LinkedHashMap<Long, WorldSettingVO> relevantWorldSettingMap = new LinkedHashMap<>();
+        for (Long worldSettingId : relatedWorldSettingIds) {
+            WorldSettingVO worldSetting = worldSettingMap.get(worldSettingId);
+            if (worldSetting != null) {
+                relevantWorldSettingMap.put(worldSettingId, worldSetting);
+            }
+        }
+        if (relevantWorldSettingMap.isEmpty()) {
+            for (WorldSettingVO item : allWorldSettings) {
+                if (item != null && item.getId() != null) {
+                    relevantWorldSettingMap.put(item.getId(), item);
+                }
+                if (relevantWorldSettingMap.size() >= MAX_CONTEXT_ITEMS) {
+                    break;
+                }
+            }
+        }
+        List<WorldSettingVO> worldSettings = new ArrayList<>(relevantWorldSettingMap.values());
 
         String retrievalQuery = String.join(" ",
                 safe(chapter.getTitle(), ""),
+                safe(chapter.getSummary(), ""),
                 userInstruction,
-                currentOutline == null ? "" : safe(currentOutline.getSummary(), currentOutline.getTitle()));
+                chapter.getStoryBeatTitles() == null ? "" : String.join(" ", chapter.getStoryBeatTitles()),
+                currentOutline == null ? "" : safe(currentOutline.getSummary(), currentOutline.getTitle()),
+                currentOutline == null ? "" : safe(currentOutline.getStageGoal(), ""));
         List<KnowledgeDocument> knowledgeDocuments = StringUtils.hasText(retrievalQuery)
                 ? knowledgeDocumentService.queryDocuments(project.getId(), userId, retrievalQuery).stream().limit(3).toList()
                 : List.of();
@@ -384,7 +424,7 @@ public class AIWritingServiceImpl extends ServiceImpl<AIWritingRecordMapper, AIW
                 .distinct()
                 .toList();
         Map<Long, ItemDefinition> itemMap = itemIds.isEmpty()
-                ? Map.of()
+                ? Collections.emptyMap()
                 : itemMapper.selectBatchIds(itemIds).stream()
                         .filter(item -> item != null && !Integer.valueOf(1).equals(item.getDeleted()))
                         .collect(Collectors.toMap(ItemDefinition::getId, item -> item, (left, right) -> left, LinkedHashMap::new));
@@ -772,6 +812,21 @@ public class AIWritingServiceImpl extends ServiceImpl<AIWritingRecordMapper, AIW
         if (chapter.getOrderNum() != null) {
             builder.append("章节顺序：第 ").append(chapter.getOrderNum()).append(" 章\n");
         }
+        if (StringUtils.hasText(chapter.getSummary())) {
+            builder.append("章节摘要：").append(limit(chapter.getSummary(), 180)).append('\n');
+        }
+        if (StringUtils.hasText(chapter.getChapterStatus())) {
+            builder.append("章节状态：").append(chapter.getChapterStatus().trim()).append('\n');
+        }
+        if (StringUtils.hasText(chapter.getOutlineTitle())) {
+            builder.append("绑定大纲：").append(chapter.getOutlineTitle().trim()).append('\n');
+        }
+        if (StringUtils.hasText(chapter.getMainPovCharacterName())) {
+            builder.append("主 POV 人物：").append(chapter.getMainPovCharacterName().trim()).append('\n');
+        }
+        if (chapter.getStoryBeatTitles() != null && !chapter.getStoryBeatTitles().isEmpty()) {
+            builder.append("剧情节拍：").append(String.join("、", chapter.getStoryBeatTitles())).append('\n');
+        }
         if (!contextBundle.requiredCharacters().isEmpty()) {
             builder.append("本章必须出现人物：").append(String.join("、", contextBundle.requiredCharacters())).append('\n');
         }
@@ -878,6 +933,9 @@ public class AIWritingServiceImpl extends ServiceImpl<AIWritingRecordMapper, AIW
             return;
         }
         builder.append("\n【章节大纲】\n");
+        if (StringUtils.hasText(outline.getOutlineType())) {
+            builder.append("大纲类型：").append(outline.getOutlineType().trim()).append('\n');
+        }
         if (StringUtils.hasText(outline.getTitle())) {
             builder.append("大纲标题：").append(outline.getTitle().trim()).append('\n');
         }
@@ -898,6 +956,9 @@ public class AIWritingServiceImpl extends ServiceImpl<AIWritingRecordMapper, AIW
         }
         if (outline.getFocusCharacterNames() != null && !outline.getFocusCharacterNames().isEmpty()) {
             builder.append("聚焦人物：").append(String.join("、", outline.getFocusCharacterNames())).append('\n');
+        }
+        if (outline.getRelatedWorldSettingNames() != null && !outline.getRelatedWorldSettingNames().isEmpty()) {
+            builder.append("关联世界观：").append(String.join("、", outline.getRelatedWorldSettingNames())).append('\n');
         }
     }
 
@@ -945,8 +1006,17 @@ public class AIWritingServiceImpl extends ServiceImpl<AIWritingRecordMapper, AIW
             if (StringUtils.hasText(plot.getConflicts())) {
                 builder.append("｜冲突：").append(limit(plot.getConflicts(), 80));
             }
-            if (StringUtils.hasText(plot.getResolutions())) {
-                builder.append("｜预期解法：").append(limit(plot.getResolutions(), 80));
+            if (StringUtils.hasText(plot.getStoryBeatType())) {
+                builder.append("｜节拍：").append(plot.getStoryBeatType().trim());
+            }
+            if (StringUtils.hasText(plot.getStoryFunction())) {
+                builder.append("｜功能：").append(plot.getStoryFunction().trim());
+            }
+            if (StringUtils.hasText(plot.getEventResult()) || StringUtils.hasText(plot.getResolutions())) {
+                builder.append("｜事件结果：").append(limit(
+                        StringUtils.hasText(plot.getEventResult()) ? plot.getEventResult() : plot.getResolutions(),
+                        80
+                ));
             }
             builder.append('\n');
         }
@@ -967,8 +1037,36 @@ public class AIWritingServiceImpl extends ServiceImpl<AIWritingRecordMapper, AIW
             if (StringUtils.hasText(item.getConditions())) {
                 builder.append("｜触发条件：").append(limit(item.getConditions(), 80));
             }
+            if (StringUtils.hasText(item.getCausalType())) {
+                builder.append("｜因果类型：").append(item.getCausalType().trim());
+            }
+            if (StringUtils.hasText(item.getTriggerMode())) {
+                builder.append("｜触发模式：").append(item.getTriggerMode().trim());
+            }
+            if (StringUtils.hasText(item.getPayoffStatus())) {
+                builder.append("｜回收状态：").append(item.getPayoffStatus().trim());
+            }
             builder.append('\n');
         }
+    }
+
+    private Outline resolveCurrentOutline(Chapter chapter, List<Outline> outlines) {
+        if (chapter == null || outlines == null || outlines.isEmpty()) {
+            return null;
+        }
+        if (chapter.getOutlineId() != null) {
+            Outline explicitOutline = outlines.stream()
+                    .filter(item -> item != null && chapter.getOutlineId().equals(item.getId()))
+                    .findFirst()
+                    .orElse(null);
+            if (explicitOutline != null) {
+                return explicitOutline;
+            }
+        }
+        return outlines.stream()
+                .filter(item -> item != null && item.getChapterId() != null && item.getChapterId().equals(chapter.getId()))
+                .findFirst()
+                .orElse(null);
     }
 
     private void appendWorldSettingSection(StringBuilder builder, List<WorldSettingVO> worldSettings) {

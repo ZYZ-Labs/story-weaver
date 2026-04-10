@@ -32,6 +32,20 @@ const plotTypeOptions = [
   { title: '伏笔铺设', value: 4 },
   { title: '结果回收', value: 5 },
 ]
+const storyBeatTypeOptions = [
+  { title: '主线', value: 'main' },
+  { title: '支线', value: 'side' },
+  { title: '高潮', value: 'climax' },
+  { title: '伏笔', value: 'foreshadow' },
+  { title: '揭示 / 回收', value: 'reveal' },
+]
+const storyFunctionOptions = [
+  'advance_mainline',
+  'character_growth',
+  'conflict_upgrade',
+  'foreshadow',
+  'payoff',
+]
 
 const statusOptions = [
   { title: '规划中', value: 0 },
@@ -46,12 +60,17 @@ const form = reactive({
   description: '',
   content: '',
   plotType: 1,
+  storyBeatType: 'main',
+  storyFunction: 'advance_mainline',
   sequence: 1,
   characters: [] as string[],
   locations: '',
   timeline: '',
   conflicts: '',
-  resolutions: '',
+  eventResult: '',
+  prevBeatId: null as number | null,
+  nextBeatId: null as number | null,
+  outlinePriority: 1,
   tags: [] as string[],
   status: 1,
 })
@@ -62,6 +81,14 @@ const characterOptions = computed(() =>
     title: item.name,
     value: item.name,
   })),
+)
+const beatOptions = computed(() =>
+  plotStore.plotlines
+    .filter((item) => item.id !== editingId.value)
+    .map((item) => ({
+      title: item.title || `剧情 #${item.id}`,
+      value: item.id,
+    })),
 )
 
 watch(
@@ -119,12 +146,17 @@ function resetForm() {
     description: '',
     content: '',
     plotType: 1,
+    storyBeatType: 'main',
+    storyFunction: 'advance_mainline',
     sequence: plotStore.plotlines.length + 1,
     characters: [],
     locations: '',
     timeline: '',
     conflicts: '',
-    resolutions: '',
+    eventResult: '',
+    prevBeatId: null,
+    nextBeatId: null,
+    outlinePriority: plotStore.plotlines.length + 1,
     tags: [],
     status: 1,
   })
@@ -158,12 +190,17 @@ function openEdit(id: number) {
     description: target.description || '',
     content: target.content || '',
     plotType: target.plotType || 1,
+    storyBeatType: target.storyBeatType || resolveStoryBeatType(target.plotType),
+    storyFunction: target.storyFunction || resolveStoryFunction(target.plotType),
     sequence: target.sequence || 1,
     characters: splitCsv(target.characters),
     locations: target.locations || '',
     timeline: target.timeline || '',
     conflicts: target.conflicts || '',
-    resolutions: target.resolutions || '',
+    eventResult: target.eventResult || target.resolutions || '',
+    prevBeatId: target.prevBeatId ?? null,
+    nextBeatId: target.nextBeatId ?? null,
+    outlinePriority: target.outlinePriority || target.sequence || 1,
     tags: splitCsv(target.tags),
     status: target.status ?? 1,
   })
@@ -183,6 +220,32 @@ function getPlotTypeLabel(plotType?: number) {
   return plotTypeOptions.find((item) => item.value === plotType)?.title || '未分类'
 }
 
+function getStoryBeatTypeLabel(storyBeatType?: string) {
+  return storyBeatTypeOptions.find((item) => item.value === storyBeatType)?.title || storyBeatType || '未分类'
+}
+
+function resolveStoryBeatType(plotType?: number) {
+  return (
+    {
+      2: 'side',
+      3: 'climax',
+      4: 'foreshadow',
+      5: 'reveal',
+    } as Record<number, string>
+  )[plotType || 1] || 'main'
+}
+
+function resolveStoryFunction(plotType?: number) {
+  return (
+    {
+      2: 'character_growth',
+      3: 'conflict_upgrade',
+      4: 'foreshadow',
+      5: 'payoff',
+    } as Record<number, string>
+  )[plotType || 1] || 'advance_mainline'
+}
+
 function getStatusLabel(status?: number) {
   return statusOptions.find((item) => item.value === status)?.title || '未知'
 }
@@ -192,7 +255,9 @@ async function submit() {
 
   const payload = {
     ...form,
+    outlinePriority: Number(form.outlinePriority) || Number(form.sequence) || 1,
     characters: form.characters.join(','),
+    eventResult: form.eventResult,
     tags: form.tags.join(','),
   }
 
@@ -246,6 +311,9 @@ async function confirmDelete() {
                   <v-chip size="small" color="primary" variant="tonal">
                     {{ getPlotTypeLabel(plot.plotType) }}
                   </v-chip>
+                  <v-chip size="small" color="secondary" variant="outlined">
+                    {{ getStoryBeatTypeLabel(plot.storyBeatType || resolveStoryBeatType(plot.plotType)) }}
+                  </v-chip>
                   <v-chip size="small" variant="outlined">
                     {{ getStatusLabel(plot.status) }}
                   </v-chip>
@@ -266,6 +334,12 @@ async function confirmDelete() {
             <div class="text-body-2 mt-4">涉及角色：{{ plot.characters || '暂无' }}</div>
             <div class="text-body-2 mt-2">涉及地点：{{ plot.locations || '暂无' }}</div>
             <div class="text-caption text-medium-emphasis mt-2">时间线：{{ plot.timeline || '未设置' }}</div>
+            <div class="text-caption text-medium-emphasis mt-2">
+              功能：{{ plot.storyFunction || resolveStoryFunction(plot.plotType) }} | 优先级：{{ plot.outlinePriority || plot.sequence || '-' }}
+            </div>
+            <div class="text-caption text-medium-emphasis mt-2">
+              前置 Beat：{{ plot.prevBeatId || '无' }} | 后续 Beat：{{ plot.nextBeatId || '无' }}
+            </div>
 
             <div class="mt-3">
               <div class="text-caption text-medium-emphasis mb-1">冲突</div>
@@ -273,8 +347,8 @@ async function confirmDelete() {
             </div>
 
             <div class="mt-3">
-              <div class="text-caption text-medium-emphasis mb-1">解决方案</div>
-              <MarkdownContent compact :source="plot.resolutions" empty-text="暂无解决方案" />
+              <div class="text-caption text-medium-emphasis mb-1">事件结果 / 回收</div>
+              <MarkdownContent compact :source="plot.eventResult || plot.resolutions" empty-text="暂无结果描述" />
             </div>
 
             <div class="d-flex ga-2 mt-5">
@@ -316,6 +390,23 @@ async function confirmDelete() {
                 :items="statusOptions"
                 item-title="title"
                 item-value="value"
+              />
+            </v-col>
+            <v-col cols="12" md="3">
+              <v-select
+                v-model="form.storyBeatType"
+                label="节拍类型"
+                :items="storyBeatTypeOptions"
+                item-title="title"
+                item-value="value"
+              />
+            </v-col>
+            <v-col cols="12" md="3">
+              <v-combobox
+                v-model="form.storyFunction"
+                label="剧情功能"
+                :items="storyFunctionOptions"
+                clearable
               />
             </v-col>
             <v-col cols="12">
@@ -369,6 +460,29 @@ async function confirmDelete() {
             <v-col cols="12" md="6">
               <v-text-field v-model="form.sequence" label="排序" type="number" />
             </v-col>
+            <v-col cols="12" md="6">
+              <v-text-field v-model="form.outlinePriority" label="大纲优先级" type="number" />
+            </v-col>
+            <v-col cols="12" md="6">
+              <v-select
+                v-model="form.prevBeatId"
+                label="前置 Beat"
+                :items="beatOptions"
+                item-title="title"
+                item-value="value"
+                clearable
+              />
+            </v-col>
+            <v-col cols="12" md="6">
+              <v-select
+                v-model="form.nextBeatId"
+                label="后续 Beat"
+                :items="beatOptions"
+                item-title="title"
+                item-value="value"
+                clearable
+              />
+            </v-col>
             <v-col cols="12">
               <MarkdownEditor
                 v-model="form.conflicts"
@@ -380,11 +494,11 @@ async function confirmDelete() {
             </v-col>
             <v-col cols="12">
               <MarkdownEditor
-                v-model="form.resolutions"
-                label="解决方案"
+                v-model="form.eventResult"
+                label="事件结果 / 回收"
                 :rows="4"
                 auto-grow
-                preview-empty-text="暂无解决方案"
+                preview-empty-text="暂无事件结果"
               />
             </v-col>
           </v-row>

@@ -9,6 +9,12 @@ public class OutlineRequestDTO {
 
     private Long chapterId;
 
+    private String outlineType;
+
+    private Long parentOutlineId;
+
+    private Long generatedChapterId;
+
     private String title;
 
     private String summary;
@@ -28,6 +34,8 @@ public class OutlineRequestDTO {
     private List<Long> relatedPlotIds;
 
     private List<Long> relatedCausalityIds;
+
+    private List<Long> relatedWorldSettingIds;
 
     private Integer status;
 

@@ -47,12 +47,18 @@ public class PlotCrudServiceImpl implements PlotCrudService {
         existing.setDescription(plot.getDescription());
         existing.setContent(plot.getContent());
         existing.setPlotType(plot.getPlotType());
+        existing.setStoryBeatType(plot.getStoryBeatType());
+        existing.setStoryFunction(plot.getStoryFunction());
         existing.setSequence(plot.getSequence());
         existing.setCharacters(plot.getCharacters());
         existing.setLocations(plot.getLocations());
         existing.setTimeline(plot.getTimeline());
         existing.setConflicts(plot.getConflicts());
         existing.setResolutions(plot.getResolutions());
+        existing.setEventResult(plot.getEventResult());
+        existing.setPrevBeatId(plot.getPrevBeatId());
+        existing.setNextBeatId(plot.getNextBeatId());
+        existing.setOutlinePriority(plot.getOutlinePriority());
         existing.setTags(plot.getTags());
         existing.setStatus(plot.getStatus());
         return plotService.updatePlot(existing, userId);

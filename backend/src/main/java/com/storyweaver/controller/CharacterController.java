@@ -82,7 +82,7 @@ public class CharacterController {
         Long userId = SecurityUtils.getCurrentUserId(authentication);
 
         Character character = requestDTO.getExistingCharacterId() != null
-                ? characterService.attachCharacter(projectId, requestDTO.getExistingCharacterId(), userId, requestDTO.getProjectRole())
+                ? characterService.attachCharacter(projectId, requestDTO.getExistingCharacterId(), userId, resolveRoleType(requestDTO))
                 : characterService.createCharacter(projectId, userId, requestDTO);
 
         if (character == null) {
@@ -196,5 +196,15 @@ public class CharacterController {
                 "message", "获取成功",
                 "data", character
         ));
+    }
+
+    private String resolveRoleType(CharacterRequestDTO requestDTO) {
+        if (requestDTO == null) {
+            return null;
+        }
+        if (requestDTO.getRoleType() != null && !requestDTO.getRoleType().isBlank()) {
+            return requestDTO.getRoleType();
+        }
+        return requestDTO.getProjectRole();
     }
 }

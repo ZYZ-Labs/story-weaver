@@ -33,6 +33,16 @@ public class Causality {
     private String effectEntityType;
     
     private String relationship;
+
+    private String causalType;
+
+    private String triggerMode;
+
+    private String payoffStatus;
+
+    private String upstreamCauseIdsJson;
+
+    private String downstreamEffectIdsJson;
     
     private Integer strength;
     

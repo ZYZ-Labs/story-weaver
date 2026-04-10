@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.storyweaver.domain.dto.CharacterRequestDTO;
 import com.storyweaver.domain.entity.Chapter;
@@ -91,7 +92,9 @@ public class CharacterServiceImpl extends ServiceImpl<CharacterMapper, Character
         for (ProjectCharacterLink link : links) {
             Character character = characterMap.get(link.getCharacterId());
             if (character != null) {
-                character.setProjectRole(normalizeProjectRole(link.getProjectRole()));
+                String resolvedRoleType = resolveRoleType(link.getRoleType(), link.getProjectRole());
+                character.setProjectRole(resolvedRoleType);
+                character.setRoleType(resolvedRoleType);
                 result.add(character);
             }
         }
@@ -125,12 +128,10 @@ public class CharacterServiceImpl extends ServiceImpl<CharacterMapper, Character
         Character character = new Character();
         character.setProjectId(projectId);
         character.setOwnerUserId(userId);
-        character.setName(requestDTO.getName().trim());
-        character.setDescription(trimToNull(requestDTO.getDescription()));
-        character.setAttributes(normalizeAttributes(requestDTO.getAttributes()));
+        applyCharacterRequest(character, requestDTO);
         save(character);
 
-        upsertProjectLink(projectId, character.getId(), requestDTO.getProjectRole());
+        upsertProjectLink(projectId, character.getId(), resolveRoleType(requestDTO.getRoleType(), requestDTO.getProjectRole()));
         return hydrateProjectCharacter(character.getId(), projectId);
     }
 
@@ -162,13 +163,9 @@ public class CharacterServiceImpl extends ServiceImpl<CharacterMapper, Character
             return false;
         }
 
-        if (StringUtils.hasText(requestDTO.getName())) {
-            existing.setName(requestDTO.getName().trim());
-        }
-        existing.setDescription(trimToNull(requestDTO.getDescription()));
-        existing.setAttributes(normalizeAttributes(requestDTO.getAttributes()));
+        applyCharacterRequest(existing, requestDTO);
         updateById(existing);
-        upsertProjectLink(projectId, characterId, requestDTO.getProjectRole());
+        upsertProjectLink(projectId, characterId, resolveRoleType(requestDTO.getRoleType(), requestDTO.getProjectRole()));
         return true;
     }
 
@@ -227,7 +224,9 @@ public class CharacterServiceImpl extends ServiceImpl<CharacterMapper, Character
         }
         attachProjectSummaries(List.of(character));
         ProjectCharacterLink link = findProjectLink(projectId, characterId);
-        character.setProjectRole(link == null ? DEFAULT_PROJECT_ROLE : normalizeProjectRole(link.getProjectRole()));
+        String resolvedRoleType = link == null ? DEFAULT_PROJECT_ROLE : resolveRoleType(link.getRoleType(), link.getProjectRole());
+        character.setProjectRole(resolvedRoleType);
+        character.setRoleType(resolvedRoleType);
         return character;
     }
 
@@ -359,17 +358,20 @@ public class CharacterServiceImpl extends ServiceImpl<CharacterMapper, Character
     }
 
     private void upsertProjectLink(Long projectId, Long characterId, String projectRole) {
+        String resolvedRoleType = normalizeProjectRole(projectRole);
         ProjectCharacterLink existingLink = findProjectLink(projectId, characterId);
         if (existingLink == null) {
             ProjectCharacterLink link = new ProjectCharacterLink();
             link.setProjectId(projectId);
             link.setCharacterId(characterId);
-            link.setProjectRole(normalizeProjectRole(projectRole));
+            link.setProjectRole(resolvedRoleType);
+            link.setRoleType(resolvedRoleType);
             projectCharacterMapper.insert(link);
             return;
         }
 
-        existingLink.setProjectRole(normalizeProjectRole(projectRole));
+        existingLink.setProjectRole(resolvedRoleType);
+        existingLink.setRoleType(resolvedRoleType);
         projectCharacterMapper.updateById(existingLink);
     }
 
@@ -379,6 +381,71 @@ public class CharacterServiceImpl extends ServiceImpl<CharacterMapper, Character
 
     private String trimToNull(String value) {
         return StringUtils.hasText(value) ? value.trim() : null;
+    }
+
+    private void applyCharacterRequest(Character character, CharacterRequestDTO requestDTO) {
+        if (StringUtils.hasText(requestDTO.getName())) {
+            character.setName(requestDTO.getName().trim());
+        }
+        character.setDescription(trimToNull(requestDTO.getDescription()));
+
+        String normalizedAttributes = requestDTO.getAttributes() != null
+                ? normalizeAttributes(requestDTO.getAttributes())
+                : defaultJson(character.getAttributes());
+        String normalizedAdvancedProfile = requestDTO.getAdvancedProfileJson() != null
+                ? normalizeAttributes(requestDTO.getAdvancedProfileJson())
+                : defaultJson(StringUtils.hasText(character.getAdvancedProfileJson()) ? character.getAdvancedProfileJson() : normalizedAttributes);
+
+        String identityFallback = firstNonBlank(
+                character.getIdentity(),
+                readJsonString(normalizedAdvancedProfile, "identity"),
+                readJsonString(normalizedAdvancedProfile, "身份"),
+                readJsonString(normalizedAttributes, "身份")
+        );
+        String coreGoalFallback = firstNonBlank(
+                character.getCoreGoal(),
+                readJsonString(normalizedAdvancedProfile, "coreGoal"),
+                readJsonString(normalizedAdvancedProfile, "目标"),
+                readJsonString(normalizedAttributes, "目标")
+        );
+        String growthArcFallback = firstNonBlank(
+                character.getGrowthArc(),
+                readJsonString(normalizedAdvancedProfile, "growthArc"),
+                readJsonString(normalizedAdvancedProfile, "成长弧线")
+        );
+        String activeStageFallback = firstNonBlank(
+                character.getActiveStage(),
+                readJsonString(normalizedAdvancedProfile, "activeStage"),
+                readJsonString(normalizedAdvancedProfile, "当前阶段")
+        );
+
+        String identity = requestDTO.getIdentity() != null ? trimToNull(requestDTO.getIdentity()) : identityFallback;
+        String coreGoal = requestDTO.getCoreGoal() != null ? trimToNull(requestDTO.getCoreGoal()) : coreGoalFallback;
+        String growthArc = requestDTO.getGrowthArc() != null ? trimToNull(requestDTO.getGrowthArc()) : growthArcFallback;
+        String activeStage = requestDTO.getActiveStage() != null ? trimToNull(requestDTO.getActiveStage()) : activeStageFallback;
+        Long firstAppearanceChapterId = requestDTO.getFirstAppearanceChapterId() != null
+                ? requestDTO.getFirstAppearanceChapterId()
+                : character.getFirstAppearanceChapterId();
+        Integer isRetired = requestDTO.getIsRetired() != null
+                ? (requestDTO.getIsRetired() ? 1 : 0)
+                : (character.getIsRetired() == null ? 0 : character.getIsRetired());
+
+        character.setIdentity(identity);
+        character.setCoreGoal(coreGoal);
+        character.setGrowthArc(growthArc);
+        character.setFirstAppearanceChapterId(firstAppearanceChapterId);
+        character.setActiveStage(activeStage);
+        character.setIsRetired(isRetired);
+        character.setAttributes(mergeLegacyAttributes(normalizedAttributes, identity, coreGoal, growthArc, activeStage, isRetired));
+        character.setAdvancedProfileJson(mergeAdvancedProfile(
+                normalizedAdvancedProfile,
+                identity,
+                coreGoal,
+                growthArc,
+                firstAppearanceChapterId,
+                activeStage,
+                isRetired
+        ));
     }
 
     private String normalizeAttributes(String attributes) {
@@ -392,5 +459,117 @@ public class CharacterServiceImpl extends ServiceImpl<CharacterMapper, Character
         } catch (JsonProcessingException exception) {
             return "{}";
         }
+    }
+
+    private String defaultJson(String rawJson) {
+        return StringUtils.hasText(rawJson) ? normalizeAttributes(rawJson) : "{}";
+    }
+
+    private String resolveRoleType(String roleType, String projectRole) {
+        if (StringUtils.hasText(roleType)) {
+            return normalizeProjectRole(roleType);
+        }
+        return normalizeProjectRole(projectRole);
+    }
+
+    private String readJsonString(String rawJson, String key) {
+        if (!StringUtils.hasText(rawJson) || !StringUtils.hasText(key)) {
+            return null;
+        }
+        try {
+            Map<String, Object> values = objectMapper.readValue(rawJson, new TypeReference<Map<String, Object>>() {});
+            Object value = values.get(key);
+            if (value == null) {
+                return null;
+            }
+            String text = String.valueOf(value).trim();
+            return text.isEmpty() ? null : text;
+        } catch (JsonProcessingException exception) {
+            return null;
+        }
+    }
+
+    private String mergeLegacyAttributes(
+            String baseJson,
+            String identity,
+            String coreGoal,
+            String growthArc,
+            String activeStage,
+            Integer isRetired) {
+        Map<String, Object> values = toMutableMap(baseJson);
+        putOrRemove(values, "身份", identity);
+        putOrRemove(values, "目标", coreGoal);
+        putOrRemove(values, "成长弧线", growthArc);
+        putOrRemove(values, "当前阶段", activeStage);
+        putOrRemove(values, "是否退场", isRetired == null ? null : isRetired);
+        return writeJson(values);
+    }
+
+    private String mergeAdvancedProfile(
+            String baseJson,
+            String identity,
+            String coreGoal,
+            String growthArc,
+            Long firstAppearanceChapterId,
+            String activeStage,
+            Integer isRetired) {
+        Map<String, Object> values = toMutableMap(baseJson);
+        putOrRemove(values, "identity", identity);
+        putOrRemove(values, "coreGoal", coreGoal);
+        putOrRemove(values, "growthArc", growthArc);
+        putOrRemove(values, "firstAppearanceChapterId", firstAppearanceChapterId);
+        putOrRemove(values, "activeStage", activeStage);
+        putOrRemove(values, "isRetired", isRetired == null ? null : isRetired == 1);
+        return writeJson(values);
+    }
+
+    private Map<String, Object> toMutableMap(String rawJson) {
+        if (!StringUtils.hasText(rawJson)) {
+            return new LinkedHashMap<>();
+        }
+        try {
+            return new LinkedHashMap<>(objectMapper.readValue(rawJson, new TypeReference<Map<String, Object>>() {}));
+        } catch (JsonProcessingException exception) {
+            return new LinkedHashMap<>();
+        }
+    }
+
+    private void putOrRemove(Map<String, Object> values, String key, Object value) {
+        if (!StringUtils.hasText(key)) {
+            return;
+        }
+        if (value == null) {
+            values.remove(key);
+            return;
+        }
+        if (value instanceof String textValue) {
+            if (StringUtils.hasText(textValue)) {
+                values.put(key, textValue.trim());
+            } else {
+                values.remove(key);
+            }
+            return;
+        }
+        values.put(key, value);
+    }
+
+    private String writeJson(Map<String, Object> values) {
+        try {
+            return objectMapper.writeValueAsString(values);
+        } catch (JsonProcessingException exception) {
+            return "{}";
+        }
+    }
+
+    private String firstNonBlank(String... values) {
+        if (values == null) {
+            return null;
+        }
+        for (String value : values) {
+            if (StringUtils.hasText(value)) {
+                return value.trim();
+            }
+        }
+        return null;
     }
 }

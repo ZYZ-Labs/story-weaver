@@ -12,6 +12,7 @@ import { useCharacterStore } from '@/stores/character'
 import { useOutlineStore } from '@/stores/outline'
 import { usePlotStore } from '@/stores/plot'
 import { useProjectStore } from '@/stores/project'
+import { useWorldSettingStore } from '@/stores/world-setting'
 import type { Outline } from '@/types'
 
 const projectStore = useProjectStore()
@@ -20,6 +21,7 @@ const chapterStore = useChapterStore()
 const characterStore = useCharacterStore()
 const plotStore = usePlotStore()
 const causalityStore = useCausalityStore()
+const worldSettingStore = useWorldSettingStore()
 
 const projectId = computed(() => projectStore.selectedProjectId)
 const dialog = ref(false)
@@ -38,8 +40,17 @@ const statusOptions = [
   { title: '已归档', value: 3 },
 ]
 
+const outlineTypeOptions = [
+  { title: '全局总纲', value: 'global' },
+  { title: '卷级大纲', value: 'volume' },
+  { title: '章节大纲', value: 'chapter' },
+]
+
 const form = reactive({
+  outlineType: 'chapter',
+  parentOutlineId: null as number | null,
   chapterId: null as number | null,
+  generatedChapterId: null as number | null,
   title: '',
   summary: '',
   content: '',
@@ -50,9 +61,38 @@ const form = reactive({
   focusCharacterIds: [] as number[],
   relatedPlotIds: [] as number[],
   relatedCausalityIds: [] as number[],
+  relatedWorldSettingIds: [] as number[],
   status: 0,
   orderNum: 1,
 })
+
+const outlineLookup = computed(() =>
+  outlineStore.outlines.reduce<Record<number, Outline>>((accumulator, item) => {
+    accumulator[item.id] = item
+    return accumulator
+  }, {}),
+)
+
+const orderedOutlines = computed(() =>
+  [...outlineStore.outlines].sort((left, right) => {
+    const leftRoot = left.rootOutlineId ?? left.id
+    const rightRoot = right.rootOutlineId ?? right.id
+    if (leftRoot !== rightRoot) {
+      return leftRoot - rightRoot
+    }
+    const leftParent = left.parentOutlineId ?? 0
+    const rightParent = right.parentOutlineId ?? 0
+    if (leftParent !== rightParent) {
+      return leftParent - rightParent
+    }
+    const leftOrder = left.orderNum ?? Number.MAX_SAFE_INTEGER
+    const rightOrder = right.orderNum ?? Number.MAX_SAFE_INTEGER
+    if (leftOrder !== rightOrder) {
+      return leftOrder - rightOrder
+    }
+    return left.id - right.id
+  }),
+)
 
 const chapterOptions = computed(() =>
   chapterStore.chapters.map((item) => ({
@@ -78,6 +118,20 @@ const causalityOptions = computed(() =>
     value: item.id,
   })),
 )
+const worldSettingOptions = computed(() =>
+  worldSettingStore.items.map((item) => ({
+    title: item.name || item.title || `设定 #${item.id}`,
+    value: item.id,
+  })),
+)
+const parentOutlineOptions = computed(() =>
+  orderedOutlines.value
+    .filter((item) => item.id !== editingId.value && canUseAsParent(item, form.outlineType))
+    .map((item) => ({
+      title: `${getOutlineTypeLabel(item.outlineType, resolveOutlineChapterId(item))} · ${item.title || `大纲 #${item.id}`}`,
+      value: item.id,
+    })),
+)
 
 watch(
   projectId,
@@ -91,23 +145,47 @@ watch(
       characterStore.fetchByProject(id),
       plotStore.fetchByProject(id),
       causalityStore.fetchByProject(id),
+      worldSettingStore.fetchByProject(id),
     ])
   },
   { immediate: true },
 )
 
 watch(
-  () => form.chapterId,
+  () => form.outlineType,
+  (outlineType) => {
+    if (outlineType === 'chapter') {
+      if (!form.generatedChapterId) {
+        form.generatedChapterId = chapterStore.chapters[0]?.id ?? null
+      }
+      form.chapterId = form.generatedChapterId
+      return
+    }
+    form.chapterId = null
+    form.generatedChapterId = null
+  },
+)
+
+watch(
+  () => form.generatedChapterId,
   (chapterId) => {
+    form.chapterId = chapterId
+
+    if (form.outlineType !== 'chapter') {
+      return
+    }
+
     const chapter = chapterStore.chapters.find((item) => item.id === chapterId)
     if (!chapter) {
       return
     }
 
     const autoTitle = `第 ${chapter.orderNum || '?'} 章大纲 · ${chapter.title}`
-    const autoSummary = chapter.content?.trim()
-      ? `延续章节《${chapter.title}》当前素材，梳理本章的目标、冲突与关键转折：${chapter.content.slice(0, 80)}`
-      : `围绕章节《${chapter.title}》规划本章目标、冲突推进、转折点与收束方式。`
+    const autoSummary = chapter.summary?.trim()
+      ? `围绕章节《${chapter.title}》推进：${chapter.summary.slice(0, 80)}`
+      : chapter.content?.trim()
+        ? `延续章节《${chapter.title}》当前素材，梳理目标、冲突与关键转折：${chapter.content.slice(0, 80)}`
+        : `围绕章节《${chapter.title}》规划目标、冲突推进、节拍和收束方式。`
 
     if (!form.title || form.title === lastAutoTitle.value) {
       form.title = autoTitle
@@ -133,8 +211,13 @@ onMounted(() => {
 })
 
 function resetForm() {
+  const defaultOutlineType = chapterStore.chapters.length ? 'chapter' : 'global'
+  const defaultChapterId = defaultOutlineType === 'chapter' ? (chapterStore.chapters[0]?.id ?? null) : null
   Object.assign(form, {
-    chapterId: chapterStore.chapters[0]?.id ?? null,
+    outlineType: defaultOutlineType,
+    parentOutlineId: null,
+    chapterId: defaultChapterId,
+    generatedChapterId: defaultChapterId,
     title: '',
     summary: '',
     content: '',
@@ -145,6 +228,7 @@ function resetForm() {
     focusCharacterIds: [],
     relatedPlotIds: [],
     relatedCausalityIds: [],
+    relatedWorldSettingIds: [],
     status: 0,
     orderNum: outlineStore.outlines.length + 1,
   })
@@ -160,9 +244,14 @@ function openCreate() {
 }
 
 function openEdit(outline: Outline) {
+  const outlineType = normalizeOutlineType(outline.outlineType, resolveOutlineChapterId(outline))
+  const chapterId = resolveOutlineChapterId(outline)
   editingId.value = outline.id
   Object.assign(form, {
-    chapterId: outline.chapterId ?? null,
+    outlineType,
+    parentOutlineId: outline.parentOutlineId ?? null,
+    chapterId,
+    generatedChapterId: chapterId,
     title: outline.title || '',
     summary: outline.summary || '',
     content: outline.content || '',
@@ -170,9 +259,12 @@ function openEdit(outline: Outline) {
     keyConflict: outline.keyConflict || '',
     turningPoints: outline.turningPoints || '',
     expectedEnding: outline.expectedEnding || '',
-    focusCharacterIds: [...(outline.focusCharacterIds || [])],
-    relatedPlotIds: [...(outline.relatedPlotIds || [])],
-    relatedCausalityIds: [...(outline.relatedCausalityIds || [])],
+    focusCharacterIds: normalizeNumberList(outline.focusCharacterIdList ?? outline.focusCharacterIds),
+    relatedPlotIds: normalizeNumberList(outline.relatedPlotIdList ?? outline.relatedPlotIds),
+    relatedCausalityIds: normalizeNumberList(outline.relatedCausalityIdList ?? outline.relatedCausalityIds),
+    relatedWorldSettingIds: normalizeNumberList(
+      outline.relatedWorldSettingIdList ?? outline.relatedWorldSettingIds,
+    ),
     status: outline.status ?? 0,
     orderNum: outline.orderNum || 1,
   })
@@ -187,8 +279,65 @@ function requestDelete(id: number) {
   confirmVisible.value = true
 }
 
+function normalizeOutlineType(value?: string | null, chapterId?: number | null) {
+  if (value === 'global' || value === 'volume' || value === 'chapter') {
+    return value
+  }
+  return chapterId ? 'chapter' : 'global'
+}
+
+function normalizeNumberList(value: unknown) {
+  if (Array.isArray(value)) {
+    return value
+      .map((item) => Number(item))
+      .filter((item) => Number.isFinite(item))
+  }
+  if (typeof value === 'string') {
+    return value
+      .split(/[\s,，[\]]+/)
+      .map((item) => Number(item.trim()))
+      .filter((item) => Number.isFinite(item))
+  }
+  return [] as number[]
+}
+
+function resolveOutlineChapterId(outline: Outline) {
+  return outline.generatedChapterId ?? outline.chapterId ?? null
+}
+
+function canUseAsParent(outline: Outline, childType: string) {
+  const parentType = normalizeOutlineType(outline.outlineType, resolveOutlineChapterId(outline))
+  if (parentType === 'chapter') {
+    return false
+  }
+  if (parentType === 'volume') {
+    return childType === 'chapter'
+  }
+  return parentType === 'global'
+}
+
 function getStatusLabel(status?: number) {
   return statusOptions.find((item) => item.value === status)?.title || '未标记'
+}
+
+function getOutlineTypeLabel(outlineType?: string | null, chapterId?: number | null) {
+  return outlineTypeOptions.find((item) => item.value === normalizeOutlineType(outlineType, chapterId))?.title || '章节大纲'
+}
+
+function getParentOutlineLabel(outline: Outline) {
+  if (!outline.parentOutlineId) {
+    return '顶层节点'
+  }
+  const parent = outlineLookup.value[outline.parentOutlineId]
+  return parent?.title || `父级 #${outline.parentOutlineId}`
+}
+
+function getOutlineTargetLabel(outline: Outline) {
+  const chapterId = resolveOutlineChapterId(outline)
+  if (!chapterId) {
+    return '未绑定章节'
+  }
+  return outline.chapterTitle || `章节 #${chapterId}`
 }
 
 async function submit() {
@@ -197,7 +346,10 @@ async function submit() {
   }
 
   const payload = {
-    chapterId: form.chapterId,
+    outlineType: form.outlineType,
+    parentOutlineId: form.parentOutlineId,
+    chapterId: form.outlineType === 'chapter' ? form.generatedChapterId : null,
+    generatedChapterId: form.outlineType === 'chapter' ? form.generatedChapterId : null,
     title: form.title,
     summary: form.summary,
     content: form.content,
@@ -208,6 +360,7 @@ async function submit() {
     focusCharacterIds: [...form.focusCharacterIds],
     relatedPlotIds: [...form.relatedPlotIds],
     relatedCausalityIds: [...form.relatedCausalityIds],
+    relatedWorldSettingIds: [...form.relatedWorldSettingIds],
     status: form.status,
     orderNum: Number(form.orderNum) || 1,
   }
@@ -232,7 +385,7 @@ async function confirmDelete() {
 <template>
   <PageContainer
     title="大纲管理"
-    description="把章节目标、冲突、转折、人物焦点、剧情节点和因果链整理成结构化大纲。保存后的大纲会直接进入 AI 写作上下文。"
+    description="把全局总纲、卷级大纲和章节大纲整理成树型结构，并把人物、剧情、因果、世界观一起挂到 AI 写作上下文里。"
   >
     <template #actions>
       <v-btn color="primary" prepend-icon="mdi-plus" :disabled="!projectId" @click="openCreate">
@@ -243,34 +396,42 @@ async function confirmDelete() {
     <EmptyState
       v-if="!projectId"
       title="先选择一个项目"
-      description="大纲与项目强绑定。请先在左侧切换到一个小说项目，再开始规划章节大纲。"
+      description="大纲与项目强绑定。请先在左侧切换到一个小说项目，再开始规划全局总纲、卷纲或章节大纲。"
     />
 
     <template v-else>
       <v-alert type="info" variant="tonal" class="mb-4">
-        AI 写作时会优先读取“当前章节对应的大纲”，再补充相关剧情、因果、世界观和知识片段，最后一起组装为 prompt。
+        现在支持三层结构：全局总纲负责总方向，卷级大纲负责阶段推进，章节大纲负责落到单章写作。章节大纲会优先被 AI 总导读取。
       </v-alert>
 
       <EmptyState
         v-if="!outlineStore.outlines.length"
         title="还没有大纲"
-        description="先建一条章节大纲，后面写作中心和章节页生成正文时，就能自动读取这些结构化上下文。"
+        description="可以先建一个全局总纲，也可以直接从章节开始建单章大纲。"
       >
         <v-btn color="primary" prepend-icon="mdi-plus" @click="openCreate">创建第一条大纲</v-btn>
       </EmptyState>
 
       <v-row v-else>
-        <v-col v-for="outline in outlineStore.outlines" :key="outline.id" cols="12" md="6">
+        <v-col v-for="outline in orderedOutlines" :key="outline.id" cols="12" md="6">
           <v-card class="soft-panel h-100">
             <v-card-text>
               <div class="d-flex justify-space-between align-start ga-3">
                 <div>
                   <div class="text-h6">{{ outline.title || '未命名大纲' }}</div>
-                  <div class="text-caption text-medium-emphasis mt-2">
-                    {{ outline.chapterTitle || '未关联章节' }} · 顺序 {{ outline.orderNum || '-' }}
+                  <div class="d-flex flex-wrap ga-2 mt-3">
+                    <v-chip size="small" color="primary" variant="tonal">
+                      {{ getOutlineTypeLabel(outline.outlineType, resolveOutlineChapterId(outline)) }}
+                    </v-chip>
+                    <v-chip size="small" variant="outlined">
+                      {{ getStatusLabel(outline.status) }}
+                    </v-chip>
                   </div>
                 </div>
-                <v-chip color="primary" variant="tonal">{{ getStatusLabel(outline.status) }}</v-chip>
+              </div>
+
+              <div class="text-caption text-medium-emphasis mt-3">
+                父级：{{ getParentOutlineLabel(outline) }} | 绑定章节：{{ getOutlineTargetLabel(outline) }} | 顺序：{{ outline.orderNum || '-' }}
               </div>
 
               <div class="mt-4">
@@ -278,7 +439,7 @@ async function confirmDelete() {
               </div>
 
               <div v-if="outline.stageGoal" class="mt-4">
-                <div class="text-body-2 font-weight-medium mb-2">本章目标</div>
+                <div class="text-body-2 font-weight-medium mb-2">阶段目标</div>
                 <MarkdownContent :source="outline.stageGoal" compact />
               </div>
               <div v-if="outline.keyConflict" class="mt-3">
@@ -312,6 +473,9 @@ async function confirmDelete() {
               <div v-if="outline.relatedCausalityNames?.length" class="text-caption text-medium-emphasis mt-2">
                 关联因果：{{ outline.relatedCausalityNames.join('、') }}
               </div>
+              <div v-if="outline.relatedWorldSettingNames?.length" class="text-caption text-medium-emphasis mt-2">
+                关联世界观：{{ outline.relatedWorldSettingNames.join('、') }}
+              </div>
 
               <div class="d-flex ga-2 mt-5">
                 <v-btn variant="outlined" @click="openEdit(outline)">编辑</v-btn>
@@ -323,23 +487,29 @@ async function confirmDelete() {
       </v-row>
     </template>
 
-    <v-dialog v-model="dialog" max-width="980">
+    <v-dialog v-model="dialog" max-width="1040">
       <v-card>
         <v-card-title>{{ editingId ? '编辑大纲' : '新建大纲' }}</v-card-title>
         <v-card-text class="pt-4">
           <v-row>
-            <v-col cols="12" md="5">
+            <v-col cols="12" md="4">
               <v-select
-                v-model="form.chapterId"
-                label="关联章节"
-                :items="chapterOptions"
+                v-model="form.outlineType"
+                label="大纲类型"
+                :items="outlineTypeOptions"
+                item-title="title"
+                item-value="value"
+              />
+            </v-col>
+            <v-col cols="12" md="4">
+              <v-select
+                v-model="form.parentOutlineId"
+                label="父级大纲"
+                :items="parentOutlineOptions"
                 item-title="title"
                 item-value="value"
                 clearable
               />
-            </v-col>
-            <v-col cols="12" md="3">
-              <v-text-field v-model="form.orderNum" type="number" label="排序号" />
             </v-col>
             <v-col cols="12" md="4">
               <v-select
@@ -351,6 +521,20 @@ async function confirmDelete() {
               />
             </v-col>
 
+            <v-col v-if="form.outlineType === 'chapter'" cols="12" md="6">
+              <v-select
+                v-model="form.generatedChapterId"
+                label="绑定章节"
+                :items="chapterOptions"
+                item-title="title"
+                item-value="value"
+                clearable
+              />
+            </v-col>
+            <v-col cols="12" :md="form.outlineType === 'chapter' ? 6 : 4">
+              <v-text-field v-model="form.orderNum" type="number" label="排序号" />
+            </v-col>
+
             <v-col cols="12">
               <v-text-field v-model="form.title" label="大纲标题" />
             </v-col>
@@ -358,7 +542,7 @@ async function confirmDelete() {
               <MarkdownEditor v-model="form.summary" label="摘要" :rows="3" preview-empty-text="暂无摘要" />
             </v-col>
             <v-col cols="12" md="6">
-              <MarkdownEditor v-model="form.stageGoal" label="本章目标" :rows="3" preview-empty-text="暂无本章目标" />
+              <MarkdownEditor v-model="form.stageGoal" label="阶段目标" :rows="3" preview-empty-text="暂无阶段目标" />
             </v-col>
             <v-col cols="12" md="6">
               <MarkdownEditor v-model="form.keyConflict" label="核心冲突" :rows="3" preview-empty-text="暂无核心冲突" />
@@ -374,11 +558,11 @@ async function confirmDelete() {
                 v-model="form.content"
                 label="详细大纲正文"
                 :rows="8"
-                placeholder="可以按场景、节拍、镜头感或事件顺序展开详细大纲。"
+                placeholder="可以按阶段、场景、节拍或事件顺序展开详细大纲。"
                 preview-empty-text="暂无详细大纲正文"
               />
             </v-col>
-            <v-col cols="12" md="4">
+            <v-col cols="12" md="3">
               <v-select
                 v-model="form.focusCharacterIds"
                 label="聚焦人物"
@@ -391,7 +575,7 @@ async function confirmDelete() {
                 clearable
               />
             </v-col>
-            <v-col cols="12" md="4">
+            <v-col cols="12" md="3">
               <v-select
                 v-model="form.relatedPlotIds"
                 label="关联剧情节点"
@@ -404,11 +588,24 @@ async function confirmDelete() {
                 clearable
               />
             </v-col>
-            <v-col cols="12" md="4">
+            <v-col cols="12" md="3">
               <v-select
                 v-model="form.relatedCausalityIds"
                 label="关联因果链"
                 :items="causalityOptions"
+                item-title="title"
+                item-value="value"
+                multiple
+                chips
+                closable-chips
+                clearable
+              />
+            </v-col>
+            <v-col cols="12" md="3">
+              <v-select
+                v-model="form.relatedWorldSettingIds"
+                label="关联世界观"
+                :items="worldSettingOptions"
                 item-title="title"
                 item-value="value"
                 multiple

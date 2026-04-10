@@ -380,8 +380,18 @@ public class AIDirectorApplicationServiceImpl implements AIDirectorApplicationSe
         if (chapter == null || chapter.getProjectId() == null) {
             return null;
         }
-        return outlineService.getProjectOutlines(chapter.getProjectId(), userId).stream()
-                .filter(item -> item.getChapterId() != null && item.getChapterId().equals(chapter.getId()))
+        List<Outline> outlines = outlineService.getProjectOutlines(chapter.getProjectId(), userId);
+        if (chapter.getOutlineId() != null) {
+            Outline explicitOutline = outlines.stream()
+                    .filter(item -> item != null && chapter.getOutlineId().equals(item.getId()))
+                    .findFirst()
+                    .orElse(null);
+            if (explicitOutline != null) {
+                return explicitOutline;
+            }
+        }
+        return outlines.stream()
+                .filter(item -> item != null && item.getChapterId() != null && item.getChapterId().equals(chapter.getId()))
                 .findFirst()
                 .orElse(null);
     }

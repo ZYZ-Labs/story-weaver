@@ -11,6 +11,7 @@ import MarkdownEditor from '@/components/MarkdownEditor.vue'
 import NameSuggestionDialog from '@/components/NameSuggestionDialog.vue'
 import PageContainer from '@/components/PageContainer.vue'
 import { useCharacterStore } from '@/stores/character'
+import { useChapterStore } from '@/stores/chapter'
 import { useProjectStore } from '@/stores/project'
 import type { Character, CharacterAttributeSuggestionResult } from '@/types'
 import {
@@ -22,6 +23,7 @@ import {
 
 const projectStore = useProjectStore()
 const characterStore = useCharacterStore()
+const chapterStore = useChapterStore()
 
 const dialog = ref(false)
 const inventoryDialog = ref(false)
@@ -122,6 +124,10 @@ const form = reactive({
   name: '',
   description: '',
   projectRole: '配角',
+  growthArc: '',
+  activeStage: '',
+  firstAppearanceChapterId: null as number | null,
+  isRetired: false,
 })
 
 const attributeForm = reactive(createEmptyCharacterAttributeForm())
@@ -129,7 +135,13 @@ const attributeForm = reactive(createEmptyCharacterAttributeForm())
 const charactersWithProfiles = computed(() =>
   characterStore.characters.map((character) => ({
     ...character,
-    profile: parseCharacterAttributes(character.attributes),
+    profile: buildCharacterProfile(character),
+    roleLabel: character.roleType || character.projectRole || '配角',
+    coreIdentity: resolveCharacterIdentity(character),
+    coreGoal: resolveCharacterGoal(character),
+    growthArcLabel: resolveCharacterGrowthArc(character),
+    activeStageLabel: resolveCharacterActiveStage(character),
+    retiredFlag: resolveRetiredFlag(character.isRetired),
   })),
 )
 
@@ -143,6 +155,29 @@ const selectedReusableCharacter = computed(() =>
 )
 
 const attributePreview = computed(() => buildCharacterAttributesJson(cloneCharacterAttributeForm(attributeForm)))
+const advancedProfilePreview = computed(() =>
+  JSON.stringify(
+    {
+      identity: attributeForm.identity.trim() || undefined,
+      coreGoal: attributeForm.goal.trim() || undefined,
+      growthArc: form.growthArc.trim() || undefined,
+      firstAppearanceChapterId: form.firstAppearanceChapterId || undefined,
+      activeStage: form.activeStage.trim() || undefined,
+      isRetired: form.isRetired ? 1 : 0,
+      camp: attributeForm.camp.trim() || undefined,
+      tags: attributeForm.tags.length ? [...attributeForm.tags] : undefined,
+      relations: attributeForm.relations.length ? [...attributeForm.relations] : undefined,
+    },
+    null,
+    2,
+  ),
+)
+const chapterOptions = computed(() =>
+  chapterStore.chapters.map((item) => ({
+    title: `第 ${item.orderNum || '-'} 章 · ${item.title}`,
+    value: item.id,
+  })),
+)
 
 watch(
   currentProjectId,
@@ -150,7 +185,11 @@ watch(
     if (!projectId) {
       return
     }
-    await Promise.allSettled([characterStore.fetchByProject(projectId), characterStore.fetchLibrary()])
+    await Promise.allSettled([
+      characterStore.fetchByProject(projectId),
+      characterStore.fetchLibrary(),
+      chapterStore.fetchByProject(projectId),
+    ])
   },
   { immediate: true },
 )
@@ -161,20 +200,82 @@ onMounted(() => {
   }
 })
 
+function parseJsonObject(raw?: string | null) {
+  if (!raw?.trim()) {
+    return {}
+  }
+  try {
+    const parsed = JSON.parse(raw) as Record<string, unknown>
+    return parsed && typeof parsed === 'object' ? parsed : {}
+  } catch {
+    return {}
+  }
+}
+
+function readTextValue(source: Record<string, unknown>, key: string) {
+  const value = source[key]
+  return typeof value === 'string' ? value.trim() : ''
+}
+
+function readNumberValue(source: Record<string, unknown>, key: string) {
+  const value = source[key]
+  const normalized = Number(value)
+  return Number.isFinite(normalized) ? normalized : null
+}
+
+function resolveRetiredFlag(value?: boolean | number | null) {
+  return value === true || value === 1
+}
+
+function resolveCharacterIdentity(character?: Character | null) {
+  return character?.identity?.trim() || ''
+}
+
+function resolveCharacterGoal(character?: Character | null) {
+  return character?.coreGoal?.trim() || ''
+}
+
+function resolveCharacterGrowthArc(character?: Character | null) {
+  return character?.growthArc?.trim() || ''
+}
+
+function resolveCharacterActiveStage(character?: Character | null) {
+  return character?.activeStage?.trim() || ''
+}
+
+function buildCharacterProfile(character: Character) {
+  const profile = cloneCharacterAttributeForm(parseCharacterAttributes(character.attributes))
+  if (resolveCharacterIdentity(character)) {
+    profile.identity = resolveCharacterIdentity(character)
+  }
+  if (resolveCharacterGoal(character)) {
+    profile.goal = resolveCharacterGoal(character)
+  }
+  return profile
+}
+
 function fillAttributeForm(character?: Character | null) {
-  Object.assign(
-    attributeForm,
-    cloneCharacterAttributeForm(parseCharacterAttributes(character?.attributes)),
-  )
+  const parsed = cloneCharacterAttributeForm(parseCharacterAttributes(character?.attributes))
+  parsed.identity = resolveCharacterIdentity(character) || parsed.identity
+  parsed.goal = resolveCharacterGoal(character) || parsed.goal
+  Object.assign(attributeForm, parsed)
 }
 
 function fillForm(character?: Character | null) {
+  const advancedProfile = parseJsonObject(character?.advancedProfileJson)
   Object.assign(form, {
     mode: 'create',
     existingCharacterId: null,
     name: character?.name || '',
     description: character?.description || '',
-    projectRole: character?.projectRole || '配角',
+    projectRole: character?.roleType || character?.projectRole || '配角',
+    growthArc: resolveCharacterGrowthArc(character) || readTextValue(advancedProfile, 'growthArc'),
+    activeStage: resolveCharacterActiveStage(character) || readTextValue(advancedProfile, 'activeStage'),
+    firstAppearanceChapterId:
+      character?.firstAppearanceChapterId ??
+      readNumberValue(advancedProfile, 'firstAppearanceChapterId') ??
+      null,
+    isRetired: resolveRetiredFlag(character?.isRetired),
   })
   fillAttributeForm(character)
   attributeSuggestionSourceLabel.value = ''
@@ -194,6 +295,10 @@ function openAttach() {
     name: '',
     description: '',
     projectRole: '配角',
+    growthArc: '',
+    activeStage: '',
+    firstAppearanceChapterId: null,
+    isRetired: false,
   })
   fillAttributeForm(selectedReusableCharacter.value)
   dialog.value = true
@@ -235,13 +340,22 @@ async function submit() {
       await characterStore.create(currentProjectId.value, {
         existingCharacterId: form.existingCharacterId || undefined,
         projectRole: form.projectRole,
+        roleType: form.projectRole,
       })
     } else {
       const payload = {
         name: form.name.trim(),
         description: form.description.trim(),
+        identity: attributeForm.identity.trim(),
+        coreGoal: attributeForm.goal.trim(),
+        growthArc: form.growthArc.trim(),
+        firstAppearanceChapterId: form.firstAppearanceChapterId,
+        activeStage: form.activeStage.trim(),
+        isRetired: form.isRetired,
         attributes: attributePreview.value,
+        advancedProfileJson: advancedProfilePreview.value,
         projectRole: form.projectRole,
+        roleType: form.projectRole,
       }
 
       if (editingId.value) {
@@ -436,7 +550,7 @@ async function refreshCharacterInventorySummary() {
             <div class="d-flex align-center justify-space-between ga-3">
               <div>
                 <div class="text-h6">{{ item.name }}</div>
-                <div class="text-caption text-medium-emphasis mt-1">{{ item.projectRole || '配角' }}</div>
+                <div class="text-caption text-medium-emphasis mt-1">{{ item.roleLabel }}</div>
               </div>
               <v-chip color="secondary" variant="tonal" size="small">
                 关联项目 {{ item.projectNames?.length || 1 }}
@@ -460,9 +574,19 @@ async function refreshCharacterInventorySummary() {
 
             <v-divider class="my-4" />
 
-            <div class="text-caption text-medium-emphasis">身份：{{ item.profile.identity || '未填写' }}</div>
+            <div class="text-caption text-medium-emphasis">身份：{{ item.coreIdentity || '未填写' }}</div>
             <div class="text-caption text-medium-emphasis mt-1">阵营：{{ item.profile.camp || '未填写' }}</div>
-            <div class="text-caption text-medium-emphasis mt-1">目标：{{ item.profile.goal || '未填写' }}</div>
+            <div class="text-caption text-medium-emphasis mt-1">目标：{{ item.coreGoal || '未填写' }}</div>
+            <div class="text-caption text-medium-emphasis mt-1">成长弧线：{{ item.growthArcLabel || '未填写' }}</div>
+            <div class="text-caption text-medium-emphasis mt-1">当前阶段：{{ item.activeStageLabel || '未填写' }}</div>
+            <div class="d-flex flex-wrap ga-2 mt-3">
+              <v-chip v-if="item.firstAppearanceChapterId" size="small" variant="outlined">
+                初登场章节 #{{ item.firstAppearanceChapterId }}
+              </v-chip>
+              <v-chip v-if="item.retiredFlag" size="small" color="warning" variant="tonal">
+                已退场
+              </v-chip>
+            </div>
 
             <div class="mt-4">
               <div class="text-caption text-medium-emphasis mb-2">技能</div>
@@ -552,7 +676,7 @@ async function refreshCharacterInventorySummary() {
               <v-col cols="12" md="6">
                 <v-select
                   v-model="form.projectRole"
-                  label="当前项目中的角色定位"
+                  label="当前项目中的角色定位 / roleType"
                   :items="projectRoleOptions"
                   clearable
                 />
@@ -584,7 +708,7 @@ async function refreshCharacterInventorySummary() {
               <v-col cols="12" md="4">
                 <v-select
                   v-model="form.projectRole"
-                  label="当前项目中的角色定位"
+                  label="当前项目中的角色定位 / roleType"
                   :items="projectRoleOptions"
                   clearable
                 />
@@ -648,6 +772,31 @@ async function refreshCharacterInventorySummary() {
               </v-col>
               <v-col cols="12" md="6">
                 <v-text-field v-model="attributeForm.goal" label="核心目标" />
+              </v-col>
+              <v-col cols="12" md="6">
+                <MarkdownEditor
+                  v-model="form.growthArc"
+                  label="成长弧线"
+                  :rows="4"
+                  auto-grow
+                  preview-empty-text="暂无成长弧线"
+                />
+              </v-col>
+              <v-col cols="12" md="3">
+                <v-text-field v-model="form.activeStage" label="当前阶段" placeholder="例如：入局期 / 破局前夜" />
+              </v-col>
+              <v-col cols="12" md="3">
+                <v-select
+                  v-model="form.firstAppearanceChapterId"
+                  label="初登场章节"
+                  :items="chapterOptions"
+                  item-title="title"
+                  item-value="value"
+                  clearable
+                />
+              </v-col>
+              <v-col cols="12" md="3">
+                <v-switch v-model="form.isRetired" color="warning" label="是否退场" inset />
               </v-col>
               <v-col cols="12" md="6">
                 <MarkdownEditor
@@ -861,6 +1010,15 @@ async function refreshCharacterInventorySummary() {
                   :model-value="attributePreview"
                   rows="8"
                   label="自动组装后的属性 JSON"
+                  readonly
+                  auto-grow
+                />
+              </v-col>
+              <v-col cols="12">
+                <v-textarea
+                  :model-value="advancedProfilePreview"
+                  rows="8"
+                  label="自动组装后的高级画像 JSON"
                   readonly
                   auto-grow
                 />

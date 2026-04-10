@@ -25,6 +25,10 @@ public class Plot {
     private String content;
     
     private Integer plotType;
+
+    private String storyBeatType;
+
+    private String storyFunction;
     
     private Integer sequence;
     
@@ -37,6 +41,14 @@ public class Plot {
     private String conflicts;
     
     private String resolutions;
+
+    private String eventResult;
+
+    private Long prevBeatId;
+
+    private Long nextBeatId;
+
+    private Integer outlinePriority;
     
     private String tags;
     

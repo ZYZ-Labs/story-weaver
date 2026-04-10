@@ -21,6 +21,8 @@ public class ProjectCharacterLink {
 
     private String projectRole;
 
+    private String roleType;
+
     @TableField(fill = FieldFill.INSERT)
     private LocalDateTime createTime;
 

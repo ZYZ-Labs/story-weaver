@@ -31,12 +31,19 @@ export const useCharacterStore = defineStore('character', () => {
     }
   }
 
-  async function create(projectId: number, payload: Partial<Character> & { existingCharacterId?: number; projectRole?: string }) {
+  async function create(
+    projectId: number,
+    payload: Partial<Character> & { existingCharacterId?: number; projectRole?: string; roleType?: string },
+  ) {
     await characterApi.createCharacter(projectId, payload)
     await Promise.allSettled([fetchByProject(projectId), fetchLibrary()])
   }
 
-  async function update(projectId: number, characterId: number, payload: Partial<Character> & { projectRole?: string }) {
+  async function update(
+    projectId: number,
+    characterId: number,
+    payload: Partial<Character> & { projectRole?: string; roleType?: string },
+  ) {
     await characterApi.updateCharacter(projectId, characterId, payload)
     await Promise.allSettled([fetchByProject(projectId), fetchLibrary()])
   }

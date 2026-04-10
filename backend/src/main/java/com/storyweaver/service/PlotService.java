@@ -6,6 +6,7 @@ import com.storyweaver.domain.entity.Plot;
 import com.storyweaver.repository.PlotMapper;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -35,6 +36,7 @@ public class PlotService extends ServiceImpl<PlotMapper, Plot> {
     
     @Transactional
     public boolean createPlot(Plot plot, Long userId) {
+        normalizePlotFields(plot);
         if (plot.getSequence() == null) {
             Integer maxSequence = baseMapper.getMaxSequenceByChapterId(plot.getChapterId());
             plot.setSequence(maxSequence != null ? maxSequence + 1 : 1);
@@ -52,6 +54,7 @@ public class PlotService extends ServiceImpl<PlotMapper, Plot> {
     
     @Transactional
     public boolean updatePlot(Plot plot, Long userId) {
+        normalizePlotFields(plot);
         plot.setUpdateTime(LocalDateTime.now());
         plot.setUpdateBy(userId);
         
@@ -123,5 +126,69 @@ public class PlotService extends ServiceImpl<PlotMapper, Plot> {
             case 4: return "Background Plot";
             default: return "Unknown";
         }
+    }
+
+    private void normalizePlotFields(Plot plot) {
+        if (plot == null) {
+            return;
+        }
+
+        if (!StringUtils.hasText(plot.getStoryBeatType())) {
+            plot.setStoryBeatType(resolveStoryBeatType(plot.getPlotType()));
+        }
+        if (!StringUtils.hasText(plot.getStoryFunction())) {
+            plot.setStoryFunction(resolveStoryFunction(plot.getPlotType()));
+        }
+        if (!StringUtils.hasText(plot.getEventResult()) && StringUtils.hasText(plot.getResolutions())) {
+            plot.setEventResult(plot.getResolutions().trim());
+        }
+        if (!StringUtils.hasText(plot.getResolutions()) && StringUtils.hasText(plot.getEventResult())) {
+            plot.setResolutions(plot.getEventResult().trim());
+        }
+        if (plot.getPlotType() == null) {
+            plot.setPlotType(resolveLegacyPlotType(plot.getStoryBeatType()));
+        }
+        if (plot.getOutlinePriority() == null) {
+            plot.setOutlinePriority(plot.getSequence());
+        }
+    }
+
+    private String resolveStoryBeatType(Integer plotType) {
+        if (plotType == null) {
+            return "main";
+        }
+        return switch (plotType) {
+            case 2 -> "side";
+            case 3 -> "climax";
+            case 4 -> "foreshadow";
+            case 5 -> "reveal";
+            default -> "main";
+        };
+    }
+
+    private String resolveStoryFunction(Integer plotType) {
+        if (plotType == null) {
+            return "advance_mainline";
+        }
+        return switch (plotType) {
+            case 2 -> "character_growth";
+            case 3 -> "conflict_upgrade";
+            case 4 -> "foreshadow";
+            case 5 -> "payoff";
+            default -> "advance_mainline";
+        };
+    }
+
+    private Integer resolveLegacyPlotType(String storyBeatType) {
+        if (!StringUtils.hasText(storyBeatType)) {
+            return 1;
+        }
+        return switch (storyBeatType.trim()) {
+            case "side" -> 2;
+            case "climax" -> 3;
+            case "foreshadow" -> 4;
+            case "reveal" -> 5;
+            default -> 1;
+        };
     }
 }

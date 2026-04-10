@@ -13,6 +13,8 @@ import PageContainer from '@/components/PageContainer.vue'
 import { generateNameSuggestions } from '@/api/name-suggestion'
 import { useCharacterStore } from '@/stores/character'
 import { useChapterStore } from '@/stores/chapter'
+import { useOutlineStore } from '@/stores/outline'
+import { usePlotStore } from '@/stores/plot'
 import { useProjectStore } from '@/stores/project'
 import { useProviderStore } from '@/stores/provider'
 import { useSettingsStore } from '@/stores/settings'
@@ -31,6 +33,8 @@ const providerModelLibrary: Record<string, string[]> = {
 const projectStore = useProjectStore()
 const chapterStore = useChapterStore()
 const characterStore = useCharacterStore()
+const outlineStore = useOutlineStore()
+const plotStore = usePlotStore()
 const writingStore = useWritingStore()
 const settingsStore = useSettingsStore()
 const providerStore = useProviderStore()
@@ -98,20 +102,55 @@ const chapterAiProfile = computed(() =>
     chapterAiForm.selectedModel || selectedDraftProvider.value?.modelName,
   ),
 )
+const outlineOptions = computed(() =>
+  outlineStore.outlines.map((item) => ({
+    title: item.title || `大纲 #${item.id}`,
+    value: item.id,
+  })),
+)
+const storyBeatOptions = computed(() =>
+  plotStore.plotlines.map((item) => ({
+    title: item.title || `剧情 #${item.id}`,
+    value: item.id,
+  })),
+)
+const chapterLinkOptions = computed(() =>
+  chapterStore.chapters
+    .filter((item) => item.id !== editingId.value)
+    .map((item) => ({
+      title: `第 ${item.orderNum || '-'} 章 · ${item.title}`,
+      value: item.id,
+    })),
+)
 
 const tableHeaders = [
   { title: '顺序', key: 'orderNum', width: 88 },
   { title: '标题', key: 'title' },
+  { title: '状态', key: 'chapterStatus', width: 112 },
   { title: '字数', key: 'wordCount', width: 100 },
   { title: '操作', key: 'actions', sortable: false, width: 188 },
 ]
 
 const toneOptions = ['紧张压迫', '轻松日常', '神秘悬疑', '高压推进', '克制伤感', '史诗宏大']
+const chapterStatusOptions = [
+  { title: '草稿', value: 'draft' },
+  { title: '待审阅', value: 'review' },
+  { title: '润色中', value: 'polishing' },
+  { title: '已定稿', value: 'published' },
+  { title: '已归档', value: 'archived' },
+]
 
 const form = reactive({
   title: '',
+  summary: '',
   content: '',
   orderNum: 1,
+  chapterStatus: 'draft',
+  outlineId: null as number | null,
+  storyBeatIds: [] as number[],
+  prevChapterId: null as number | null,
+  nextChapterId: null as number | null,
+  mainPovCharacterId: null as number | null,
   requiredCharacterIds: [] as number[],
 })
 
@@ -134,6 +173,8 @@ watch(
     await Promise.allSettled([
       chapterStore.fetchByProject(projectId),
       characterStore.fetchByProject(projectId),
+      outlineStore.fetchByProject(projectId),
+      plotStore.fetchByProject(projectId),
     ])
   },
   { immediate: true },
@@ -207,10 +248,25 @@ onMounted(async () => {
 function fillForm(chapter?: Chapter | null) {
   Object.assign(form, {
     title: chapter?.title || '',
+    summary: chapter?.summary || '',
     content: chapter?.content || '',
     orderNum: chapter?.orderNum || chapterStore.chapters.length + 1,
+    chapterStatus: chapter?.chapterStatus || 'draft',
+    outlineId: chapter?.outlineId ?? null,
+    storyBeatIds: normalizeNumberList(chapter?.storyBeatIds),
+    prevChapterId: chapter?.prevChapterId ?? null,
+    nextChapterId: chapter?.nextChapterId ?? null,
+    mainPovCharacterId: chapter?.mainPovCharacterId ?? null,
     requiredCharacterIds: [...(chapter?.requiredCharacterIds || [])],
   })
+}
+
+function normalizeNumberList(value?: number[] | null) {
+  return Array.isArray(value)
+    ? value
+        .map((item) => Number(item))
+        .filter((item) => Number.isFinite(item))
+    : []
 }
 
 function getPreferredDraftProviderId() {
@@ -318,13 +374,17 @@ function getWritingTypeLabel(value?: string) {
   return mapping[value || ''] || value || '初稿'
 }
 
-function getStatusLabel(value?: string) {
+function getWritingRecordStatusLabel(value?: string) {
   const mapping: Record<string, string> = {
     draft: '草稿',
     accepted: '已采纳',
     rejected: '已拒绝',
   }
   return mapping[value || ''] || value || '草稿'
+}
+
+function getChapterStatusLabel(value?: string) {
+  return chapterStatusOptions.find((item) => item.value === value)?.title || value || '草稿'
 }
 
 function fillLatestRecordFromStore() {
@@ -337,8 +397,16 @@ async function submit() {
   }
 
   const payload = {
-    ...form,
+    title: form.title,
+    summary: form.summary,
+    content: form.content,
     orderNum: Number(form.orderNum) || 1,
+    chapterStatus: form.chapterStatus,
+    outlineId: form.outlineId,
+    storyBeatIds: [...form.storyBeatIds],
+    prevChapterId: form.prevChapterId,
+    nextChapterId: form.nextChapterId,
+    mainPovCharacterId: form.mainPovCharacterId,
     requiredCharacterIds: [...form.requiredCharacterIds],
   }
 
@@ -364,6 +432,7 @@ async function generateTitleSuggestions() {
       entityType: 'chapter',
       brief:
         form.content.trim() ||
+        form.summary.trim() ||
         form.title.trim() ||
         '请结合当前项目风格，为这个章节生成更贴合连载小说语境的标题。',
       extraRequirements: `当前章节顺序为第 ${Number(form.orderNum) || 1} 章，请返回适合中文长篇连载的章节标题候选。`,
@@ -387,6 +456,11 @@ function buildChapterAiInstruction(action: 'draft' | 'continue' | 'expand') {
     chapterAiForm.tone.trim() && `情绪氛围：${chapterAiForm.tone.trim()}`,
     chapterAiForm.characterVoice.trim() && `人物口吻：${chapterAiForm.characterVoice.trim()}`,
     chapterAiForm.extraInstruction.trim() && `补充要求：${chapterAiForm.extraInstruction.trim()}`,
+    currentPreview.value?.summary?.trim() && `章节摘要：${currentPreview.value.summary.trim()}`,
+    currentPreview.value?.outlineTitle?.trim() && `绑定大纲：${currentPreview.value.outlineTitle.trim()}`,
+    currentPreview.value?.mainPovCharacterName?.trim() && `建议 POV：${currentPreview.value.mainPovCharacterName.trim()}`,
+    currentPreview.value?.storyBeatTitles?.length &&
+      `剧情节拍：${currentPreview.value.storyBeatTitles.join('、')}`,
     currentPreview.value?.requiredCharacterNames?.length &&
       `本章必出人物：${currentPreview.value.requiredCharacterNames.join('、')}`,
   ].filter(Boolean)
@@ -526,6 +600,10 @@ async function confirmDelete() {
             </button>
           </template>
 
+          <template #[`item.chapterStatus`]="{ item }">
+            {{ getChapterStatusLabel(item.chapterStatus) }}
+          </template>
+
           <template #[`item.wordCount`]="{ item }">
             {{ getWordCount(item) }}
           </template>
@@ -546,7 +624,36 @@ async function confirmDelete() {
           <v-card-text v-if="currentPreview" class="chapter-preview-body">
             <div class="text-h6">{{ currentPreview.title }}</div>
             <div class="text-body-2 text-medium-emphasis mt-2">
-              顺序：{{ currentPreview.orderNum || '-' }} | 字数：{{ getWordCount(currentPreview) }}
+              顺序：{{ currentPreview.orderNum || '-' }} | 状态：{{ getChapterStatusLabel(currentPreview.chapterStatus) }} | 字数：{{ getWordCount(currentPreview) }} | 预计阅读：{{ currentPreview.readingTimeMinutes || 0 }} 分钟
+            </div>
+            <div v-if="currentPreview.summary" class="mt-4">
+              <div class="text-caption text-medium-emphasis mb-1">章节摘要</div>
+              <MarkdownContent :source="currentPreview.summary" compact />
+            </div>
+            <div class="d-flex flex-wrap ga-2 mt-3">
+              <v-chip v-if="currentPreview.outlineTitle" size="small" color="primary" variant="tonal">
+                大纲：{{ currentPreview.outlineTitle }}
+              </v-chip>
+              <v-chip v-if="currentPreview.mainPovCharacterName" size="small" color="secondary" variant="tonal">
+                POV：{{ currentPreview.mainPovCharacterName }}
+              </v-chip>
+              <v-chip v-if="currentPreview.prevChapterId" size="small" variant="outlined">
+                上一章 #{{ currentPreview.prevChapterId }}
+              </v-chip>
+              <v-chip v-if="currentPreview.nextChapterId" size="small" variant="outlined">
+                下一章 #{{ currentPreview.nextChapterId }}
+              </v-chip>
+            </div>
+            <div v-if="currentPreview.storyBeatTitles?.length" class="d-flex flex-wrap ga-2 mt-3">
+              <v-chip
+                v-for="storyBeat in currentPreview.storyBeatTitles"
+                :key="storyBeat"
+                size="small"
+                color="primary"
+                variant="outlined"
+              >
+                节拍：{{ storyBeat }}
+              </v-chip>
             </div>
             <div v-if="currentPreview.requiredCharacterNames?.length" class="d-flex flex-wrap ga-2 mt-3">
               <v-chip
@@ -709,7 +816,7 @@ async function confirmDelete() {
                   </div>
                   <div class="text-caption text-medium-emphasis mt-1">
                     {{ formatDateTime(displayChapterAiLatestRecord.createTime) }} |
-                    {{ getStatusLabel(displayChapterAiLatestRecord.status) }}
+                    {{ getWritingRecordStatusLabel(displayChapterAiLatestRecord.status) }}
                   </div>
                 </div>
                 <div class="d-flex ga-2">
@@ -763,12 +870,12 @@ async function confirmDelete() {
       </div>
     </div>
 
-    <v-dialog v-model="dialog" max-width="760">
+    <v-dialog v-model="dialog" max-width="900">
       <v-card>
         <v-card-title>{{ editingId ? '编辑章节' : '新建章节' }}</v-card-title>
         <v-card-text class="pt-4">
           <v-row>
-            <v-col cols="12" md="8">
+            <v-col cols="12" md="7">
               <div class="d-flex ga-2 align-start">
                 <v-text-field v-model="form.title" class="flex-grow-1" label="章节标题" />
                 <v-btn class="mt-2" variant="outlined" @click="generateTitleSuggestions">
@@ -776,8 +883,78 @@ async function confirmDelete() {
                 </v-btn>
               </div>
             </v-col>
-            <v-col cols="12" md="4">
+            <v-col cols="12" md="2">
               <v-text-field v-model="form.orderNum" type="number" label="章节顺序" />
+            </v-col>
+            <v-col cols="12" md="3">
+              <v-select
+                v-model="form.chapterStatus"
+                label="章节状态"
+                :items="chapterStatusOptions"
+                item-title="title"
+                item-value="value"
+              />
+            </v-col>
+            <v-col cols="12">
+              <MarkdownEditor
+                v-model="form.summary"
+                label="章节摘要"
+                :rows="3"
+                preview-empty-text="暂无章节摘要。"
+              />
+            </v-col>
+            <v-col cols="12" md="6">
+              <v-select
+                v-model="form.outlineId"
+                label="绑定大纲"
+                :items="outlineOptions"
+                item-title="title"
+                item-value="value"
+                clearable
+              />
+            </v-col>
+            <v-col cols="12" md="6">
+              <v-select
+                v-model="form.mainPovCharacterId"
+                label="主 POV 人物"
+                :items="characterStore.characters"
+                item-title="name"
+                item-value="id"
+                clearable
+              />
+            </v-col>
+            <v-col cols="12" md="6">
+              <v-select
+                v-model="form.storyBeatIds"
+                label="剧情节拍"
+                :items="storyBeatOptions"
+                item-title="title"
+                item-value="value"
+                multiple
+                chips
+                closable-chips
+                clearable
+              />
+            </v-col>
+            <v-col cols="12" md="3">
+              <v-select
+                v-model="form.prevChapterId"
+                label="上一章节"
+                :items="chapterLinkOptions"
+                item-title="title"
+                item-value="value"
+                clearable
+              />
+            </v-col>
+            <v-col cols="12" md="3">
+              <v-select
+                v-model="form.nextChapterId"
+                label="下一章节"
+                :items="chapterLinkOptions"
+                item-title="title"
+                item-value="value"
+                clearable
+              />
             </v-col>
             <v-col cols="12">
               <MarkdownEditor
