@@ -8,12 +8,12 @@
 | Priority | Req ID | Name | Status | Requirement Doc | Plan Doc | Progress Doc |
 | --- | --- | --- | --- | --- | --- | --- |
 | High | REQ-20260411-stateful-story-platform-upgrade | Story 平台级架构升级：Summary First、StoryUnit、MCP/LSP 与多 Session 编排 | In Progress | `docs/requirements/REQ-20260411-stateful-story-platform-upgrade.md` | `docs/plans/PLAN-REQ-20260411-stateful-story-platform-upgrade-v1.md` | `docs/progress/PROGRESS-REQ-20260411-stateful-story-platform-upgrade.md` |
-| High | REQ-20260409-generation-reliability-refactor | Story 生成可靠性、减法交互与结构化沉淀重构 | In Progress | `docs/requirements/REQ-20260409-generation-reliability-refactor.md` | `docs/plans/PLAN-REQ-20260409-generation-reliability-refactor-v2.md` | `docs/progress/PROGRESS-REQ-20260409-generation-reliability-refactor.md` |
 
 ## Archived Requirements
 
 | Req ID | Name | Final Status | Requirement Doc | Plan Doc | Progress Doc |
 | --- | --- | --- | --- | --- | --- |
+| REQ-20260409-generation-reliability-refactor | Story 生成可靠性、减法交互与结构化沉淀重构 | Archived | `docs/archive/requirements/REQ-20260409-generation-reliability-refactor.md` | `docs/archive/plans/PLAN-REQ-20260409-generation-reliability-refactor-v2.md` | `docs/archive/progress/PROGRESS-REQ-20260409-generation-reliability-refactor.md` |
 | REQ-20260409-core-module-refactor | Story 核心模块重构 | Archived | `docs/archive/requirements/REQ-20260409-core-module-refactor.md` | `docs/archive/plans/PLAN-REQ-20260409-core-module-refactor-v1.md` | `docs/archive/progress/PROGRESS-REQ-20260409-core-module-refactor.md` |
 | REQ-20260408-ai-director-layer | AI 总导编排层 | Archived | `docs/archive/requirements/REQ-20260408-ai-director-layer.md` | `docs/archive/plans/PLAN-REQ-20260408-ai-director-layer-v1.md` | `docs/archive/progress/PROGRESS-REQ-20260408-ai-director-layer.md` |
 | REQ-20260408-writing-workflow-ui-bug | AI 写作工作流修订展示缺陷 | Fixed | `docs/archive/requirements/REQ-20260408-writing-workflow-ui-bug.md` | `docs/archive/plans/PLAN-REQ-20260408-writing-workflow-ui-bug-v1.md` | `docs/archive/progress/PROGRESS-REQ-20260408-writing-workflow-ui-bug.md` |
@@ -28,7 +28,7 @@
   - 多 session 写作管线
   - 前端信息架构
   - 文档治理制度
-- `REQ-20260409-generation-reliability-refactor` 仍保留为次主线，作为当前代码稳定性与线上样本基线。
+- `REQ-20260409-generation-reliability-refactor` 已归档，但其 report 仍保留为当前代码稳定性与线上样本基线。
 - 下一轮进入编码前，必须先新增本轮详细实施计划文档，而不是直接进入代码。
 
 ## Current Blockers
@@ -50,7 +50,7 @@
    - `docs/architecture/ARCH-REQ-20260411-writing-pipeline-and-scene-execution-v1.md`
    - `docs/architecture/ARCH-REQ-20260411-frontend-information-architecture-v1.md`
    - `docs/governance/GOV-REQ-20260411-documentation-and-planning-workflow-v1.md`
-5. 如果需要回到旧代码链路，再补读 `REQ-20260409-generation-reliability-refactor` 及其 report。
+5. 如果需要回到旧代码链路，再补读 `docs/archive/requirements/REQ-20260409-generation-reliability-refactor.md` 及其 report。
 6. 最后再进入代码和测试文件。
 
 ## Handoff Notes
@@ -60,7 +60,7 @@
   - 智能体负责架构文档、实施计划、代码开发与迁移建议
   - 用户负责方向确认、部署执行和真实环境联调
 - 新主线不是旧主线的简单延长，而是平台级升级。
-- 旧主线 `REQ-20260409-generation-reliability-refactor` 仍有效，但应被视为：
+- 旧主线 `REQ-20260409-generation-reliability-refactor` 已归档，但仍应被视为：
   - 当前代码基线
   - 真实样本基线
   - 新平台升级前的稳定性参考线

@@ -12,7 +12,7 @@
 - Last Completed: 已确认本次升级不是单功能重构，而是平台级架构升级
 - Next Action: 补齐其余核心架构文档，并更新 `agent-context.md`
 - Blockers:
-  - 旧主线 `REQ-20260409-generation-reliability-refactor` 仍是当前代码级主线，需要在后续阶段明确与新平台主线的衔接关系
+  - 旧主线 `REQ-20260409-generation-reliability-refactor` 已归档，但其代码成果和回归报告仍需作为迁移基线继续参考
   - `MCP` 与 `LSP` 的边界尚未形成代码级实现，只完成讨论与文档收敛
   - 前端现有页面结构仍是旧工作流，尚未切到新信息架构
 - Latest Verified:
@@ -50,8 +50,7 @@
   - `docs/plans/PLAN-REQ-20260411-stateful-story-platform-upgrade-v1.md`
   - `docs/progress/PROGRESS-REQ-20260411-stateful-story-platform-upgrade.md`
 - 风险/遗留:
-  - 旧主线尚未归档
-  - 新旧主线衔接方式还需要在后续文档中明确
+  - 旧主线已归档，但新旧主线衔接方式还需要在后续文档中明确
 - 下一步:
   - 完成核心架构文档并更新 `agent-context.md`
 
@@ -60,4 +59,3 @@
 - 平台升级方向和问题提出：用户。
 - 进度文档结构、术语收敛与记录整理：Codex。
 - 当前结论由用户与 Codex 共同讨论形成。
-
