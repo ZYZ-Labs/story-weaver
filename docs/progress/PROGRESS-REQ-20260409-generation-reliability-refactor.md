@@ -3,18 +3,17 @@
 - Req ID: REQ-20260409-generation-reliability-refactor
 - Status: In Progress
 - Created At: 2026-04-09 Asia/Shanghai
-- Updated At: 2026-04-10 Asia/Shanghai
+- Updated At: 2026-04-11 Asia/Shanghai
 
 ## 当前快照
 
-- Current Phase: 已完成第二轮真实线上回归，确认 Step 9 / Step 10 已在线生效，但稳定性问题仍未收口
-- Current Task: 进入 P0 修复，优先处理“半句截断仍漏检”“blocked readiness 仍可生成”“总导真实兼容仍 fallback”三件事
-- Last Completed: 已完成 `旧日王座` 第二轮线上回归，确认新 trace 与新增对象建议链路已经进入线上主链
-- Next Action: 将结尾完整性检查提升为硬阻断，并让 `readiness=blocked` 真正阻止生成；随后补齐第 32-34 章锚点再复验
+- Current Phase: 已完成首章收尾稳定性本地修复，等待下一轮部署验证
+- Current Task: 等待用户部署新版本，然后复验“第一章空章起稿是否能通过尾段修补成功落稿”
+- Last Completed: 已完成“动态 token 预算 + 收尾提示增强 + 尾段定向修补”三项本地落地
+- Next Action: 用户部署后，只针对第一章空章起稿与第二章续写做新一轮线上回归，再决定是否继续调总导兼容
 - Blockers:
-  - 新生成记录虽然已有 `readerReveal`，但结尾半句截断仍未被 `check / revise` 链路拦住
-  - `GenerationReadinessVO.status=blocked` 目前仍未真正阻止生成执行
   - 总导在真实 DeepSeek 上依旧 `fallback`
+  - 第一章 / 空章首稿虽然开场已改善，但新修复尚未上线验证，暂未确认尾段修补是否足以提升成功率
   - `StoryConsistencyInspector` 目前仍只有后端接口，还未接独立前端入口
   - 摘要建议 / 进度预测虽然已有后端接口，但还未完成独立前端入口闭环
 - Latest Verified:
@@ -112,9 +111,31 @@
   - 已确认摘要建议接口已在线返回 `proposedCreates`，可识别：
     - 新因果候选
     - 新人物候选
+  - 已完成 P0 本地修复：
+    - `GenerationReadinessVO.status=blocked` 现在会在 `prepareGeneration` 阶段直接阻止生成
+    - 正文结尾若停在未完成句子或缺少自然收束，会被并入硬性问题并阻止落记录
+    - 修订后若仍未通过结尾完整性硬检查，会直接失败而不是继续保存破损结果
+  - 已再次通过 `mvn -Dmaven.repo.local=/usr/local/project/github/story-weaver/.cache/m2 -f backend/pom.xml -DskipTests compile`
+  - 已完成第三轮线上回归并新增报告：
+    - `docs/reports/REPORT-20260411-old-throne-live-regression-round3.md`
+  - 已确认 `chapter 31` 当前真实为空章，可直接用于“清空后从零开始写”回归
+  - 已确认空章起稿开场不再像从章节中段切入，读者定向已明显改善
+  - 已确认 `chapter 31` 的坏稿会被结尾完整性硬检查挡回，且不会新增 `ai_writing_record`
+  - 已确认 `chapter 32 / 33 / 34` 真实生成请求现在都会直接 `HTTP 400`
+  - 已确认 `AIWritingRequestDTO.maxTokens` 默认值仍为 `500`
+  - 已确认前端写作页默认 `maxTokens = 700`
+  - 已完成本地修复：
+    - `AIWritingRequestDTO.maxTokens` 去掉默认 `500`
+    - 后端按章节类型动态决定 token 预算
+    - 空章 / 首章写作 prompt 新增显式收尾约束
+    - revise prompt 新增“优先重写最后一到两段并自然收束”
+    - 结尾仍不完整时，会额外走一次尾段定向修补，而不是直接失败
+    - blocked / hard-fail 错误消息已清理重复标点
+  - 已通过 `mvn -Dmaven.repo.local=/usr/local/project/github/story-weaver/.cache/m2 -f backend/pom.xml -DskipTests compile`
 - Latest Unverified:
   - 尚未在线验证 `StructuredCreationApply` 的真实落库闭环，本轮仅验证了不落库的 `proposedCreates`
   - 尚未完成“补齐第 32-34 章锚点后再生成”的新一轮样本复验
+  - 尚未验证提高首稿 token 预算并接入尾段修补后，第一章空章起稿是否能稳定成功
   - `StoryConsistencyInspector` 仍未接独立前端入口
   - 摘要建议 / 进度预测的独立前端入口仍未接完
 

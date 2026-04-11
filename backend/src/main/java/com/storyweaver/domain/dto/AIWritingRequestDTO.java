@@ -15,7 +15,7 @@ public class AIWritingRequestDTO {
 
     private String writingType; // draft, continue, polish, expand, rewrite
 
-    private Integer maxTokens = 500;
+    private Integer maxTokens;
 
     private Long selectedProviderId;
 

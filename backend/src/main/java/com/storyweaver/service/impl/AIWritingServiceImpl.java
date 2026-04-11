@@ -249,6 +249,7 @@ public class AIWritingServiceImpl extends ServiceImpl<AIWritingRecordMapper, AIW
         );
         emitGenerationReadinessLogs(eventConsumer, readiness);
         emitAnchorSnapshotLog(eventConsumer, anchorBundle);
+        enforceReadinessBeforeGeneration(readiness, chapter, writingType, currentContent);
         boolean exposeDirectorDebug = getConfiguredBoolean("ai.director.debug_expose_decision", false);
         if (exposeDirectorDebug) {
             emitStage(eventConsumer, "director", "started", "正在生成总导决策并选择本轮上下文模块");
@@ -305,7 +306,7 @@ public class AIWritingServiceImpl extends ServiceImpl<AIWritingRecordMapper, AIW
                 readiness,
                 anchorBundle,
                 readerRevealConstraint,
-                normalizeMaxTokens(requestDTO.getMaxTokens())
+                resolveMaxTokens(requestDTO.getMaxTokens(), chapter, currentContent, writingType)
         );
     }
 
@@ -902,8 +903,41 @@ public class AIWritingServiceImpl extends ServiceImpl<AIWritingRecordMapper, AIW
         return getDefaultPromptTemplate(writingType);
     }
 
-    private Integer normalizeMaxTokens(Integer maxTokens) {
-        return maxTokens != null && maxTokens > 0 ? maxTokens : null;
+    private Integer resolveMaxTokens(
+            Integer requestedMaxTokens,
+            Chapter chapter,
+            String currentContent,
+            String writingType) {
+        Integer normalizedRequested = requestedMaxTokens != null && requestedMaxTokens > 0 ? requestedMaxTokens : null;
+        boolean emptyChapterStart = !StringUtils.hasText(currentContent);
+        boolean firstChapter = chapter != null && chapter.getOrderNum() != null && chapter.getOrderNum() == 1;
+
+        int resolved = normalizedRequested != null
+                ? normalizedRequested
+                : defaultMaxTokensForContext(emptyChapterStart, firstChapter, writingType);
+
+        if (emptyChapterStart) {
+            resolved = Math.max(resolved, firstChapter ? 1600 : 1200);
+        } else if ("rewrite".equals(writingType) || "expand".equals(writingType)) {
+            resolved = Math.max(resolved, 1000);
+        } else if ("continue".equals(writingType)) {
+            resolved = Math.max(resolved, 800);
+        }
+
+        return Math.min(resolved, 2600);
+    }
+
+    private int defaultMaxTokensForContext(boolean emptyChapterStart, boolean firstChapter, String writingType) {
+        if (emptyChapterStart) {
+            return firstChapter ? 1600 : 1200;
+        }
+        return switch (writingType) {
+            case "rewrite", "expand" -> 1100;
+            case "continue" -> 900;
+            case "polish" -> 700;
+            case "draft" -> 1000;
+            default -> 900;
+        };
     }
 
     private String buildSystemPrompt(String promptSnapshot) {
@@ -1334,6 +1368,37 @@ public class AIWritingServiceImpl extends ServiceImpl<AIWritingRecordMapper, AIW
                 .append('\n');
     }
 
+    private void appendEndingGuardrails(StringBuilder builder, PreparedGenerationContext context) {
+        if (builder == null || context == null) {
+            return;
+        }
+        builder.append("\n【本轮收束要求】\n");
+        if (isEmptyChapterStart(context)) {
+            builder.append("1. 当前是空章起稿，优先完成一个完整可停住的开场片段，不要把范围铺得过宽。\n");
+            if (isFirstChapter(context.chapter())) {
+                builder.append("2. 第一章先完成现实场景、人物状态和触发事件的读者定向，再自然停住。\n");
+            } else {
+                builder.append("2. 先完成当前场景、人物状态和本章触发点，再自然停住。\n");
+            }
+            builder.append("3. 如果接近篇幅上限，优先收束当前动作或心理段落，不要在结尾新开场景。\n");
+            builder.append("4. 宁可早一点停在完整句号上，也不要把句子停在半截。\n");
+            return;
+        }
+        builder.append("1. 本轮只推进当前已开启的场景或冲突，不要在结尾突然切去新场景。\n");
+        builder.append("2. 如果接近篇幅上限，优先把当前段落写完整并停在自然句号上。\n");
+    }
+
+    private void appendRevisionGuardrails(StringBuilder builder, PreparedGenerationContext context) {
+        if (builder == null || context == null) {
+            return;
+        }
+        builder.append("4. 如果正文结尾不完整，优先重写最后一到两段，确保自然收束。\n");
+        builder.append("5. 如果接近篇幅上限，宁可缩小范围，也不要把句子停在半截。\n");
+        if (isEmptyChapterStart(context)) {
+            builder.append("6. 当前是空章起稿，请把章节停在一个完整可继续扩写的开场节点上。\n");
+        }
+    }
+
     private String resolveWritingIntent(String writingType) {
         return switch (writingType) {
             case "draft" -> "任务要求：当前正文为空，请先拟生成一版可继续扩写的章节初稿。\n";
@@ -1406,9 +1471,12 @@ public class AIWritingServiceImpl extends ServiceImpl<AIWritingRecordMapper, AIW
             );
         }
         emitStage(eventConsumer, "write", "completed", "正文初稿已生成");
+        List<String> hardIssuesAfterWrite = detectHardConstraintIssues(context, content);
 
         if (settings.maxCheckRounds() <= 0) {
-            return new WorkflowResult(content);
+            String stabilizedContent = stabilizeEndingIfNeeded(context, eventConsumer, content, hardIssuesAfterWrite);
+            failOnHardConstraintIssues(detectHardConstraintIssues(context, stabilizedContent));
+            return new WorkflowResult(stabilizedContent);
         }
 
         emitStage(eventConsumer, "check", "started", "正在检查连贯性与约束条件");
@@ -1438,12 +1506,17 @@ public class AIWritingServiceImpl extends ServiceImpl<AIWritingRecordMapper, AIW
                         700
                 )
         );
-        WritingCheckResult checkResult = parseCheckResult(checkReport);
+        WritingCheckResult checkResult = mergeHardConstraintIssues(
+                parseCheckResult(checkReport),
+                hardIssuesAfterWrite
+        );
         emitLog(eventConsumer, "check", checkResult.summary());
         emitStage(eventConsumer, "check", "completed", checkResult.requiresRevision() ? "建议进行修订" : "检查通过");
 
         if (!checkResult.requiresRevision() || settings.maxRevisionRounds() <= 0) {
-            return new WorkflowResult(content);
+            String stabilizedContent = stabilizeEndingIfNeeded(context, eventConsumer, content, checkResult.hardIssues());
+            failOnHardConstraintIssues(detectHardConstraintIssues(context, stabilizedContent));
+            return new WorkflowResult(stabilizedContent);
         }
 
         emitStage(eventConsumer, "revise", "started", "正在根据审校意见修订正文");
@@ -1467,7 +1540,14 @@ public class AIWritingServiceImpl extends ServiceImpl<AIWritingRecordMapper, AIW
             eventConsumer.accept(AIWritingStreamEventVO.replace(revisedContent));
         }
         emitStage(eventConsumer, "revise", "completed", "修订结果已应用");
-        return new WorkflowResult(revisedContent);
+        String stabilizedContent = stabilizeEndingIfNeeded(
+                context,
+                eventConsumer,
+                revisedContent,
+                detectHardConstraintIssues(context, revisedContent)
+        );
+        failOnHardConstraintIssues(detectHardConstraintIssues(context, stabilizedContent));
+        return new WorkflowResult(stabilizedContent);
     }
 
     private WorkflowSettings loadWorkflowSettings() {
@@ -1492,10 +1572,12 @@ public class AIWritingServiceImpl extends ServiceImpl<AIWritingRecordMapper, AIW
     }
 
     private String buildWriterPrompt(PreparedGenerationContext context, String plan) {
-        if (!StringUtils.hasText(plan)) {
-            return context.userPrompt();
+        StringBuilder builder = new StringBuilder(context.userPrompt());
+        appendEndingGuardrails(builder, context);
+        if (StringUtils.hasText(plan)) {
+            builder.append("\n\n【写作计划】\n").append(plan.trim()).append("\n");
         }
-        return context.userPrompt() + "\n\n【写作计划】\n" + plan.trim() + "\n";
+        return builder.toString();
     }
 
     private String buildCheckPrompt(PreparedGenerationContext context, String plan, String content) {
@@ -1515,7 +1597,9 @@ public class AIWritingServiceImpl extends ServiceImpl<AIWritingRecordMapper, AIW
         builder.append("要求：\n");
         builder.append("1. 只输出完整修订后的正文。\n");
         builder.append("2. 保留正确的剧情事实和叙事口吻。\n");
-        builder.append("3. 优先修复连贯性、设定一致性和章节目标偏差。\n\n");
+        builder.append("3. 优先修复连贯性、设定一致性和章节目标偏差。\n");
+        appendRevisionGuardrails(builder, context);
+        builder.append('\n');
         if (StringUtils.hasText(plan)) {
             builder.append("【写作计划】\n").append(plan.trim()).append("\n\n");
         }
@@ -1549,7 +1633,278 @@ public class AIWritingServiceImpl extends ServiceImpl<AIWritingRecordMapper, AIW
                     return splitIndex >= 0 ? line.substring(splitIndex + 1).trim() : line.trim();
                 })
                 .orElse(limit(normalized, 220));
-        return new WritingCheckResult(requiresRevision, summary, normalized);
+        return new WritingCheckResult(requiresRevision, summary, normalized, List.of());
+    }
+
+    private void enforceReadinessBeforeGeneration(
+            GenerationReadinessVO readiness,
+            Chapter chapter,
+            String writingType,
+            String currentContent) {
+        if (readiness == null || !readiness.isBlocked()) {
+            return;
+        }
+        if (allowsBlockedReadiness(writingType, currentContent)) {
+            return;
+        }
+        throw new IllegalStateException(buildBlockedReadinessMessage(chapter, readiness));
+    }
+
+    private boolean allowsBlockedReadiness(String writingType, String currentContent) {
+        return StringUtils.hasText(currentContent) && "polish".equals(writingType);
+    }
+
+    private String buildBlockedReadinessMessage(Chapter chapter, GenerationReadinessVO readiness) {
+        String chapterLabel = chapter != null && StringUtils.hasText(chapter.getTitle())
+                ? "《" + chapter.getTitle().trim() + "》"
+                : "当前章节";
+        List<String> blockingIssues = readiness == null || readiness.getBlockingIssues() == null
+                ? List.of()
+                : readiness.getBlockingIssues().stream()
+                .filter(StringUtils::hasText)
+                .map(this::normalizeIssueFragment)
+                .limit(4)
+                .toList();
+        String issueText = blockingIssues.isEmpty()
+                ? "缺少必要的生成锚点"
+                : String.join("；", blockingIssues);
+        return chapterLabel + " 尚未满足生成前置条件：" + issueText + "。请先补齐章节摘要、POV 或人物锚点后再生成。";
+    }
+
+    private WritingCheckResult mergeHardConstraintIssues(WritingCheckResult baseResult, List<String> hardIssues) {
+        if (hardIssues == null || hardIssues.isEmpty()) {
+            return baseResult;
+        }
+        String summary = StringUtils.hasText(baseResult.summary())
+                ? baseResult.summary() + "；存在必须修复的硬性问题"
+                : "检测到必须修复的硬性问题";
+        StringBuilder reportBuilder = new StringBuilder();
+        if (StringUtils.hasText(baseResult.report())) {
+            reportBuilder.append(baseResult.report().trim()).append('\n');
+        }
+        reportBuilder.append("硬性问题：\n");
+        for (String issue : hardIssues) {
+            reportBuilder.append("- ").append(issue).append('\n');
+        }
+        return new WritingCheckResult(
+                true,
+                summary,
+                reportBuilder.toString().trim(),
+                List.copyOf(hardIssues)
+        );
+    }
+
+    private List<String> detectHardConstraintIssues(PreparedGenerationContext context, String content) {
+        List<String> issues = new ArrayList<>();
+        if (!StringUtils.hasText(content)) {
+            issues.add("生成结果为空，未产出可用正文。");
+            return issues;
+        }
+        if (hasIncompleteEnding(content)) {
+            issues.add("正文结尾停在未完成句子、缺少自然收束，不能直接作为可提交结果。");
+        }
+        return issues;
+    }
+
+    private boolean hasIncompleteEnding(String content) {
+        String normalized = normalizeText(content);
+        if (!StringUtils.hasText(normalized)) {
+            return true;
+        }
+        String candidate = trimTrailingClosers(normalized);
+        if (!StringUtils.hasText(candidate)) {
+            return true;
+        }
+        char lastChar = candidate.charAt(candidate.length() - 1);
+        return !isTerminalPunctuation(lastChar);
+    }
+
+    private String trimTrailingClosers(String value) {
+        int end = value.length();
+        while (end > 0 && isTrailingCloser(value.charAt(end - 1))) {
+            end--;
+        }
+        return value.substring(0, end).trim();
+    }
+
+    private boolean isTrailingCloser(char value) {
+        return "\"'”’）》】』」〉〕）]}】".indexOf(value) >= 0;
+    }
+
+    private boolean isTerminalPunctuation(char value) {
+        return "。！？!?…".indexOf(value) >= 0;
+    }
+
+    private void failOnHardConstraintIssues(List<String> hardIssues) {
+        if (hardIssues == null || hardIssues.isEmpty()) {
+            return;
+        }
+        throw new IllegalStateException(buildHardConstraintFailureMessage(hardIssues));
+    }
+
+    private String buildHardConstraintFailureMessage(List<String> hardIssues) {
+        List<String> normalizedIssues = hardIssues == null
+                ? List.of()
+                : hardIssues.stream()
+                .filter(StringUtils::hasText)
+                .map(this::normalizeIssueFragment)
+                .toList();
+        return "生成结果未通过硬性完整性检查：" + String.join("；", normalizedIssues) + "。请重试或调整本章锚点后再生成。";
+    }
+
+    private String stabilizeEndingIfNeeded(
+            PreparedGenerationContext context,
+            Consumer<AIWritingStreamEventVO> eventConsumer,
+            String content,
+            List<String> hardIssues) {
+        if (!containsIncompleteEndingIssue(hardIssues) || !StringUtils.hasText(content)) {
+            return content;
+        }
+
+        emitStage(eventConsumer, "repair", "started", "检测到结尾未自然收束，正在定向修补尾段");
+        String stablePrefix = extractStablePrefixForEndingRepair(content);
+        String brokenTail = content.substring(Math.min(stablePrefix.length(), content.length())).trim();
+        String repairedTail = executeWithHeartbeat(
+                eventConsumer,
+                "repair",
+                "正在补足结尾收束，请稍候",
+                () -> aiProviderService.generateText(
+                        context.provider(),
+                        context.selectedModel(),
+                        """
+                        你是一名中文小说尾段修补助手。
+                        请只输出需要接在已有正文后面的新增尾段，不要重复前文，不要解释。
+                        你的目标是把当前场景自然收住，而不是继续扩展新情节。
+                        """,
+                        buildEndingRepairPrompt(context, stablePrefix, brokenTail),
+                        null,
+                        resolveEndingRepairMaxTokens(context.maxTokens())
+                )
+        );
+        String stabilized = mergeEndingRepair(stablePrefix, repairedTail);
+        emitLog(eventConsumer, "repair", "已根据当前场景补足结尾收束");
+        if (eventConsumer != null && !Objects.equals(stabilized, content)) {
+            eventConsumer.accept(AIWritingStreamEventVO.replace(stabilized));
+        }
+        emitStage(eventConsumer, "repair", "completed", "结尾修补已完成");
+        return stabilized;
+    }
+
+    private boolean containsIncompleteEndingIssue(List<String> hardIssues) {
+        if (hardIssues == null || hardIssues.isEmpty()) {
+            return false;
+        }
+        return hardIssues.stream()
+                .filter(StringUtils::hasText)
+                .anyMatch(issue -> issue.contains("结尾") || issue.contains("收束"));
+    }
+
+    private String buildEndingRepairPrompt(
+            PreparedGenerationContext context,
+            String stablePrefix,
+            String brokenTail) {
+        StringBuilder builder = new StringBuilder();
+        builder.append("请根据以下正文补足结尾，只输出新增尾段。\n");
+        builder.append("要求：\n");
+        builder.append("1. 不要重复前文。\n");
+        builder.append("2. 不要引入新人物、新场景、新任务。\n");
+        builder.append("3. 优先把当前动作、心理或场景写完整，并自然停住。\n");
+        builder.append("4. 新增尾段控制在 120 到 260 字左右。\n");
+        builder.append("5. 最后一句必须完整收束，不能停在半句。\n\n");
+        if (StringUtils.hasText(context.userInstruction())) {
+            builder.append("【补充要求】\n").append(context.userInstruction().trim()).append("\n\n");
+        }
+        builder.append("【已保留正文】\n").append(stablePrefix.trim()).append("\n\n");
+        if (StringUtils.hasText(brokenTail)) {
+            builder.append("【被截断的原始尾部，仅供参考】\n").append(brokenTail.trim()).append("\n\n");
+        }
+        builder.append("请直接输出新增尾段。");
+        return builder.toString();
+    }
+
+    private int resolveEndingRepairMaxTokens(Integer contextMaxTokens) {
+        if (contextMaxTokens == null || contextMaxTokens <= 0) {
+            return 360;
+        }
+        return Math.min(Math.max(contextMaxTokens / 3, 260), 480);
+    }
+
+    private String extractStablePrefixForEndingRepair(String content) {
+        String normalized = normalizeText(content);
+        if (!StringUtils.hasText(normalized)) {
+            return "";
+        }
+
+        int lastTerminalBoundary = findLastTerminalBoundary(normalized);
+        if (lastTerminalBoundary > 0 && lastTerminalBoundary < normalized.length() - 1) {
+            return normalized.substring(0, lastTerminalBoundary + 1).trim();
+        }
+
+        int lastParagraphBreak = normalized.lastIndexOf("\n\n");
+        if (lastParagraphBreak > 0) {
+            return normalized.substring(0, lastParagraphBreak).trim();
+        }
+        return normalized;
+    }
+
+    private int findLastTerminalBoundary(String value) {
+        if (!StringUtils.hasText(value)) {
+            return -1;
+        }
+        int searchFrom = Math.max(0, value.length() - 500);
+        for (int index = value.length() - 1; index >= searchFrom; index--) {
+            if (isTerminalPunctuation(value.charAt(index))) {
+                return index;
+            }
+        }
+        return -1;
+    }
+
+    private String mergeEndingRepair(String stablePrefix, String repairedTail) {
+        String prefix = normalizeText(stablePrefix);
+        String tail = normalizeText(repairedTail);
+        if (!StringUtils.hasText(prefix)) {
+            return tail;
+        }
+        if (!StringUtils.hasText(tail)) {
+            return prefix;
+        }
+        String mergedTail = tail;
+        int overlapLength = Math.min(prefix.length(), Math.min(mergedTail.length(), 40));
+        for (int length = overlapLength; length >= 12; length--) {
+            String prefixSuffix = prefix.substring(prefix.length() - length);
+            if (mergedTail.startsWith(prefixSuffix)) {
+                mergedTail = mergedTail.substring(length).trim();
+                break;
+            }
+        }
+        if (!StringUtils.hasText(mergedTail)) {
+            return prefix;
+        }
+        return prefix + "\n\n" + mergedTail;
+    }
+
+    private boolean isEmptyChapterStart(PreparedGenerationContext context) {
+        return context != null && !StringUtils.hasText(context.currentContent());
+    }
+
+    private boolean isFirstChapter(Chapter chapter) {
+        return chapter != null && chapter.getOrderNum() != null && chapter.getOrderNum() == 1;
+    }
+
+    private String normalizeIssueFragment(String issue) {
+        if (!StringUtils.hasText(issue)) {
+            return "";
+        }
+        String normalized = issue.trim();
+        while (normalized.endsWith("。")
+                || normalized.endsWith("；")
+                || normalized.endsWith(";")
+                || normalized.endsWith("，")
+                || normalized.endsWith(",")) {
+            normalized = normalized.substring(0, normalized.length() - 1).trim();
+        }
+        return normalized;
     }
 
     private void emitStage(Consumer<AIWritingStreamEventVO> eventConsumer, String stage, String status, String message) {
@@ -1945,7 +2300,8 @@ public class AIWritingServiceImpl extends ServiceImpl<AIWritingRecordMapper, AIW
     private record WritingCheckResult(
             boolean requiresRevision,
             String summary,
-            String report) {
+            String report,
+            List<String> hardIssues) {
     }
 
     @FunctionalInterface
