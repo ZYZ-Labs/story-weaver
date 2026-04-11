@@ -14,6 +14,7 @@ front/node_modules_stale/
 target/
 dist/
 build/
+.cache/
 
 # OS
 .DS_Store

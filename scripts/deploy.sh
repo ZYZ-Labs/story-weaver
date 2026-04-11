@@ -506,7 +506,7 @@ if [ "$SKIP_LOGIN" != true ]; then
 fi
 
 print_info "Building backend image: $BACKEND_IMAGE"
-docker build --pull -t "$BACKEND_IMAGE" -f "$REPO_ROOT/backend/Dockerfile" "$REPO_ROOT/backend"
+docker build --pull -t "$BACKEND_IMAGE" -f "$REPO_ROOT/backend/Dockerfile" "$REPO_ROOT"
 
 print_info "Building frontend image: $FRONTEND_IMAGE"
 docker build --pull -t "$FRONTEND_IMAGE" \

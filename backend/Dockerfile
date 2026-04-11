@@ -7,15 +7,20 @@ RUN mkdir -p /root/.m2 && \
     > /root/.m2/settings.xml
 
 WORKDIR /app
-COPY pom.xml .
-RUN mvn dependency:go-offline -B
-COPY src ./src
-RUN mvn clean package -Dmaven.test.skip=true
-RUN test -f /app/target/story-weaver-backend.jar
+COPY pom.xml ./pom.xml
+COPY story-domain/pom.xml ./story-domain/pom.xml
+COPY story-storyunit/pom.xml ./story-storyunit/pom.xml
+COPY backend/pom.xml ./backend/pom.xml
+RUN mvn -pl backend -am dependency:go-offline -B
+COPY story-domain/src ./story-domain/src
+COPY story-storyunit/src ./story-storyunit/src
+COPY backend/src ./backend/src
+RUN mvn -pl backend -am clean package -Dmaven.test.skip=true
+RUN test -f /app/backend/target/story-weaver-backend.jar
 
 # Runtime stage
 FROM eclipse-temurin:21-jre-alpine
 WORKDIR /app
-COPY --from=build /app/target/story-weaver-backend.jar /app/app.jar
+COPY --from=build /app/backend/target/story-weaver-backend.jar /app/app.jar
 EXPOSE 8080
 ENTRYPOINT ["java", "-jar", "/app/app.jar"]

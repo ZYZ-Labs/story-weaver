@@ -547,7 +547,7 @@ if (-not $SkipLogin.IsPresent) {
 }
 
 Write-Info "Building backend image: $backendImage"
-docker build --pull -t $backendImage -f (Join-Path $repoRoot 'backend\Dockerfile') (Join-Path $repoRoot 'backend')
+docker build --pull -t $backendImage -f (Join-Path $repoRoot 'backend\Dockerfile') $repoRoot
 
 Write-Info "Building frontend image: $frontendImage"
 docker build --pull -t $frontendImage --build-arg VITE_API_BASE_URL=/api --build-arg VITE_API_PROXY_TARGET=http://localhost:8080 -f (Join-Path $repoRoot 'front\Dockerfile') $repoRoot

@@ -29,12 +29,35 @@
   - 前端信息架构
   - 文档治理制度
 - `REQ-20260409-generation-reliability-refactor` 已归档，但其 report 仍保留为当前代码稳定性与线上样本基线。
-- 下一轮进入编码前，必须先新增本轮详细实施计划文档，而不是直接进入代码。
+- 第一份详细实施计划已创建：
+  - `docs/plans/PLAN-REQ-20260411-stateful-story-platform-upgrade-phase1-foundation-v1.md`
+- 第二份详细实施计划已创建：
+  - `docs/plans/PLAN-REQ-20260411-stateful-story-platform-upgrade-phase1-modularization-v1.md`
+- 当前阶段口径已确认：
+  - `Phase 1A`：包先细分、协议先行
+  - `Phase 1B`：尽早进入粗粒度模块拆分
+- `Phase 1A` 首批协议骨架已迁移到：
+  - `story-storyunit/src/main/java/com/storyweaver/storyunit/*`
+- `Phase 1B` 首轮粗粒度模块拆分已完成：
+  - 根 `pom.xml`
+  - `story-domain`
+  - `story-storyunit`
+  - `backend` 保持应用壳
+- 当前统一构建入口应使用根工程：
+  - `mvn -Dmaven.repo.local=/usr/local/project/github/story-weaver/.cache/m2 -DskipTests compile`
+- 当前下一步应继续完成：
+  - 继续留在 `Phase 1B`
+  - 完成 `1B.2`
+    - 清理活动文档中的旧构建入口描述
+    - 清理活动文档中的旧目录口径
+  - 完成 `1B.3`
+    - 冻结 `story-generation / story-provider / story-web / story-infra` 的粗边界
+    - 明确继续临时留在 `backend` 的包
 
 ## Current Blockers
 
-- 新主线虽然已完成文档建制，但还没有进入第一轮模块级实施计划。
-- `StoryUnit` 只完成协议定义，尚未完成存储映射与代码骨架。
+- 新主线已完成 `Phase 1B` 的 `1B.1`，但 `1B.2 / 1B.3` 仍未完成，当前仍处于 `Phase 1B`。
+- `StoryUnit` 已完成第一批协议、代码骨架与模块迁移，但尚未完成存储映射与 service/repository 实装。
 - `MCP / LSP` 边界已明确，但还没有形成服务层和接口层实现。
 - 前端仍是旧信息架构，尚未切到工作台模式。
 - 旧主线中的真实 provider fallback 问题仍存在，后续需要作为平台升级前的稳定性基线继续跟踪。
@@ -44,14 +67,17 @@
 1. 先读取 `docs/requirements/REQ-20260411-stateful-story-platform-upgrade.md`。
 2. 再读取 `docs/plans/PLAN-REQ-20260411-stateful-story-platform-upgrade-v1.md`。
 3. 再读取 `docs/progress/PROGRESS-REQ-20260411-stateful-story-platform-upgrade.md`。
-4. 再读取：
+4. 再读取本轮详细实施计划：
+   - `docs/plans/PLAN-REQ-20260411-stateful-story-platform-upgrade-phase1-foundation-v1.md`
+   - `docs/plans/PLAN-REQ-20260411-stateful-story-platform-upgrade-phase1-modularization-v1.md`
+5. 再读取：
    - `docs/architecture/ARCH-REQ-20260411-story-unit-and-facets-v1.md`
    - `docs/architecture/ARCH-REQ-20260411-module-boundaries-and-mcp-lsp-v1.md`
    - `docs/architecture/ARCH-REQ-20260411-writing-pipeline-and-scene-execution-v1.md`
    - `docs/architecture/ARCH-REQ-20260411-frontend-information-architecture-v1.md`
    - `docs/governance/GOV-REQ-20260411-documentation-and-planning-workflow-v1.md`
-5. 如果需要回到旧代码链路，再补读 `docs/archive/requirements/REQ-20260409-generation-reliability-refactor.md` 及其 report。
-6. 最后再进入代码和测试文件。
+6. 如果需要回到旧代码链路，再补读 `docs/archive/requirements/REQ-20260409-generation-reliability-refactor.md` 及其 report。
+7. 最后再进入代码和测试文件。
 
 ## Handoff Notes
 
