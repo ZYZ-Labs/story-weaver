@@ -33,9 +33,12 @@
   - `docs/plans/PLAN-REQ-20260411-stateful-story-platform-upgrade-phase1-foundation-v1.md`
 - 第二份详细实施计划已创建：
   - `docs/plans/PLAN-REQ-20260411-stateful-story-platform-upgrade-phase1-modularization-v1.md`
+- 第三份详细实施计划已创建：
+  - `docs/plans/PLAN-REQ-20260411-stateful-story-platform-upgrade-phase2-storyunit-storage-v1.md`
 - 当前阶段口径已确认：
   - `Phase 1A`：包先细分、协议先行
   - `Phase 1B`：尽早进入粗粒度模块拆分
+  - `Phase 2`：projection-first 的 StoryUnit 存储映射与服务协议落地
 - `Phase 1A` 首批协议骨架已迁移到：
   - `story-storyunit/src/main/java/com/storyweaver/storyunit/*`
 - `Phase 1B` 首轮粗粒度模块拆分已完成：
@@ -56,22 +59,24 @@
   - `story-infra` 已建立
   - `repository.* / item mapper` 已迁移
   - config / security / mapper resources 暂留 `backend`
+- 当前下一步应继续完成：
+  - `Phase 2.1` 已完成
+  - `Phase 2.2` 核心实现已完成
+  - 下一步进入 `Phase 2.3`
+  - 优先补：
+    - `StorySummaryService`
+    - 规则型摘要回生成
+    - `StoryUnit` 对外统一读模型收口
 - 当前统一构建入口应使用根工程：
   - `mvn -Dmaven.repo.local=/usr/local/project/github/story-weaver/.cache/m2 -DskipTests compile`
-- 当前下一步应继续完成：
-  - `Phase 1` 已完成，后续进入 `Phase 2`
-  - 下一步先写 `StoryUnit + Facets` 存储映射与服务层协议的详细实施计划
-  - 再开始首批对象族的存储映射落地：
-    - 人物
-    - 世界观
-    - 章节
-- 当前对 `Phase 1` 的完成度判断：
-  - 已完成
-  - 后续实现层迁移不再归属本阶段
+- 当前对 `Phase 2` 的状态判断：
+  - `2.1` 已完成
+  - `2.2` 核心实现已完成
+  - `2.3` 待启动
 
 ## Current Blockers
 
-- 新主线已完成 `Phase 1`，当前不再卡在模块粗拆阶段。
+- 新主线已完成 `Phase 1`，当前已进入 `Phase 2` 计划启动阶段。
 - `StoryUnit` 已完成第一批协议、代码骨架与模块迁移，但尚未完成存储映射与 service/repository 实装。
 - `MCP / LSP` 边界已明确，但还没有形成服务层和接口层实现。
 - 前端仍是旧信息架构，尚未切到工作台模式。
@@ -85,8 +90,10 @@
 4. 再读取本轮详细实施计划：
    - `docs/plans/PLAN-REQ-20260411-stateful-story-platform-upgrade-phase1-foundation-v1.md`
    - `docs/plans/PLAN-REQ-20260411-stateful-story-platform-upgrade-phase1-modularization-v1.md`
+   - `docs/plans/PLAN-REQ-20260411-stateful-story-platform-upgrade-phase2-storyunit-storage-v1.md`
 5. 再读取：
    - `docs/architecture/ARCH-REQ-20260411-story-unit-and-facets-v1.md`
+   - `docs/architecture/ARCH-REQ-20260412-storyunit-mapping-matrix-v1.md`
    - `docs/architecture/ARCH-REQ-20260411-module-boundaries-and-mcp-lsp-v1.md`
    - `docs/architecture/ARCH-REQ-20260411-writing-pipeline-and-scene-execution-v1.md`
    - `docs/architecture/ARCH-REQ-20260411-frontend-information-architecture-v1.md`

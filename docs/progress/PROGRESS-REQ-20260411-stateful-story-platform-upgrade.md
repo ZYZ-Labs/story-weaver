@@ -7,12 +7,14 @@
 
 ## 当前快照
 
-- Current Phase: `Phase 1` 已完成，下一步准备进入 `Phase 2`
-- Current Task: 以 `StoryUnit + Facets` 为中心，拆出 `Phase 2` 的详细实施计划并开始存储映射落地
-- Last Completed: `Phase 1B` 已完成，粗粒度模块拆分与边界冻结收尾结束
+- Current Phase: `Phase 2` 进行中
+- Current Task: 准备进入 `Phase 2.3`，补规则型摘要回生成与统一读模型收口
+- Last Completed: 已完成 `Phase 2.2` 的首批 projection service 与统一查询链
 - Next Action:
-  - 编写 `Phase 2` 详细实施计划
-  - 明确 `StoryUnit` 的存储映射、服务层协议和首批对象族落地顺序
+  - 落：
+    - `StorySummaryService`
+    - 规则型摘要回生成
+    - `StoryUnit` 对外统一读模型收口
 - Blockers:
   - 旧主线 `REQ-20260409-generation-reliability-refactor` 已归档，但其代码成果和回归报告仍需作为迁移基线继续参考
   - `MCP` 与 `LSP` 的边界尚未形成代码级实现，只完成讨论与文档收敛
@@ -72,6 +74,26 @@
   - 已完成 `Phase 1B`
   - 已完成 `1B.2` 的活动文档与构建入口口径统一
   - 已完成 `1B.3` 的粗边界冻结与最小模块壳建立
+  - 已创建 `docs/plans/PLAN-REQ-20260411-stateful-story-platform-upgrade-phase2-storyunit-storage-v1.md`
+  - 已明确 `Phase 2` 采用 `projection-first`，现有业务表继续作为 source of truth
+  - 已将 `Phase 2` 详细计划扩写为可开工级文档：
+    - 分阶段拆分
+    - 开发顺序
+    - 测试与验证计划
+    - 风险清单
+  - 已完成 `Phase 2.1` 代码协议补齐：
+    - `StoryUnitRegistry`
+    - `StoryUnitAssembler`
+    - `StoryFacetAssembler`
+    - `StoryUnitMappingMatrix`
+  - 已冻结首批对象族映射矩阵：
+    - `docs/architecture/ARCH-REQ-20260412-storyunit-mapping-matrix-v1.md`
+  - 已完成 `Phase 2.2` 首批实现：
+    - `DefaultStoryUnitProjectionService`
+    - `DefaultStoryUnitQueryService`
+    - `CharacterStoryUnitProjectionService`
+    - `WorldSettingStoryUnitProjectionService`
+    - `ChapterStoryUnitProjectionService`
   - 已完成物理迁移：
     - `domain/entity -> story-domain`
     - `item/domain -> story-domain`
@@ -89,23 +111,23 @@
   - 模块化单体的首轮拆分方案是否会影响现有主链
   - 前端信息架构在真实页面中的可用性
   - `storyunit` 与现有 domain/repository 的迁移耦合面还没有正式开始切
-  - `story-generation / story-provider / story-web / story-infra` 的实现层迁移顺序尚未冻结
-  - 活动文档中的旧构建入口与旧目录口径尚未清理完毕
-  - `story-generation` 实现层何时继续迁移尚未冻结
-  - `story-provider` 实现层何时继续迁移尚未冻结
-  - `story-web` 控制器是否单独成模块尚未冻结
-  - `story-infra` 的配置与 mapper XML 何时迁移尚未冻结
+  - `StorySummaryService` 的规则回生成实现尚未落地
 
 ## 当前阶段完成度判断
 
-- `Phase 1` 当前完成度判断：
-  - `已完成`
-- 完成范围：
-  - `Phase 1A` 协议先行与包边界冻结
-  - `Phase 1B` 粗粒度模块拆分、活动文档口径统一、模块边界冻结
-- 未纳入本阶段的内容：
-  - `generation/provider/web/infra` 实现层继续外搬
-  - `StoryUnit` 存储映射与服务层实装
+- `Phase 2` 当前完成度判断：
+  - `2.1 已完成，2.2 核心实现已完成`
+- 当前已完成：
+  - 详细实施计划已建立
+  - 存储映射路线已冻结为 `projection-first`
+  - 详细开发顺序、对象族范围、测试口径和风险清单已写入计划文档
+  - registry / assembler / mapping 协议已落地
+  - 三类对象族的 mapping matrix 已冻结
+  - 三类对象族的 projection service 已落地
+  - 统一 `StoryUnitProjectionService / StoryUnitQueryService` 已落地
+- 当前未完成：
+  - `StorySummaryService` 尚未落地
+  - 规则型摘要回生成尚未落地
 
 ## 关键节点记录
 
@@ -335,6 +357,124 @@
 - 下一步:
   - 进入 `Phase 2`
   - 先写 `StoryUnit` 存储映射与服务层协议的详细实施计划
+
+### [2026-04-12 Asia/Shanghai] 启动 Phase 2：StoryUnit 存储映射与服务协议
+
+- 背景:
+  - `Phase 1` 已经完成协议骨架与粗模块拆分，下一步必须把 `StoryUnit` 从“命名和接口”推进到“可读取的统一投影模型”。
+- 本次完成:
+  - 新增 `Phase 2` 详细实施计划
+  - 明确采用 `projection-first`
+  - 明确首批对象族只做：
+    - `Character`
+    - `WorldSetting`
+    - `Chapter`
+  - 明确本阶段优先建立：
+    - `StoryUnitRegistry`
+    - `StoryUnitAssembler`
+    - `StoryFacetAssembler`
+    - `StorySummaryService`
+    - `StoryUnitProjectionService`
+- 修改文件:
+  - `docs/plans/PLAN-REQ-20260411-stateful-story-platform-upgrade-phase2-storyunit-storage-v1.md`
+  - `docs/progress/PROGRESS-REQ-20260411-stateful-story-platform-upgrade.md`
+  - `docs/agent-context.md`
+- 风险/遗留:
+  - 目前仍是计划启动，代码尚未进入 `Phase 2` 实装
+  - `summary` 的规则回生成和 AI 回生成边界后续还需继续细化
+- 下一步:
+  - 先落 registry / assembler / projection service 骨架代码
+
+### [2026-04-12 Asia/Shanghai] 细化 Phase 2 详细开发计划
+
+- 背景:
+  - 用户希望先看完整的 `Phase 2` 详细开发计划，再决定是否进入编码。
+- 本次完成:
+  - 将 `Phase 2` 计划扩写为可开工级文档
+  - 明确 `Phase 2.1 / 2.2 / 2.3` 分阶段
+  - 明确首批对象族范围、建议代码落点、开发顺序、测试口径与风险清单
+- 修改文件:
+  - `docs/plans/PLAN-REQ-20260411-stateful-story-platform-upgrade-phase2-storyunit-storage-v1.md`
+  - `docs/plans/PLAN-REQ-20260411-stateful-story-platform-upgrade-v1.md`
+  - `docs/progress/PROGRESS-REQ-20260411-stateful-story-platform-upgrade.md`
+  - `docs/agent-context.md`
+- 风险/遗留:
+  - 当前仍未进入 `Phase 2` 代码开发
+  - 是否开工，等待用户审阅后决定
+- 下一步:
+  - 启动 `Phase 2.1`
+
+### [2026-04-12 Asia/Shanghai] 完成 Phase 2.1：协议补齐与映射矩阵冻结
+
+- 背景:
+  - `Phase 2` 需要先把 registry / assembler / mapping 协议补齐，再进入 projection service 实装，否则 `2.2` 会继续边写边猜。
+- 本次完成:
+  - 在 `story-storyunit` 中新增：
+    - `registry`
+    - `assembler`
+    - `mapping`
+  - 补齐：
+    - `StoryUnitRegistry`
+    - `DefaultStoryUnitRegistry`
+    - `StoryUnitAssembler`
+    - `StoryFacetAssembler`
+    - `AbstractStoryUnitAssembler`
+    - `StoryUnitMappingMatrix`
+    - `StoryFieldMapping`
+  - 新增首批对象族映射矩阵文档：
+    - `docs/architecture/ARCH-REQ-20260412-storyunit-mapping-matrix-v1.md`
+- 修改文件:
+  - `story-storyunit/src/main/java/com/storyweaver/storyunit/assembler/*`
+  - `story-storyunit/src/main/java/com/storyweaver/storyunit/registry/*`
+  - `story-storyunit/src/main/java/com/storyweaver/storyunit/mapping/*`
+  - `docs/architecture/ARCH-REQ-20260412-storyunit-mapping-matrix-v1.md`
+  - `docs/plans/PLAN-REQ-20260411-stateful-story-platform-upgrade-phase2-storyunit-storage-v1.md`
+  - `docs/plans/PLAN-REQ-20260411-stateful-story-platform-upgrade-v1.md`
+  - `docs/progress/PROGRESS-REQ-20260411-stateful-story-platform-upgrade.md`
+  - `docs/agent-context.md`
+- 风险/遗留:
+  - 当前只完成协议和矩阵冻结，尚未进入 `backend` 的 projection service 实现
+- 下一步:
+  - 进入 `Phase 2.2`
+
+### [2026-04-12 Asia/Shanghai] 完成 Phase 2.2：首批 Projection Service 与统一查询链
+
+- 背景:
+  - `Phase 2.1` 已经冻结协议和映射矩阵，下一步需要在 `backend` 中真正把三类对象投影成统一 `StoryUnit` 读模型。
+- 本次完成:
+  - 新增 `StoryUnitProjectionConfig`
+  - 新增可实例化 facet：
+    - `DefaultSummaryFacet`
+    - `DefaultCanonFacet`
+    - `DefaultRelationFacet`
+    - `DefaultExecutionFacet`
+  - 新增统一投影服务协议：
+    - `ProjectedStoryUnit`
+    - `TypedStoryUnitProjectionService`
+    - 更新 `StoryUnitProjectionService`
+  - 在 `backend` 中落地：
+    - `Character / WorldSetting / Chapter` projection source
+    - 三类对象 assembler
+    - 三类对象 projection service
+    - `DefaultStoryUnitProjectionService`
+    - `DefaultStoryUnitQueryService`
+  - 完成根工程编译验证
+- 修改文件:
+  - `story-storyunit/src/main/java/com/storyweaver/storyunit/facet/*`
+  - `story-storyunit/src/main/java/com/storyweaver/storyunit/service/*`
+  - `backend/src/main/java/com/storyweaver/config/StoryUnitProjectionConfig.java`
+  - `backend/src/main/java/com/storyweaver/storyunit/projection/*`
+  - `backend/src/main/java/com/storyweaver/storyunit/assembler/*`
+  - `backend/src/main/java/com/storyweaver/storyunit/service/impl/*`
+  - `docs/plans/PLAN-REQ-20260411-stateful-story-platform-upgrade-phase2-storyunit-storage-v1.md`
+  - `docs/plans/PLAN-REQ-20260411-stateful-story-platform-upgrade-v1.md`
+  - `docs/progress/PROGRESS-REQ-20260411-stateful-story-platform-upgrade.md`
+  - `docs/agent-context.md`
+- 风险/遗留:
+  - 当前 summary 仍由 assembler 内部规则拼装，尚未独立收口到 `StorySummaryService`
+  - `Chapter` 的 execution facet 仍只是预留位，不是完整执行状态模型
+- 下一步:
+  - 进入 `Phase 2.3`
 
 ## 贡献与署名说明
 

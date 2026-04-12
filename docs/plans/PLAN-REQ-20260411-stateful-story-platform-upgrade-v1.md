@@ -140,6 +140,15 @@
 
 - 至少人物、世界观、章节三个对象族具备统一的 unit + facet 映射定义。
 
+当前状态：
+
+- 已启动
+- 详细计划：
+  - `docs/plans/PLAN-REQ-20260411-stateful-story-platform-upgrade-phase2-storyunit-storage-v1.md`
+- `Phase 2.1` 已完成
+- `Phase 2.2` 核心实现已完成
+- 下一步进入 `Phase 2.3`
+
 ### Phase 3. Summary First 对象工作流
 
 目标：
