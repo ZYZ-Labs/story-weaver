@@ -7,12 +7,12 @@
 
 ## 当前快照
 
-- Current Phase: `Phase 2` 已完成，准备进入 `Phase 3`
-- Current Task: 整理 `Phase 3` 的详细实施计划，进入 `Summary First` 对象工作流
+- Current Phase: `Phase 3` 进行中
+- Current Task: 推进 `Phase 3.1` 协议壳，冻结 `Summary First` 的 proposal / preview / apply 工作流
 - Last Completed: 已完成 `Phase 2.3` 的 `StorySummaryService`、规则型摘要回生成与统一读模型收口
 - Next Action:
-  - 编写并审阅 `Phase 3` 详细实施计划
-  - 以 `SummaryFacet` 为默认输出设计对象侧交互与 patch 流
+  - 继续补 `Character / WorldSetting / Chapter` 的 translator / handler 边界
+  - 进入 `Phase 3.2` 前冻结后端服务落点
 - Blockers:
   - 旧主线 `REQ-20260409-generation-reliability-refactor` 已归档，但其代码成果和回归报告仍需作为迁移基线继续参考
   - `MCP` 与 `LSP` 的边界尚未形成代码级实现，只完成讨论与文档收敛
@@ -102,6 +102,17 @@
     - `mvn test -pl backend -am -Dtest=RuleBasedStorySummaryServiceTest -Dsurefire.failIfNoSpecifiedTests=false -Dmaven.repo.local=/usr/local/project/github/story-weaver/.cache/m2`
   - 已新增架构说明：
     - `docs/architecture/ARCH-REQ-20260412-story-summary-read-model-v1.md`
+  - 已新增 `Phase 3` 详细实施计划：
+    - `docs/plans/PLAN-REQ-20260411-stateful-story-platform-upgrade-phase3-summary-first-workflow-v1.md`
+  - 已启动 `Phase 3.1` 协议壳：
+    - `SummaryInputDraft`
+    - `StructuredPatchProposal`
+    - `SummaryChangePreview`
+    - `SummaryApplyCommand`
+    - `SummaryApplyResult`
+    - `StorySummaryProposalService`
+    - `StorySummaryPreviewService`
+    - `StorySummaryApplyService`
   - 已完成物理迁移：
     - `domain/entity -> story-domain`
     - `item/domain -> story-domain`
@@ -119,7 +130,7 @@
   - 模块化单体的首轮拆分方案是否会影响现有主链
   - 前端信息架构在真实页面中的可用性
   - `storyunit` 与现有 domain/repository 的迁移耦合面还没有正式开始切
-  - `Phase 3` 的 `Summary First` 交互流尚未开始编码
+  - `Phase 3.2` 的后端 handler 与写回实现尚未开始
 
 ## 当前阶段完成度判断
 
@@ -136,9 +147,10 @@
   - `StorySummaryService` 已落地
   - 规则型摘要回生成已落地
   - `StoryUnit` 对外统一读模型已收口
+  - `Phase 3` 详细实施计划已建立
+  - `Phase 3.1` 协议壳已建立
 - 当前未完成：
-  - `Phase 3` 详细实施计划尚未编写
-  - `Summary First` 对象工作流尚未开始编码
+  - `Phase 3.2 / 3.3` 尚未开始编码
 
 ## 关键节点记录
 

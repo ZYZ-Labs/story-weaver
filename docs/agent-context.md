@@ -35,6 +35,8 @@
   - `docs/plans/PLAN-REQ-20260411-stateful-story-platform-upgrade-phase1-modularization-v1.md`
 - 第三份详细实施计划已创建：
   - `docs/plans/PLAN-REQ-20260411-stateful-story-platform-upgrade-phase2-storyunit-storage-v1.md`
+- 第四份详细实施计划已创建：
+  - `docs/plans/PLAN-REQ-20260411-stateful-story-platform-upgrade-phase3-summary-first-workflow-v1.md`
 - 当前阶段口径已确认：
   - `Phase 1A`：包先细分、协议先行
   - `Phase 1B`：尽早进入粗粒度模块拆分
@@ -65,8 +67,8 @@
   - `Phase 2.3` 已完成
   - `Phase 2` 已完成
 - 当前下一步应进入：
-  - `Phase 3` 详细实施计划
-  - 重点是 `Summary First` 的对象交互、patch 流和摘要确认写回
+  - 继续 `Phase 3.1`
+  - 重点是 `Summary First` 的对象交互协议、patch proposal、变化预览和摘要确认写回
 - 当前统一构建入口应使用根工程：
   - `mvn -Dmaven.repo.local=/usr/local/project/github/story-weaver/.cache/m2 -DskipTests compile`
 - 当前对 `Phase 2` 的状态判断：
@@ -89,6 +91,7 @@
    - `docs/plans/PLAN-REQ-20260411-stateful-story-platform-upgrade-phase1-foundation-v1.md`
    - `docs/plans/PLAN-REQ-20260411-stateful-story-platform-upgrade-phase1-modularization-v1.md`
    - `docs/plans/PLAN-REQ-20260411-stateful-story-platform-upgrade-phase2-storyunit-storage-v1.md`
+   - `docs/plans/PLAN-REQ-20260411-stateful-story-platform-upgrade-phase3-summary-first-workflow-v1.md`
 5. 再读取：
    - `docs/architecture/ARCH-REQ-20260411-story-unit-and-facets-v1.md`
    - `docs/architecture/ARCH-REQ-20260412-storyunit-mapping-matrix-v1.md`

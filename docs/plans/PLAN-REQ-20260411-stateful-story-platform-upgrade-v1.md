@@ -169,6 +169,14 @@
 
 - 前端默认不再要求用户直接面对字段墙。
 
+当前状态：
+
+- 已启动详细计划编写
+- 详细计划：
+  - `docs/plans/PLAN-REQ-20260411-stateful-story-platform-upgrade-phase3-summary-first-workflow-v1.md`
+- `Phase 3.1` 已启动协议壳落地
+- 下一步继续完成 `Phase 3.1`
+
 ### Phase 4. Read-Only MCP 与 LSP 基础设施
 
 目标：
