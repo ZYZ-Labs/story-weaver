@@ -280,6 +280,24 @@
 - 新接口作为并行入口
 - 等 `Phase 3` 稳定后再评估是否下调旧表单入口
 
+## 迁移基线
+
+`Phase 3.2` 不应平地起一套完全平行的写回实现，而应优先复用并拆分现有基础能力。
+
+当前已确认可作为迁移基线的代码：
+
+- `backend.story.generation.impl.StructuredSummaryApplyServiceImpl`
+- `CharacterService`
+- `WorldSettingService`
+- `ChapterService`
+
+迁移策略建议：
+
+- 保留现有 `StructuredSummaryApplyServiceImpl` 作为过渡实现
+- 把对象族差异逐步下沉到 `Character / WorldSetting / Chapter` handler
+- 把“摘要输入 -> patch proposal -> preview -> apply”新协议接在外层
+- 等 `Phase 3.2` 稳定后，再评估是否替换旧 controller/service 入口
+
 ## 测试与验证
 
 ### 自动化验证

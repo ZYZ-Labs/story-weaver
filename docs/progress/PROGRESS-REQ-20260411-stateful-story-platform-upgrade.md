@@ -113,6 +113,11 @@
     - `StorySummaryProposalService`
     - `StorySummaryPreviewService`
     - `StorySummaryApplyService`
+  - 已确认 `Phase 3.2` 的迁移基线：
+    - `StructuredSummaryApplyServiceImpl`
+    - `CharacterService`
+    - `WorldSettingService`
+    - `ChapterService`
   - 已完成物理迁移：
     - `domain/entity -> story-domain`
     - `item/domain -> story-domain`
