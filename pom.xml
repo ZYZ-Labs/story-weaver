@@ -21,6 +21,10 @@
     <modules>
         <module>story-domain</module>
         <module>story-storyunit</module>
+        <module>story-generation</module>
+        <module>story-provider</module>
+        <module>story-web</module>
+        <module>story-infra</module>
         <module>backend</module>
     </modules>
 

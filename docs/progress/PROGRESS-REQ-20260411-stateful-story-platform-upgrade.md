@@ -3,16 +3,16 @@
 - Req ID: REQ-20260411-stateful-story-platform-upgrade
 - Status: In Progress
 - Created At: 2026-04-11 Asia/Shanghai
-- Updated At: 2026-04-11 Asia/Shanghai
+- Updated At: 2026-04-12 Asia/Shanghai
 
 ## 当前快照
 
-- Current Phase: Phase 1B 进行中，当前完成的是 `1B.1`，仍需继续完成 `1B.2 / 1B.3`
-- Current Task: 继续完成 `Phase 1B` 的文档口径收敛与下一批粗模块边界冻结，不进入新阶段
-- Last Completed: 已完成 `1B.1`，即 `story-domain` 与 `story-storyunit` 的首轮物理迁移、根工程聚合与构建链路切换
-- Next Action: 在 `Phase 1B` 内继续完成：
-  - `1B.2` 活动文档与构建入口统一
-  - `1B.3` 下一批粗模块边界冻结
+- Current Phase: `Phase 1` 已完成，下一步准备进入 `Phase 2`
+- Current Task: 以 `StoryUnit + Facets` 为中心，拆出 `Phase 2` 的详细实施计划并开始存储映射落地
+- Last Completed: `Phase 1B` 已完成，粗粒度模块拆分与边界冻结收尾结束
+- Next Action:
+  - 编写 `Phase 2` 详细实施计划
+  - 明确 `StoryUnit` 的存储映射、服务层协议和首批对象族落地顺序
 - Blockers:
   - 旧主线 `REQ-20260409-generation-reliability-refactor` 已归档，但其代码成果和回归报告仍需作为迁移基线继续参考
   - `MCP` 与 `LSP` 的边界尚未形成代码级实现，只完成讨论与文档收敛
@@ -54,8 +54,24 @@
     - `story-domain`
     - `story-storyunit`
     - 保留 `backend` 作为应用壳
-  - 已明确 `Phase 1B` 目前只完成 `1B.1`
-  - 已明确 `1B.2 / 1B.3` 仍归属当前 `Phase 1B`
+  - 已开始 `1B.3`：
+    - 新增 `story-generation`
+    - 抽出 generation 顶层合同层
+    - 抽出 generation 相关 request DTO
+    - `generation.impl` 暂留 `backend`
+    - 新增 `story-provider`
+    - 抽出 `AIProviderService`
+    - 抽出 `ProviderDiscoveryVO`
+    - `AIProviderServiceImpl / AIModelRoutingService` 暂留 `backend`
+    - 新增 `story-web`
+    - 抽出 `ApiResponse / ApiErrorResponse`
+    - controller / handler 暂留 `backend`
+    - 新增 `story-infra`
+    - 抽出 `repository.*` 与 `item` 持久化 mapper
+    - config / security / mapper resources 暂留 `backend`
+  - 已完成 `Phase 1B`
+  - 已完成 `1B.2` 的活动文档与构建入口口径统一
+  - 已完成 `1B.3` 的粗边界冻结与最小模块壳建立
   - 已完成物理迁移：
     - `domain/entity -> story-domain`
     - `item/domain -> story-domain`
@@ -73,8 +89,23 @@
   - 模块化单体的首轮拆分方案是否会影响现有主链
   - 前端信息架构在真实页面中的可用性
   - `storyunit` 与现有 domain/repository 的迁移耦合面还没有正式开始切
-  - `story-generation / story-provider / story-web / story-infra` 的下一轮拆分顺序尚未冻结
+  - `story-generation / story-provider / story-web / story-infra` 的实现层迁移顺序尚未冻结
   - 活动文档中的旧构建入口与旧目录口径尚未清理完毕
+  - `story-generation` 实现层何时继续迁移尚未冻结
+  - `story-provider` 实现层何时继续迁移尚未冻结
+  - `story-web` 控制器是否单独成模块尚未冻结
+  - `story-infra` 的配置与 mapper XML 何时迁移尚未冻结
+
+## 当前阶段完成度判断
+
+- `Phase 1` 当前完成度判断：
+  - `已完成`
+- 完成范围：
+  - `Phase 1A` 协议先行与包边界冻结
+  - `Phase 1B` 粗粒度模块拆分、活动文档口径统一、模块边界冻结
+- 未纳入本阶段的内容：
+  - `generation/provider/web/infra` 实现层继续外搬
+  - `StoryUnit` 存储映射与服务层实装
 
 ## 关键节点记录
 
@@ -179,6 +210,131 @@
   - 完成 `1B.3`：
     - 冻结 `story-generation / story-provider / story-web / story-infra` 的粗边界
     - 明确继续临时留在 `backend` 的包
+
+### [2026-04-12 Asia/Shanghai] 推进 Phase 1B：抽出 `story-generation` 合同层
+
+- 背景:
+  - 检查后确认 `story-generation` 顶层合同层主要依赖 `domain`，但实现层仍直接依赖 `service / repository / transaction`。
+  - 因此本轮适合先抽合同层，不直接搬实现层，避免形成循环依赖。
+- 本次完成:
+  - 新增模块：
+    - `story-generation`
+  - 迁移 `com.storyweaver.story.generation` 顶层接口、VO、结果对象与 suggestion/pack
+  - 迁移 generation 相关 request DTO：
+    - `StructuredCreationApplyRequestDTO`
+    - `StructuredSummaryApplyRequestDTO`
+    - `ChapterAnchorUpdateRequestDTO`
+  - 保留 `com.storyweaver.story.generation.impl.*` 在 `backend`
+  - 更新 `backend` 依赖，使其消费 `story-generation`
+  - 完成根工程编译验证
+- 修改文件:
+  - `pom.xml`
+  - `story-generation/pom.xml`
+  - `backend/pom.xml`
+  - `story-generation/src/main/java/com/storyweaver/story/generation/*`
+  - `story-generation/src/main/java/com/storyweaver/domain/dto/*`
+  - `backend/src/main/java/com/storyweaver/story/generation/impl/*`
+  - `docs/plans/PLAN-REQ-20260411-stateful-story-platform-upgrade-phase1-modularization-v1.md`
+  - `docs/progress/PROGRESS-REQ-20260411-stateful-story-platform-upgrade.md`
+  - `docs/agent-context.md`
+- 风险/遗留:
+  - `story-generation` 目前只是合同层模块，不包含实现层
+  - `generation.impl` 仍直接耦合 `repository / service / transaction`
+  - `story-provider / story-web / story-infra` 边界尚未冻结
+- 下一步:
+  - 继续留在 `Phase 1B`
+  - 补齐 `story-generation` 实现层的暂留边界说明
+  - 冻结 `story-provider / story-web / story-infra` 的粗边界
+
+### [2026-04-12 Asia/Shanghai] 推进 Phase 1B：抽出 `story-provider` 合同层
+
+- 背景:
+  - `provider` 相关能力已经形成相对清晰的合同层，但实现层仍直接依赖 repository、事务和系统配置。
+  - 因此本轮适合先抽 `AIProviderService` 与发现结果对象，不直接搬实现层。
+- 本次完成:
+  - 新增模块：
+    - `story-provider`
+  - 迁移 `AIProviderService`
+  - 迁移 `ProviderDiscoveryVO`
+  - 保留 `AIProviderServiceImpl` 与 `AIModelRoutingService` 在 `backend`
+  - 更新 `backend` 依赖，使其消费 `story-provider`
+  - 完成根工程编译验证
+- 修改文件:
+  - `pom.xml`
+  - `story-provider/pom.xml`
+  - `backend/pom.xml`
+  - `story-provider/src/main/java/com/storyweaver/service/AIProviderService.java`
+  - `story-provider/src/main/java/com/storyweaver/domain/vo/ProviderDiscoveryVO.java`
+  - `docs/plans/PLAN-REQ-20260411-stateful-story-platform-upgrade-phase1-modularization-v1.md`
+  - `docs/progress/PROGRESS-REQ-20260411-stateful-story-platform-upgrade.md`
+  - `docs/agent-context.md`
+- 风险/遗留:
+  - `story-provider` 目前只是合同层模块，不包含实现层
+  - `AIProviderServiceImpl` 仍直接耦合 repository 和 HTTP 调用
+  - `AIModelRoutingService` 仍直接依赖 `SystemConfigService`
+  - `story-web / story-infra` 边界尚未冻结
+- 下一步:
+  - 继续留在 `Phase 1B`
+  - 补齐 `story-provider` 实现层的暂留边界说明
+  - 冻结 `story-web / story-infra` 的粗边界
+
+### [2026-04-12 Asia/Shanghai] 推进 Phase 1B：建立 `story-web` 与 `story-infra` 粗模块
+
+- 背景:
+  - `story-web / story-infra` 如果只停留在文档边界，后续继续拆分时仍会反复混淆 `backend` 的应用壳职责。
+  - 当前最安全的物理迁移对象是 HTTP 公共响应壳与 MyBatis mapper 接口，它们依赖方向清晰、对运行壳影响最小。
+- 本次完成:
+  - 新增模块：
+    - `story-web`
+    - `story-infra`
+  - 迁移 `ApiResponse`
+  - 迁移 `ApiErrorResponse`
+  - 迁移 `com.storyweaver.repository.*`
+  - 迁移 `com.storyweaver.item.infrastructure.persistence.mapper.*`
+  - 更新根工程与 `backend` 依赖
+  - 完成根工程编译验证
+- 修改文件:
+  - `pom.xml`
+  - `story-web/pom.xml`
+  - `story-infra/pom.xml`
+  - `backend/pom.xml`
+  - `story-web/src/main/java/com/storyweaver/common/web/ApiResponse.java`
+  - `story-web/src/main/java/com/storyweaver/exception/ApiErrorResponse.java`
+  - `story-infra/src/main/java/com/storyweaver/repository/*`
+  - `story-infra/src/main/java/com/storyweaver/item/infrastructure/persistence/mapper/*`
+  - `docs/plans/PLAN-REQ-20260411-stateful-story-platform-upgrade-phase1-modularization-v1.md`
+  - `docs/progress/PROGRESS-REQ-20260411-stateful-story-platform-upgrade.md`
+  - `docs/agent-context.md`
+- 风险/遗留:
+  - `story-web` 目前只是最小公共响应壳模块，不含 controller 与 handler 实现
+  - `story-infra` 目前只承载 mapper 接口，不含 config、security 与 mapper XML 资源
+  - `backend` 仍然是实际运行的 Spring Boot 应用壳
+- 下一步:
+  - 继续留在 `Phase 1B`
+  - 统一 `1B.2` 的活动文档与构建入口口径
+  - 补齐 `generation/provider/web/infra` 的暂留边界与下一轮迁移顺序
+
+### [2026-04-12 Asia/Shanghai] 完成 Phase 1B 收尾
+
+- 背景:
+  - `story-generation / story-provider / story-web / story-infra` 的最小模块壳已经建立，剩余工作集中在文档口径统一和边界写死。
+- 本次完成:
+  - 统一活动文档中的根工程构建入口口径
+  - 明确当前模块归属表
+  - 明确继续暂留 `backend` 的包
+  - 明确下一轮优先迁移顺序
+  - 将 `Phase 1B` 状态切换为完成
+- 修改文件:
+  - `docs/plans/PLAN-REQ-20260411-stateful-story-platform-upgrade-phase1-modularization-v1.md`
+  - `docs/plans/PLAN-REQ-20260411-stateful-story-platform-upgrade-v1.md`
+  - `docs/progress/PROGRESS-REQ-20260411-stateful-story-platform-upgrade.md`
+  - `docs/agent-context.md`
+- 风险/遗留:
+  - `backend` 仍是实际运行壳，后续实现层迁移仍需按阶段推进
+  - `Phase 2` 之前不应继续扩大 `Phase 1` 范围
+- 下一步:
+  - 进入 `Phase 2`
+  - 先写 `StoryUnit` 存储映射与服务层协议的详细实施计划
 
 ## 贡献与署名说明
 

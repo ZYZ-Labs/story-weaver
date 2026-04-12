@@ -1,6 +1,6 @@
 # Agent Context
 
-- Last Updated: 2026-04-11 Asia/Shanghai
+- Last Updated: 2026-04-12 Asia/Shanghai
 - Current Primary Req: REQ-20260411-stateful-story-platform-upgrade
 
 ## Active Requirements
@@ -43,20 +43,35 @@
   - `story-domain`
   - `story-storyunit`
   - `backend` 保持应用壳
+- `Phase 1B` 已继续推进到 `1B.3`：
+  - `story-generation` 已建立
+  - generation 顶层合同层已迁移
+  - `generation.impl` 暂留 `backend`
+  - `story-provider` 已建立
+  - `AIProviderService` 与 `ProviderDiscoveryVO` 已迁移
+  - `AIProviderServiceImpl / AIModelRoutingService` 暂留 `backend`
+  - `story-web` 已建立
+  - `ApiResponse / ApiErrorResponse` 已迁移
+  - controller / handler 暂留 `backend`
+  - `story-infra` 已建立
+  - `repository.* / item mapper` 已迁移
+  - config / security / mapper resources 暂留 `backend`
 - 当前统一构建入口应使用根工程：
   - `mvn -Dmaven.repo.local=/usr/local/project/github/story-weaver/.cache/m2 -DskipTests compile`
 - 当前下一步应继续完成：
-  - 继续留在 `Phase 1B`
-  - 完成 `1B.2`
-    - 清理活动文档中的旧构建入口描述
-    - 清理活动文档中的旧目录口径
-  - 完成 `1B.3`
-    - 冻结 `story-generation / story-provider / story-web / story-infra` 的粗边界
-    - 明确继续临时留在 `backend` 的包
+  - `Phase 1` 已完成，后续进入 `Phase 2`
+  - 下一步先写 `StoryUnit + Facets` 存储映射与服务层协议的详细实施计划
+  - 再开始首批对象族的存储映射落地：
+    - 人物
+    - 世界观
+    - 章节
+- 当前对 `Phase 1` 的完成度判断：
+  - 已完成
+  - 后续实现层迁移不再归属本阶段
 
 ## Current Blockers
 
-- 新主线已完成 `Phase 1B` 的 `1B.1`，但 `1B.2 / 1B.3` 仍未完成，当前仍处于 `Phase 1B`。
+- 新主线已完成 `Phase 1`，当前不再卡在模块粗拆阶段。
 - `StoryUnit` 已完成第一批协议、代码骨架与模块迁移，但尚未完成存储映射与 service/repository 实装。
 - `MCP / LSP` 边界已明确，但还没有形成服务层和接口层实现。
 - 前端仍是旧信息架构，尚未切到工作台模式。

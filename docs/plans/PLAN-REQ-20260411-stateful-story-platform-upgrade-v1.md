@@ -4,7 +4,7 @@
 - Plan Version: v1
 - Status: In Progress
 - Created At: 2026-04-11 Asia/Shanghai
-- Updated At: 2026-04-11 Asia/Shanghai
+- Updated At: 2026-04-12 Asia/Shanghai
 
 ## 计划定位
 
@@ -53,7 +53,7 @@
   - 协议先行
 - `Phase 1B`
   - 粗粒度模块拆分
-  - 当前仍在进行中
+  - 已完成
 
 `Phase 1B` 内部分段：
 
@@ -71,15 +71,29 @@
   - `story-storyunit`
   - 根 Maven 聚合工程
   - `backend` 作为应用壳保留
+- `1B.3` 已启动的部分
+  - `story-generation`
+  - generation 顶层合同层
+  - generation 相关 request DTO
+  - `generation.impl` 仍暂留 `backend`
+  - `story-provider`
+  - `AIProviderService`
+  - `ProviderDiscoveryVO`
+  - `AIProviderServiceImpl / AIModelRoutingService` 仍暂留 `backend`
+  - `story-web`
+  - `ApiResponse / ApiErrorResponse`
+  - controller / handler 仍暂留 `backend`
+  - `story-infra`
+  - `repository.* / item mapper`
+  - config / security / mapper resources 仍暂留 `backend`
 
 当前未完成但仍属于 `Phase 1B`：
 
-- `1B.2`
-  - 清理活动文档中的旧单模块构建入口
-  - 清理活动文档中的旧目录口径
-- `1B.3`
-  - 冻结 `story-generation / story-provider / story-web / story-infra` 的粗边界
-  - 标注继续临时留在 `backend` 的包
+当前判断：
+
+- `Phase 1` 已完成
+- `Phase 1B` 的范围只包含粗粒度模块拆分与边界冻结
+- 后续实现层迁移不再归属 `Phase 1`
 
 建议模块：
 

@@ -2,9 +2,9 @@
 
 - Req ID: REQ-20260411-stateful-story-platform-upgrade
 - Plan ID: PLAN-REQ-20260411-stateful-story-platform-upgrade-phase1-foundation-v1
-- Status: In Progress
+- Status: Completed
 - Created At: 2026-04-11 Asia/Shanghai
-- Updated At: 2026-04-11 Asia/Shanghai
+- Updated At: 2026-04-12 Asia/Shanghai
 
 ## 本轮目标
 
@@ -110,6 +110,9 @@
 
 - 这是协议冻结和命名冻结，不是业务迁移
 - 这批代码允许 `Phase 1B` 开始拆模块，也允许后续 generation / MCP / LSP 从统一契约起步
+- 当前状态：
+  - `Phase 1A` 已完成
+  - 后续不再回到本阶段补零散协议命名
 
 ## 建议代码落点
 

@@ -29,6 +29,30 @@
             <version>${project.version}</version>
         </dependency>
 
+        <dependency>
+            <groupId>com.storyweaver</groupId>
+            <artifactId>story-generation</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+
+        <dependency>
+            <groupId>com.storyweaver</groupId>
+            <artifactId>story-provider</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+
+        <dependency>
+            <groupId>com.storyweaver</groupId>
+            <artifactId>story-web</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+
+        <dependency>
+            <groupId>com.storyweaver</groupId>
+            <artifactId>story-infra</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+
         <!-- Spring Boot Starters -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
