@@ -142,12 +142,13 @@
 
 当前状态：
 
-- 已启动
+- 已完成
 - 详细计划：
   - `docs/plans/PLAN-REQ-20260411-stateful-story-platform-upgrade-phase2-storyunit-storage-v1.md`
 - `Phase 2.1` 已完成
 - `Phase 2.2` 核心实现已完成
-- 下一步进入 `Phase 2.3`
+- `Phase 2.3` 已完成
+- 下一步进入 `Phase 3` 详细实施计划
 
 ### Phase 3. Summary First 对象工作流
 

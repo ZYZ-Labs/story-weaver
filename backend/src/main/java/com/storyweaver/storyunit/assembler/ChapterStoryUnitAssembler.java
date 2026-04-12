@@ -3,8 +3,6 @@ package com.storyweaver.storyunit.assembler;
 import com.storyweaver.domain.entity.Character;
 import com.storyweaver.domain.entity.Plot;
 import com.storyweaver.storyunit.adapter.AbstractStoryUnitAdapter;
-import com.storyweaver.storyunit.assembler.AbstractStoryUnitAssembler;
-import com.storyweaver.storyunit.assembler.StoryFacetAssembler;
 import com.storyweaver.storyunit.facet.canon.DefaultCanonFacet;
 import com.storyweaver.storyunit.facet.execution.DefaultExecutionFacet;
 import com.storyweaver.storyunit.facet.relation.DefaultRelationFacet;
@@ -14,6 +12,8 @@ import com.storyweaver.storyunit.model.StoryScope;
 import com.storyweaver.storyunit.model.StoryUnit;
 import com.storyweaver.storyunit.model.StoryUnitType;
 import com.storyweaver.storyunit.projection.ChapterProjectionSource;
+import com.storyweaver.storyunit.summary.StorySummaryDraft;
+import com.storyweaver.storyunit.summary.StorySummaryService;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
@@ -25,9 +25,9 @@ import java.util.Optional;
 @Component
 public class ChapterStoryUnitAssembler extends AbstractStoryUnitAssembler<ChapterProjectionSource> {
 
-    public ChapterStoryUnitAssembler() {
+    public ChapterStoryUnitAssembler(StorySummaryService storySummaryService) {
         super(new ChapterProjectionSourceAdapter(), List.of(
-                new ChapterSummaryFacetAssembler(),
+                new ChapterSummaryFacetAssembler(storySummaryService),
                 new ChapterCanonFacetAssembler(),
                 new ChapterRelationFacetAssembler(),
                 new ChapterExecutionFacetAssembler()
@@ -58,6 +58,12 @@ public class ChapterStoryUnitAssembler extends AbstractStoryUnitAssembler<Chapte
 
     private static final class ChapterSummaryFacetAssembler implements StoryFacetAssembler<ChapterProjectionSource, DefaultSummaryFacet> {
 
+        private final StorySummaryService storySummaryService;
+
+        private ChapterSummaryFacetAssembler(StorySummaryService storySummaryService) {
+            this.storySummaryService = storySummaryService;
+        }
+
         @Override
         public FacetType facetType() {
             return FacetType.SUMMARY;
@@ -71,22 +77,20 @@ public class ChapterStoryUnitAssembler extends AbstractStoryUnitAssembler<Chapte
         @Override
         public Optional<DefaultSummaryFacet> assemble(ChapterProjectionSource source, StoryUnit storyUnit) {
             String displayTitle = blankToEmpty(source.chapter().getTitle());
-            String oneLine = firstNonBlank(source.chapter().getSummary(), displayTitle);
-            String longSummary = firstNonBlank(source.chapter().getSummary(), abbreviate(source.chapter().getContent(), 240), oneLine);
-            String stateSummary = buildStateSummary(source);
-            String relationSummary = buildRelationSummary(source);
-            return Optional.of(new DefaultSummaryFacet(
+            StorySummaryDraft draft = new StorySummaryDraft(
+                    StoryUnitType.CHAPTER,
                     displayTitle,
-                    oneLine,
-                    longSummary,
-                    stateSummary,
-                    relationSummary,
-                    "",
+                    List.of(source.chapter().getSummary(), displayTitle),
+                    List.of(source.chapter().getSummary(), abbreviate(source.chapter().getContent(), 240)),
+                    buildStateFacts(source),
+                    buildRelationFacts(source),
+                    List.of(),
                     List.of()
-            ));
+            );
+            return Optional.of(storySummaryService.summarize(draft));
         }
 
-        private String buildStateSummary(ChapterProjectionSource source) {
+        private List<String> buildStateFacts(ChapterProjectionSource source) {
             List<String> parts = new ArrayList<>();
             if (hasText(source.chapter().getChapterStatus())) {
                 parts.add("章节状态：" + source.chapter().getChapterStatus().trim());
@@ -94,10 +98,10 @@ public class ChapterStoryUnitAssembler extends AbstractStoryUnitAssembler<Chapte
             if (source.chapter().getWordCount() != null) {
                 parts.add("字数：" + source.chapter().getWordCount());
             }
-            return String.join("；", parts);
+            return List.copyOf(parts);
         }
 
-        private String buildRelationSummary(ChapterProjectionSource source) {
+        private List<String> buildRelationFacts(ChapterProjectionSource source) {
             List<String> parts = new ArrayList<>();
             if (source.outline() != null && hasText(source.outline().getTitle())) {
                 parts.add("关联大纲：" + source.outline().getTitle().trim());
@@ -111,7 +115,7 @@ public class ChapterStoryUnitAssembler extends AbstractStoryUnitAssembler<Chapte
             if (!source.plots().isEmpty()) {
                 parts.add("关联剧情 " + source.plots().size() + " 个");
             }
-            return String.join("；", parts);
+            return List.copyOf(parts);
         }
     }
 
@@ -204,15 +208,6 @@ public class ChapterStoryUnitAssembler extends AbstractStoryUnitAssembler<Chapte
 
     private static boolean hasText(String value) {
         return value != null && !value.trim().isEmpty();
-    }
-
-    private static String firstNonBlank(String... values) {
-        for (String value : values) {
-            if (hasText(value)) {
-                return value.trim();
-            }
-        }
-        return "";
     }
 
     private static String blankToEmpty(String value) {

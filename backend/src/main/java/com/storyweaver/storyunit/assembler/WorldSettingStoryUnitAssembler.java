@@ -3,8 +3,6 @@ package com.storyweaver.storyunit.assembler;
 import com.storyweaver.domain.entity.OutlineWorldSettingLink;
 import com.storyweaver.domain.entity.ProjectWorldSettingLink;
 import com.storyweaver.storyunit.adapter.AbstractStoryUnitAdapter;
-import com.storyweaver.storyunit.assembler.AbstractStoryUnitAssembler;
-import com.storyweaver.storyunit.assembler.StoryFacetAssembler;
 import com.storyweaver.storyunit.facet.canon.DefaultCanonFacet;
 import com.storyweaver.storyunit.facet.relation.DefaultRelationFacet;
 import com.storyweaver.storyunit.facet.summary.DefaultSummaryFacet;
@@ -12,11 +10,11 @@ import com.storyweaver.storyunit.model.FacetType;
 import com.storyweaver.storyunit.model.StoryUnit;
 import com.storyweaver.storyunit.model.StoryUnitType;
 import com.storyweaver.storyunit.projection.WorldSettingProjectionSource;
+import com.storyweaver.storyunit.summary.StorySummaryDraft;
+import com.storyweaver.storyunit.summary.StorySummaryService;
 import org.springframework.stereotype.Component;
 
-import java.util.ArrayList;
 import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -24,9 +22,9 @@ import java.util.Optional;
 @Component
 public class WorldSettingStoryUnitAssembler extends AbstractStoryUnitAssembler<WorldSettingProjectionSource> {
 
-    public WorldSettingStoryUnitAssembler() {
+    public WorldSettingStoryUnitAssembler(StorySummaryService storySummaryService) {
         super(new WorldSettingProjectionSourceAdapter(), List.of(
-                new WorldSettingSummaryFacetAssembler(),
+                new WorldSettingSummaryFacetAssembler(storySummaryService),
                 new WorldSettingCanonFacetAssembler(),
                 new WorldSettingRelationFacetAssembler()
         ));
@@ -51,6 +49,12 @@ public class WorldSettingStoryUnitAssembler extends AbstractStoryUnitAssembler<W
 
     private static final class WorldSettingSummaryFacetAssembler implements StoryFacetAssembler<WorldSettingProjectionSource, DefaultSummaryFacet> {
 
+        private final StorySummaryService storySummaryService;
+
+        private WorldSettingSummaryFacetAssembler(StorySummaryService storySummaryService) {
+            this.storySummaryService = storySummaryService;
+        }
+
         @Override
         public FacetType facetType() {
             return FacetType.SUMMARY;
@@ -64,18 +68,17 @@ public class WorldSettingStoryUnitAssembler extends AbstractStoryUnitAssembler<W
         @Override
         public Optional<DefaultSummaryFacet> assemble(WorldSettingProjectionSource source, StoryUnit storyUnit) {
             String displayTitle = firstNonBlank(source.worldSetting().getTitle(), source.worldSetting().getName());
-            String oneLine = firstNonBlank(source.worldSetting().getDescription(), displayTitle);
-            String longSummary = firstNonBlank(source.worldSetting().getContent(), source.worldSetting().getDescription(), oneLine);
-            String relationSummary = "关联项目 " + source.projectLinks().size() + " 个，关联大纲 " + source.outlineLinks().size() + " 个";
-            return Optional.of(new DefaultSummaryFacet(
+            StorySummaryDraft draft = new StorySummaryDraft(
+                    StoryUnitType.WORLD_SETTING,
                     displayTitle,
-                    oneLine,
-                    longSummary,
-                    "",
-                    relationSummary,
-                    "",
+                    List.of(source.worldSetting().getDescription(), displayTitle),
+                    List.of(source.worldSetting().getContent(), source.worldSetting().getDescription()),
+                    List.of(),
+                    List.of("关联项目 " + source.projectLinks().size() + " 个", "关联大纲 " + source.outlineLinks().size() + " 个"),
+                    List.of(),
                     List.of()
-            ));
+            );
+            return Optional.of(storySummaryService.summarize(draft));
         }
     }
 

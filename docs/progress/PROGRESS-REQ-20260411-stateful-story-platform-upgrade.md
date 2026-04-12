@@ -7,14 +7,12 @@
 
 ## 当前快照
 
-- Current Phase: `Phase 2` 进行中
-- Current Task: 准备进入 `Phase 2.3`，补规则型摘要回生成与统一读模型收口
-- Last Completed: 已完成 `Phase 2.2` 的首批 projection service 与统一查询链
+- Current Phase: `Phase 2` 已完成，准备进入 `Phase 3`
+- Current Task: 整理 `Phase 3` 的详细实施计划，进入 `Summary First` 对象工作流
+- Last Completed: 已完成 `Phase 2.3` 的 `StorySummaryService`、规则型摘要回生成与统一读模型收口
 - Next Action:
-  - 落：
-    - `StorySummaryService`
-    - 规则型摘要回生成
-    - `StoryUnit` 对外统一读模型收口
+  - 编写并审阅 `Phase 3` 详细实施计划
+  - 以 `SummaryFacet` 为默认输出设计对象侧交互与 patch 流
 - Blockers:
   - 旧主线 `REQ-20260409-generation-reliability-refactor` 已归档，但其代码成果和回归报告仍需作为迁移基线继续参考
   - `MCP` 与 `LSP` 的边界尚未形成代码级实现，只完成讨论与文档收敛
@@ -94,6 +92,16 @@
     - `CharacterStoryUnitProjectionService`
     - `WorldSettingStoryUnitProjectionService`
     - `ChapterStoryUnitProjectionService`
+  - 已完成 `Phase 2.3` 摘要收口：
+    - `StorySummaryDraft`
+    - `StorySummaryService`
+    - `RuleBasedStorySummaryService`
+    - `StoryUnitQueryService#getProjected / listProjected`
+  - 已完成 `Phase 2.3` 最小验证：
+    - `RuleBasedStorySummaryServiceTest`
+    - `mvn test -pl backend -am -Dtest=RuleBasedStorySummaryServiceTest -Dsurefire.failIfNoSpecifiedTests=false -Dmaven.repo.local=/usr/local/project/github/story-weaver/.cache/m2`
+  - 已新增架构说明：
+    - `docs/architecture/ARCH-REQ-20260412-story-summary-read-model-v1.md`
   - 已完成物理迁移：
     - `domain/entity -> story-domain`
     - `item/domain -> story-domain`
@@ -111,12 +119,12 @@
   - 模块化单体的首轮拆分方案是否会影响现有主链
   - 前端信息架构在真实页面中的可用性
   - `storyunit` 与现有 domain/repository 的迁移耦合面还没有正式开始切
-  - `StorySummaryService` 的规则回生成实现尚未落地
+  - `Phase 3` 的 `Summary First` 交互流尚未开始编码
 
 ## 当前阶段完成度判断
 
 - `Phase 2` 当前完成度判断：
-  - `2.1 已完成，2.2 核心实现已完成`
+  - 已完成
 - 当前已完成：
   - 详细实施计划已建立
   - 存储映射路线已冻结为 `projection-first`
@@ -125,9 +133,12 @@
   - 三类对象族的 mapping matrix 已冻结
   - 三类对象族的 projection service 已落地
   - 统一 `StoryUnitProjectionService / StoryUnitQueryService` 已落地
+  - `StorySummaryService` 已落地
+  - 规则型摘要回生成已落地
+  - `StoryUnit` 对外统一读模型已收口
 - 当前未完成：
-  - `StorySummaryService` 尚未落地
-  - 规则型摘要回生成尚未落地
+  - `Phase 3` 详细实施计划尚未编写
+  - `Summary First` 对象工作流尚未开始编码
 
 ## 关键节点记录
 

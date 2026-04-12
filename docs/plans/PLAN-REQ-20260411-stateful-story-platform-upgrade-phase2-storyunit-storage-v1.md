@@ -2,7 +2,7 @@
 
 - Req ID: REQ-20260411-stateful-story-platform-upgrade
 - Plan ID: PLAN-REQ-20260411-stateful-story-platform-upgrade-phase2-storyunit-storage-v1
-- Status: In Progress
+- Status: Completed
 - Created At: 2026-04-12 Asia/Shanghai
 - Updated At: 2026-04-12 Asia/Shanghai
 
@@ -24,9 +24,9 @@
 
 当前阶段定位：
 
-- 这是 `Phase 2` 的详细开发计划文档
-- 当前先完成计划细化，不立即进入编码
-- 代码开发要等用户审阅本计划后再启动
+- 这是 `Phase 2` 的详细实施计划文档
+- `Phase 2.1 / 2.2 / 2.3` 已按本计划执行完成
+- 后续 `Phase 3 / Phase 4` 将继续消费本阶段产出的统一读模型与摘要协议
 
 ## 本轮原则
 
@@ -180,6 +180,10 @@
 退出条件：
 
 - 后续阶段不必再直接依赖原始实体字段来拼用户可读摘要
+
+当前状态：
+
+- 已完成
 
 ## 首轮存储策略
 
@@ -564,13 +568,23 @@
 - 已新增映射矩阵文档：
   - `docs/architecture/ARCH-REQ-20260412-storyunit-mapping-matrix-v1.md`
 
-### `Phase 2.2` 下一步
+### `Phase 2.3` 已完成
 
-- 进入 `Phase 2.3`
-- 开始补：
-  - `StorySummaryService`
-  - 规则型 `SummaryFacet` 回生成收口
-  - 面向后续 MCP/编排的统一读模型输出约束
+- 已新增：
+  - `story-storyunit.summary.StorySummaryDraft`
+  - `story-storyunit.summary.StorySummaryService`
+  - `backend.storyunit.service.impl.RuleBasedStorySummaryService`
+- 已完成收口：
+  - `CharacterStoryUnitAssembler`
+  - `WorldSettingStoryUnitAssembler`
+  - `ChapterStoryUnitAssembler`
+- 已完成统一查询出口：
+  - `StoryUnitQueryService#getProjected`
+  - `StoryUnitQueryService#listProjected`
+- 已补最小规则测试：
+  - `RuleBasedStorySummaryServiceTest`
+- 已新增架构说明：
+  - `docs/architecture/ARCH-REQ-20260412-story-summary-read-model-v1.md`
 
 ## 风险与约束
 
@@ -583,6 +597,13 @@
 - 先把 `Character / WorldSetting / Chapter` 做通
 - 先把读取做通
 - 先把摘要回生成功能做稳
+
+## 本轮验证结果
+
+- 已通过：
+  - `mvn -Dmaven.repo.local=/usr/local/project/github/story-weaver/.cache/m2 -DskipTests compile`
+  - `mvn test -pl backend -am -Dtest=RuleBasedStorySummaryServiceTest -Dsurefire.failIfNoSpecifiedTests=false -Dmaven.repo.local=/usr/local/project/github/story-weaver/.cache/m2`
+  - `git diff --check`
 
 ## 贡献与署名说明
 

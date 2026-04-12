@@ -3,9 +3,6 @@ package com.storyweaver.storyunit.assembler;
 import com.storyweaver.domain.entity.ChapterCharacterLink;
 import com.storyweaver.domain.entity.ProjectCharacterLink;
 import com.storyweaver.storyunit.adapter.AbstractStoryUnitAdapter;
-import com.storyweaver.storyunit.assembler.AbstractStoryUnitAssembler;
-import com.storyweaver.storyunit.assembler.StoryFacetAssembler;
-import com.storyweaver.storyunit.facet.StoryFacet;
 import com.storyweaver.storyunit.facet.canon.DefaultCanonFacet;
 import com.storyweaver.storyunit.facet.relation.DefaultRelationFacet;
 import com.storyweaver.storyunit.facet.summary.DefaultSummaryFacet;
@@ -13,6 +10,8 @@ import com.storyweaver.storyunit.model.FacetType;
 import com.storyweaver.storyunit.model.StoryUnit;
 import com.storyweaver.storyunit.model.StoryUnitType;
 import com.storyweaver.storyunit.projection.CharacterProjectionSource;
+import com.storyweaver.storyunit.summary.StorySummaryDraft;
+import com.storyweaver.storyunit.summary.StorySummaryService;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
@@ -25,9 +24,9 @@ import java.util.Optional;
 @Component
 public class CharacterStoryUnitAssembler extends AbstractStoryUnitAssembler<CharacterProjectionSource> {
 
-    public CharacterStoryUnitAssembler() {
+    public CharacterStoryUnitAssembler(StorySummaryService storySummaryService) {
         super(new CharacterProjectionSourceAdapter(), List.of(
-                new CharacterSummaryFacetAssembler(),
+                new CharacterSummaryFacetAssembler(storySummaryService),
                 new CharacterCanonFacetAssembler(),
                 new CharacterRelationFacetAssembler()
         ));
@@ -52,6 +51,12 @@ public class CharacterStoryUnitAssembler extends AbstractStoryUnitAssembler<Char
 
     private static final class CharacterSummaryFacetAssembler implements StoryFacetAssembler<CharacterProjectionSource, DefaultSummaryFacet> {
 
+        private final StorySummaryService storySummaryService;
+
+        private CharacterSummaryFacetAssembler(StorySummaryService storySummaryService) {
+            this.storySummaryService = storySummaryService;
+        }
+
         @Override
         public FacetType facetType() {
             return FacetType.SUMMARY;
@@ -65,22 +70,20 @@ public class CharacterStoryUnitAssembler extends AbstractStoryUnitAssembler<Char
         @Override
         public Optional<DefaultSummaryFacet> assemble(CharacterProjectionSource source, StoryUnit storyUnit) {
             String displayTitle = blankToEmpty(source.character().getName());
-            String oneLine = firstNonBlank(joinWithSeparator("，", source.character().getIdentity(), source.character().getDescription()), displayTitle);
-            String longSummary = firstNonBlank(source.character().getDescription(), source.character().getAdvancedProfileJson(), oneLine);
-            String stateSummary = buildCharacterStateSummary(source);
-            String relationSummary = "关联项目 " + source.projectLinks().size() + " 个，涉及章节 " + source.chapterLinks().size() + " 个";
-            return Optional.of(new DefaultSummaryFacet(
+            StorySummaryDraft draft = new StorySummaryDraft(
+                    StoryUnitType.CHARACTER,
                     displayTitle,
-                    oneLine,
-                    longSummary,
-                    stateSummary,
-                    relationSummary,
-                    "",
+                    List.of(joinWithSeparator("，", source.character().getIdentity(), source.character().getDescription()), displayTitle),
+                    List.of(source.character().getDescription(), source.character().getAdvancedProfileJson()),
+                    buildCharacterStateFacts(source),
+                    List.of("关联项目 " + source.projectLinks().size() + " 个", "涉及章节 " + source.chapterLinks().size() + " 个"),
+                    List.of(),
                     List.of()
-            ));
+            );
+            return Optional.of(storySummaryService.summarize(draft));
         }
 
-        private String buildCharacterStateSummary(CharacterProjectionSource source) {
+        private List<String> buildCharacterStateFacts(CharacterProjectionSource source) {
             List<String> parts = new ArrayList<>();
             if (hasText(source.character().getActiveStage())) {
                 parts.add("当前阶段：" + source.character().getActiveStage().trim());
@@ -88,7 +91,7 @@ public class CharacterStoryUnitAssembler extends AbstractStoryUnitAssembler<Char
             if (source.character().getIsRetired() != null) {
                 parts.add(Integer.valueOf(1).equals(source.character().getIsRetired()) ? "状态：已退场" : "状态：活跃");
             }
-            return String.join("；", parts);
+            return List.copyOf(parts);
         }
     }
 
@@ -163,15 +166,6 @@ public class CharacterStoryUnitAssembler extends AbstractStoryUnitAssembler<Char
 
     private static boolean hasText(String value) {
         return value != null && !value.trim().isEmpty();
-    }
-
-    private static String firstNonBlank(String... values) {
-        for (String value : values) {
-            if (hasText(value)) {
-                return value.trim();
-            }
-        }
-        return "";
     }
 
     private static String joinWithSeparator(String separator, String... values) {

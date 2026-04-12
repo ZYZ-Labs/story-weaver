@@ -59,20 +59,18 @@
   - `story-infra` 已建立
   - `repository.* / item mapper` 已迁移
   - config / security / mapper resources 暂留 `backend`
-- 当前下一步应继续完成：
+- 当前阶段状态：
   - `Phase 2.1` 已完成
   - `Phase 2.2` 核心实现已完成
-  - 下一步进入 `Phase 2.3`
-  - 优先补：
-    - `StorySummaryService`
-    - 规则型摘要回生成
-    - `StoryUnit` 对外统一读模型收口
+  - `Phase 2.3` 已完成
+  - `Phase 2` 已完成
+- 当前下一步应进入：
+  - `Phase 3` 详细实施计划
+  - 重点是 `Summary First` 的对象交互、patch 流和摘要确认写回
 - 当前统一构建入口应使用根工程：
   - `mvn -Dmaven.repo.local=/usr/local/project/github/story-weaver/.cache/m2 -DskipTests compile`
 - 当前对 `Phase 2` 的状态判断：
-  - `2.1` 已完成
-  - `2.2` 核心实现已完成
-  - `2.3` 待启动
+  - 已完成
 
 ## Current Blockers
 
@@ -94,6 +92,7 @@
 5. 再读取：
    - `docs/architecture/ARCH-REQ-20260411-story-unit-and-facets-v1.md`
    - `docs/architecture/ARCH-REQ-20260412-storyunit-mapping-matrix-v1.md`
+   - `docs/architecture/ARCH-REQ-20260412-story-summary-read-model-v1.md`
    - `docs/architecture/ARCH-REQ-20260411-module-boundaries-and-mcp-lsp-v1.md`
    - `docs/architecture/ARCH-REQ-20260411-writing-pipeline-and-scene-execution-v1.md`
    - `docs/architecture/ARCH-REQ-20260411-frontend-information-architecture-v1.md`
