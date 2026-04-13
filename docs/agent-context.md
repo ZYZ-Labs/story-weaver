@@ -112,6 +112,9 @@
   - 已确认普通模式返回结果可继续进入 `proposal / preview`
   - 已确认当前 `Phase 3.3` 主要剩余项变成体验收口，而不是主链不可用
   - 第 31 章测试摘要已恢复原值
+  - 已新增普通作者导向的使用手册与测试数据包：
+    - `docs/guides/GUIDE-20260413-summary-first-user-manual-v1.md`
+    - `docs/test-data/TESTDATA-20260413-summary-first-workflow-v1.md`
 - 当前统一构建入口应使用根工程：
   - `mvn -Dmaven.repo.local=/usr/local/project/github/story-weaver/.cache/m2 -DskipTests compile`
 - 当前对 `Phase 2` 的状态判断：
