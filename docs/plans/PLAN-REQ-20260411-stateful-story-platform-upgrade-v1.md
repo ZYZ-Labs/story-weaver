@@ -161,7 +161,7 @@
 - `Phase 3.1` 已完成
 - `Phase 3.2` 已完成
 - `Phase 3.2` 已完成 Redis proposal store 修复与跨重启恢复验证
-- `Phase 3.3` 进行中
+- `Phase 3.3` 已完成
 - 最小 API 已建立：
   - `POST /api/summary-workflow/proposals`
   - `POST /api/summary-workflow/previews`
@@ -204,6 +204,17 @@
 目标：
 
 - 先做稳定读取，再做写回。
+
+当前状态：
+
+- 已启动
+- 已完成 `Phase 4` 开场收口：
+  - 后端共享 Maven 模块已从项目根目录物理收拢到 `backend/modules/*`
+  - 根工程构建入口保持不变
+  - `backend/Dockerfile` 已同步新布局
+- 下一步进入 `Phase 4.1`：
+  - 冻结首批只读工具
+  - 落统一查询服务
 
 第一批只读工具：
 

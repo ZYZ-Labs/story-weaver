@@ -8,12 +8,12 @@
         <groupId>com.storyweaver</groupId>
         <artifactId>story-weaver-parent</artifactId>
         <version>1.0.0</version>
-        <relativePath>../pom.xml</relativePath>
+        <relativePath>../../../pom.xml</relativePath>
     </parent>
 
-    <artifactId>story-provider</artifactId>
-    <name>story-provider</name>
-    <description>Provider contracts and discovery value objects</description>
+    <artifactId>story-generation</artifactId>
+    <name>story-generation</name>
+    <description>Story generation contracts, DTOs and value objects</description>
 
     <dependencies>
         <dependency>
@@ -23,9 +23,10 @@
         </dependency>
 
         <dependency>
-            <groupId>com.baomidou</groupId>
-            <artifactId>mybatis-plus-spring-boot3-starter</artifactId>
-            <version>${mybatis-plus.version}</version>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+            <version>${lombok.version}</version>
+            <optional>true</optional>
         </dependency>
     </dependencies>
 </project>

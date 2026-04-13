@@ -29,6 +29,7 @@
   - 前端信息架构
   - 文档治理制度
 - `REQ-20260409-generation-reliability-refactor` 已归档，但其 report 仍保留为当前代码稳定性与线上样本基线。
+- `Phase 4` 已启动，当前第一步不是直接上 `MCP / LSP` 工具，而是先完成后端共享模块的物理归位与构建口径稳定。
 - 第一份详细实施计划已创建：
   - `docs/plans/PLAN-REQ-20260411-stateful-story-platform-upgrade-phase1-foundation-v1.md`
 - 第二份详细实施计划已创建：
@@ -41,26 +42,32 @@
   - `Phase 1A`：包先细分、协议先行
   - `Phase 1B`：尽早进入粗粒度模块拆分
   - `Phase 2`：projection-first 的 StoryUnit 存储映射与服务协议落地
-- `Phase 1A` 首批协议骨架已迁移到：
-  - `story-storyunit/src/main/java/com/storyweaver/storyunit/*`
+- `Phase 1A` 首批协议骨架当前位于：
+  - `backend/modules/story-storyunit/src/main/java/com/storyweaver/storyunit/*`
 - `Phase 1B` 首轮粗粒度模块拆分已完成：
   - 根 `pom.xml`
-  - `story-domain`
-  - `story-storyunit`
+  - `backend/modules/story-domain`
+  - `backend/modules/story-storyunit`
   - `backend` 保持应用壳
 - `Phase 1B` 已继续推进到 `1B.3`：
-  - `story-generation` 已建立
+  - `backend/modules/story-generation` 已建立
   - generation 顶层合同层已迁移
   - `generation.impl` 暂留 `backend`
-  - `story-provider` 已建立
+  - `backend/modules/story-provider` 已建立
   - `AIProviderService` 与 `ProviderDiscoveryVO` 已迁移
   - `AIProviderServiceImpl / AIModelRoutingService` 暂留 `backend`
-  - `story-web` 已建立
+  - `backend/modules/story-web` 已建立
   - `ApiResponse / ApiErrorResponse` 已迁移
   - controller / handler 暂留 `backend`
-  - `story-infra` 已建立
+  - `backend/modules/story-infra` 已建立
   - `repository.* / item mapper` 已迁移
   - config / security / mapper resources 暂留 `backend`
+- `Phase 4` 开场收口已完成：
+  - 后端共享模块已统一物理迁入 `backend/modules/*`
+  - 根工程 `mvn -DskipTests compile` 已继续通过
+- `Phase 4.1` 已开始：
+  - 已在 `backend/modules/story-storyunit/src/main/java/com/storyweaver/storyunit/context/*` 冻结首批只读视图与统一查询接口
+  - 当前仍未进入 `backend` 侧实现层
 - 当前阶段状态：
   - `Phase 2.1` 已完成
   - `Phase 2.2` 核心实现已完成
@@ -104,9 +111,9 @@
     - 普通模式步骤收口为“说想法 -> AI 整理 -> 看变化 -> 确认写回”
     - 普通模式不再强制先选结构意图
 - 当前下一步应进入：
-  - 继续收口 `Phase 3.3`
-  - 补一轮浏览器真实点击体验验收
-  - `Phase 4` 暂不启动
+  - 开始 `Phase 4.1`
+  - 继续补齐首批只读工具与查询对象
+  - 落统一只读查询服务
 - 最新修正：
   - 已确认线上 `POST /api/summary-workflow/chat-turns` 已恢复 `HTTP 200`
   - 已确认普通模式返回结果可继续进入 `proposal / preview`
@@ -129,15 +136,22 @@
       - `docs/reports/REPORT-20260413-summary-workflow-browser-validation-round2.md`
 - 当前阶段已切换为：
   - `Phase 3` 已完成
-  - `Phase 4` 可启动
+  - `Phase 4` 已启动
 - 当前统一构建入口应使用根工程：
   - `mvn -Dmaven.repo.local=/usr/local/project/github/story-weaver/.cache/m2 -DskipTests compile`
+- 当前后端共享模块物理位置：
+  - `backend/modules/story-domain`
+  - `backend/modules/story-storyunit`
+  - `backend/modules/story-generation`
+  - `backend/modules/story-provider`
+  - `backend/modules/story-web`
+  - `backend/modules/story-infra`
 - 当前对 `Phase 2` 的状态判断：
   - 已完成
 
 ## Current Blockers
 
-- 新主线已完成 `Phase 1` 与 `Phase 2`，`Phase 3` 仍在进行中。
+- 新主线已完成 `Phase 1`、`Phase 2` 与 `Phase 3`，当前进入 `Phase 4`。
 - `StoryUnit` 已完成第一批协议、代码骨架与模块迁移，但尚未完成存储映射与 service/repository 实装。
 - `MCP / LSP` 边界已明确，但还没有形成服务层和接口层实现。
 - 前端仍是旧信息架构，尚未切到工作台模式。

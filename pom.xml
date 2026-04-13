@@ -19,12 +19,12 @@
     <description>Story Weaver parent build</description>
 
     <modules>
-        <module>story-domain</module>
-        <module>story-storyunit</module>
-        <module>story-generation</module>
-        <module>story-provider</module>
-        <module>story-web</module>
-        <module>story-infra</module>
+        <module>backend/modules/story-domain</module>
+        <module>backend/modules/story-storyunit</module>
+        <module>backend/modules/story-generation</module>
+        <module>backend/modules/story-provider</module>
+        <module>backend/modules/story-web</module>
+        <module>backend/modules/story-infra</module>
         <module>backend</module>
     </modules>
 

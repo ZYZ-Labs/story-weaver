@@ -8,12 +8,12 @@
         <groupId>com.storyweaver</groupId>
         <artifactId>story-weaver-parent</artifactId>
         <version>1.0.0</version>
-        <relativePath>../pom.xml</relativePath>
+        <relativePath>../../../pom.xml</relativePath>
     </parent>
 
-    <artifactId>story-infra</artifactId>
-    <name>story-infra</name>
-    <description>Persistence mappers and infrastructure contracts</description>
+    <artifactId>story-provider</artifactId>
+    <name>story-provider</name>
+    <description>Provider contracts and discovery value objects</description>
 
     <dependencies>
         <dependency>

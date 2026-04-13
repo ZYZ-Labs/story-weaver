@@ -8,18 +8,24 @@
         <groupId>com.storyweaver</groupId>
         <artifactId>story-weaver-parent</artifactId>
         <version>1.0.0</version>
-        <relativePath>../pom.xml</relativePath>
+        <relativePath>../../../pom.xml</relativePath>
     </parent>
 
-    <artifactId>story-storyunit</artifactId>
-    <name>story-storyunit</name>
-    <description>StoryUnit protocol and session contracts</description>
+    <artifactId>story-infra</artifactId>
+    <name>story-infra</name>
+    <description>Persistence mappers and infrastructure contracts</description>
 
     <dependencies>
         <dependency>
             <groupId>com.storyweaver</groupId>
             <artifactId>story-domain</artifactId>
             <version>${project.version}</version>
+        </dependency>
+
+        <dependency>
+            <groupId>com.baomidou</groupId>
+            <artifactId>mybatis-plus-spring-boot3-starter</artifactId>
+            <version>${mybatis-plus.version}</version>
         </dependency>
     </dependencies>
 </project>

@@ -2,7 +2,7 @@
 
 - Req ID: REQ-20260411-stateful-story-platform-upgrade
 - Plan ID: PLAN-REQ-20260411-stateful-story-platform-upgrade-phase4-readonly-mcp-lsp-v1
-- Status: Draft
+- Status: In Progress
 - Created At: 2026-04-13 Asia/Shanghai
 - Updated At: 2026-04-13 Asia/Shanghai
 
@@ -26,6 +26,27 @@
 - 这是 `Phase 4` 的详细实施计划文档
 - `Phase 4` 以前置“只读优先”为原则
 - 本阶段不追求完整 MCP Server 生态，只追求稳定读模型与工具化出口
+
+## Phase 4 开场动作
+
+在正式进入只读 `MCP / LSP` 查询协议之前，先完成工程收口：
+
+- 将后端共享 Maven 模块从项目根目录统一迁入 `backend/modules/*`
+- 保持根工程聚合入口不变，继续使用根 `pom.xml` 统一构建
+- 同步修正根 `pom.xml`、子模块 parent 相对路径和 `backend/Dockerfile`
+
+当前已完成：
+
+- `backend/modules/story-domain`
+- `backend/modules/story-storyunit`
+- `backend/modules/story-generation`
+- `backend/modules/story-provider`
+- `backend/modules/story-web`
+- `backend/modules/story-infra`
+- 根工程 `mvn -DskipTests compile` 已通过
+- `backend/modules/story-storyunit/src/main/java/com/storyweaver/storyunit/context/*` 已落下首批只读视图与统一查询接口
+
+这一步不改变模块职责，只为 `Phase 4.1` 的只读查询服务和未来 `story-mcp / story-lsp` 模块落位打底。
 
 ## 本轮原则
 
@@ -143,12 +164,12 @@
 ## 建议代码落点
 
 - 协议层：
-  - `story-storyunit`
+  - `backend/modules/story-storyunit`
 - 应用层查询服务：
   - `backend`
 - 后续工具模块承载位：
-  - `story-mcp`
-  - `story-lsp`
+  - `backend/modules/story-mcp`
+  - `backend/modules/story-lsp`
 
 ## 测试与验证
 
@@ -181,6 +202,7 @@
 
 ## 当前阶段出口条件
 
+- 后端共享模块已统一收拢到 `backend/modules/*`
 - 首批只读工具协议已冻结
 - 统一查询服务已落地
 - 至少一条真实上下文读取链已完成联调

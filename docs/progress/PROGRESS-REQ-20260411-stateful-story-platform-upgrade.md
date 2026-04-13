@@ -7,11 +7,10 @@
 
 ## 当前快照
 
-- Current Phase: `Phase 4` 准备启动
-- Current Task: 在 `Phase 3` 已完成的基础上，准备进入 Read-Only `MCP / LSP` 基础设施
-- Last Completed: 已完成 `Phase 3` 的最终部署复验与收口
+- Current Phase: `Phase 4` 已启动
+- Current Task: 已开始 `Phase 4.1` 的只读视图与统一查询合同冻结
+- Last Completed: 已完成 `Phase 4` 开场收口，并落下 `Phase 4.1` 首批只读查询合同
 - Next Action:
-  - 编写 `Phase 4` 的详细实施计划与首轮开发清单
   - 冻结首批只读 `MCP / LSP` 工具与查询对象
   - 开始统一只读查询服务
 - Blockers:
@@ -19,6 +18,28 @@
   - `MCP` 与 `LSP` 的边界尚未形成代码级实现，只完成讨论与文档收敛
   - 前端现有页面结构仍是旧工作流，尚未切到新信息架构
 - Latest Verified:
+  - 已完成 `Phase 4` 开场收口：
+    - `story-domain`
+    - `story-storyunit`
+    - `story-generation`
+    - `story-provider`
+    - `story-web`
+    - `story-infra`
+    - 已统一迁入 `backend/modules/*`
+  - 已同步修正：
+    - 根 `pom.xml` 的 reactor module 路径
+    - 各子模块的 parent `relativePath`
+    - `backend/Dockerfile` 的 `COPY` 路径
+  - 已确认根工程继续可编译：
+    - `mvn -Dmaven.repo.local=/usr/local/project/github/story-weaver/.cache/m2 -DskipTests compile`
+  - 已在 `backend/modules/story-storyunit` 落下 `Phase 4.1` 首批合同：
+    - `ProjectBriefView`
+    - `StoryUnitSummaryView`
+    - `ChapterAnchorBundleView`
+    - `ReaderKnownStateView`
+    - `CharacterRuntimeStateView`
+    - `RecentStoryProgressView`
+    - `StoryContextQueryService`
   - 已确认用户界面默认只展示摘要是新的硬原则
   - 已确认结构化字段主要服务于 MCP/LSP、编排层和状态机
   - 已确认不采用“万能基类”，而采用 `StoryUnit + Facets` 协议壳
@@ -289,8 +310,58 @@
   - 已将 `Character / WorldSetting / Chapter` 的新增与编辑统一收口到摘要工作流
   - 专家模式已调整为默认直填摘要，并保留切回旧表单的入口
 - 当前未完成：
-  - `Phase 3.3` 仍需真实部署验收新的 chat 式摘要采集版本
-  - `Phase 4` 详细计划与首批代码尚未开始
+  - `Phase 4.1` 的首批只读工具与查询对象尚未冻结
+  - `Phase 4.1` 的统一只读查询服务尚未开始
+
+## [2026-04-13 Asia/Shanghai] 启动 Phase 4：后端共享模块物理归位
+
+### 背景
+
+- `Phase 1` 已完成粗粒度模块拆分，但 `story-domain / story-storyunit / story-generation / story-provider / story-web / story-infra` 仍直接散落在项目根目录。
+- 当前仓库顶层同时承载 `front / backend / docs / scripts`，继续把后端共享模块放在根目录会持续抬高工程噪音。
+
+### 本轮决策
+
+- 保持根工程聚合入口不变
+- 保持 `backend` 继续作为应用壳
+- 将共享后端模块统一迁入 `backend/modules/*`
+
+### 本轮结果
+
+- 已迁移：
+  - `backend/modules/story-domain`
+  - `backend/modules/story-storyunit`
+  - `backend/modules/story-generation`
+  - `backend/modules/story-provider`
+  - `backend/modules/story-web`
+  - `backend/modules/story-infra`
+- 已修正：
+  - 根 `pom.xml`
+  - 各共享模块 `pom.xml`
+  - `backend/Dockerfile`
+- 已验证：
+  - 根工程 `mvn -Dmaven.repo.local=/usr/local/project/github/story-weaver/.cache/m2 -DskipTests compile` 通过
+
+### 影响判断
+
+- 本轮不改变模块职责与依赖方向
+- 本轮不推进实现层继续外搬
+- 本轮为 `Phase 4.1` 的只读查询服务和未来 `story-mcp / story-lsp` 模块落位打基础
+
+### `Phase 4.1` 首批合同冻结
+
+- 已新增：
+  - `backend/modules/story-storyunit/src/main/java/com/storyweaver/storyunit/context/ProjectBriefView.java`
+  - `backend/modules/story-storyunit/src/main/java/com/storyweaver/storyunit/context/StoryUnitSummaryView.java`
+  - `backend/modules/story-storyunit/src/main/java/com/storyweaver/storyunit/context/ChapterAnchorBundleView.java`
+  - `backend/modules/story-storyunit/src/main/java/com/storyweaver/storyunit/context/ReaderKnownStateView.java`
+  - `backend/modules/story-storyunit/src/main/java/com/storyweaver/storyunit/context/CharacterRuntimeStateView.java`
+  - `backend/modules/story-storyunit/src/main/java/com/storyweaver/storyunit/context/RecentStoryProgressItemView.java`
+  - `backend/modules/story-storyunit/src/main/java/com/storyweaver/storyunit/context/RecentStoryProgressView.java`
+  - `backend/modules/story-storyunit/src/main/java/com/storyweaver/storyunit/context/StoryContextQueryService.java`
+- 当前仍未开始：
+  - `backend` 侧的统一查询实现
+  - 任何 `MCP / LSP` 工具化出口
 
 ## 关键节点记录
 
