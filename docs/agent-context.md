@@ -104,18 +104,14 @@
     - 普通模式步骤收口为“说想法 -> AI 整理 -> 看变化 -> 确认写回”
     - 普通模式不再强制先选结构意图
 - 当前下一步应进入：
-  - 先部署并复验带“短超时 + 回退”的 `Phase 3.3` 对话采集版本
   - 继续收口 `Phase 3.3`
+  - 补一轮浏览器真实点击体验验收
   - `Phase 4` 暂不启动
 - 最新修正：
-  - 已确认线上 `POST /api/summary-workflow/chat-turns` 在普通模式下仍会超时
-  - 已确认当前阶段不能视为 `Phase 3` 完成
-  - 已补本地修复：
-    - `summary-workflow -> naming` 路由收口
-    - `conversation-timeout-seconds`
-    - `conversation-max-tokens`
-    - `DefaultStorySummaryConversationService` 虚拟线程超时回退
-  - 已恢复第 31 章测试摘要原值
+  - 已确认线上 `POST /api/summary-workflow/chat-turns` 已恢复 `HTTP 200`
+  - 已确认普通模式返回结果可继续进入 `proposal / preview`
+  - 已确认当前 `Phase 3.3` 主要剩余项变成体验收口，而不是主链不可用
+  - 第 31 章测试摘要已恢复原值
 - 当前统一构建入口应使用根工程：
   - `mvn -Dmaven.repo.local=/usr/local/project/github/story-weaver/.cache/m2 -DskipTests compile`
 - 当前对 `Phase 2` 的状态判断：
@@ -129,7 +125,7 @@
 - 前端仍是旧信息架构，尚未切到工作台模式。
 - 旧主线中的真实 provider fallback 问题仍存在，后续需要作为平台升级前的稳定性基线继续跟踪。
 - `summary-workflow` 已在线上真实跑通 proposal / preview / apply，Redis proposal store 也已恢复可用。
-- `summary-workflow` 的普通模式 `chat-turns` 在线上仍未通过，当前是 `Phase 3` 的主阻塞点。
+- `summary-workflow` 的普通模式主链已恢复可用，当前阻塞点已转为交互体验收口。
 
 ## Resume Reading Order
 

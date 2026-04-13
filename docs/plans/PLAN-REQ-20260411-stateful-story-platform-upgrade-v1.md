@@ -172,6 +172,7 @@
   - `docs/reports/REPORT-20260413-summary-workflow-live-validation-round3.md`
   - `docs/reports/REPORT-20260413-summary-workflow-live-validation-round4.md`
   - `docs/reports/REPORT-20260413-summary-workflow-live-validation-round5.md`
+  - `docs/reports/REPORT-20260413-summary-workflow-live-validation-round6.md`
 
 默认流程：
 
@@ -193,7 +194,7 @@
   - `docs/plans/PLAN-REQ-20260411-stateful-story-platform-upgrade-phase3-summary-first-workflow-v1.md`
 - `Phase 3.1` 已完成
 - `Phase 3.2` 已完成
-- `Phase 3.3` 已完成 preview/apply 与统一摘要入口，但普通模式 chat 式摘要采集仍需部署复验
+- `Phase 3.3` 已完成 preview/apply、统一摘要入口与普通模式主链复验，当前进入体验收口
 - 当前判断：
   - `Phase 3` 仍在进行中
   - `Phase 4` 暂不启动

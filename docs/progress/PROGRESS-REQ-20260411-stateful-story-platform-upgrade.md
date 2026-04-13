@@ -8,11 +8,11 @@
 ## 当前快照
 
 - Current Phase: `Phase 3.3` 持续推进
-- Current Task: 修复普通模式 `chat-turns` 在线上部署环境中的超时问题，并把“对话采集 + 摘要草稿”收口到真实可用态
-- Last Completed: 已完成 `summary-workflow` 普通模式后端短超时回退、本地回归验证与线上测试数据恢复
+- Current Task: 在普通模式主链已恢复可用的前提下，继续收口追问节奏、浏览器交互体验与普通作者默认入口
+- Last Completed: 已完成普通模式 `chat-turns` 与 `proposal / preview` 的线上部署复验
 - Next Action:
-  - 部署并复验带“短超时 + 回退”的 `POST /api/summary-workflow/chat-turns`
   - 继续收口普通模式的追问节奏、摘要草稿展示和普通作者默认入口
+  - 补一轮浏览器真实点击体验验收
   - 在 `Phase 3` 真正完成后再恢复 `Phase 4` 推进
 - Blockers:
   - 旧主线 `REQ-20260409-generation-reliability-refactor` 已归档，但其代码成果和回归报告仍需作为迁移基线继续参考
@@ -223,6 +223,17 @@
       - 虚拟线程超时回退
     - 联调与修复报告：
       - `docs/reports/REPORT-20260413-summary-workflow-live-validation-round5.md`
+  - 已完成 `Phase 3.3` 第四轮线上复验：
+    - 已确认普通模式 `POST /api/summary-workflow/chat-turns` 返回 `HTTP 200`
+    - 已确认 `CHARACTER CREATE` 与 `CHAPTER REFINE` 两类普通模式对话都能返回摘要草稿
+    - 已确认普通模式返回结果可继续进入 `proposal / preview`
+    - 已确认前端部署产物包含：
+      - `说想法新增`
+      - `说想法`
+      - `AI 整理`
+      - `让 AI 继续整理`
+    - 联调报告：
+      - `docs/reports/REPORT-20260413-summary-workflow-live-validation-round6.md`
   - 已完成物理迁移：
     - `domain/entity -> story-domain`
     - `item/domain -> story-domain`
@@ -274,6 +285,7 @@
     - 将主入口文案从“对话新增”收口为“说想法新增”
     - 将步骤文案改为“说想法 -> AI 整理 -> 看变化 -> 确认写回”
     - 普通模式下不再强行暴露意图分段按钮
+  - 已确认普通模式主链已恢复可用，当前剩余项主要是产品体验收口
   - 已将 `Character / WorldSetting / Chapter` 的新增与编辑统一收口到摘要工作流
   - 专家模式已调整为默认直填摘要，并保留切回旧表单的入口
 - 当前未完成：

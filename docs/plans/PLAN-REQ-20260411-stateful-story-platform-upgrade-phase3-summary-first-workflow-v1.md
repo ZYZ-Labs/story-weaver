@@ -273,9 +273,20 @@
     - 第 31 章摘要已恢复为原值
   - 见：
     - `docs/reports/REPORT-20260413-summary-workflow-live-validation-round5.md`
+  - 已完成部署后复验：
+    - 普通模式 `POST /api/summary-workflow/chat-turns` 已恢复 `HTTP 200`
+    - `CHARACTER CREATE` 与 `CHAPTER REFINE` 两类普通模式对话已可返回摘要草稿
+    - 普通模式返回结果已可继续进入 `proposal / preview`
+    - 前端部署产物已确认包含：
+      - `说想法新增`
+      - `说想法`
+      - `AI 整理`
+      - `让 AI 继续整理`
+    - 见：
+      - `docs/reports/REPORT-20260413-summary-workflow-live-validation-round6.md`
 - 当前剩余：
-  - 部署并复验新的 chat 式摘要采集版本
   - 根据真实体验继续收口普通模式的追问节奏和摘要草稿展示
+  - 补一轮浏览器真实点击体验验收
   - `Phase 3` 真正完成前，不进入 `Phase 4`
 - 已新增统一前端入口：
   - `front/src/components/SummaryWorkflowDialog.vue`
