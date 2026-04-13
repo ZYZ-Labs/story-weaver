@@ -115,6 +115,21 @@
   - 已新增普通作者导向的使用手册与测试数据包：
     - `docs/guides/GUIDE-20260413-summary-first-user-manual-v1.md`
     - `docs/test-data/TESTDATA-20260413-summary-first-workflow-v1.md`
+  - 已完成浏览器级真实点击验收：
+    - `Character` 新增通过
+    - `WorldSetting` 新增通过
+    - `Chapter` 新增通过
+    - `Chapter` 摘要编辑通过
+    - 报告：
+      - `docs/reports/REPORT-20260413-summary-workflow-browser-validation-round1.md`
+  - 已完成 `Phase 3` 最终部署复验与收口：
+    - 顶层普通模式入口减负已部署生效
+    - 四条浏览器级主路径继续全部通过
+    - 报告：
+      - `docs/reports/REPORT-20260413-summary-workflow-browser-validation-round2.md`
+- 当前阶段已切换为：
+  - `Phase 3` 已完成
+  - `Phase 4` 可启动
 - 当前统一构建入口应使用根工程：
   - `mvn -Dmaven.repo.local=/usr/local/project/github/story-weaver/.cache/m2 -DskipTests compile`
 - 当前对 `Phase 2` 的状态判断：

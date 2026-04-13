@@ -1,0 +1,12 @@
+{
+  "manifest_version": 3,
+  "name": "Codex Story Weaver Browser Smoke",
+  "version": "1.0.0",
+  "content_scripts": [
+    {
+      "matches": ["https://home.silvericekey.fun:41202/*"],
+      "js": ["content.js"],
+      "run_at": "document_start"
+    }
+  ]
+}

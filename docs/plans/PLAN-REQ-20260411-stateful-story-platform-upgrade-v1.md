@@ -194,10 +194,10 @@
   - `docs/plans/PLAN-REQ-20260411-stateful-story-platform-upgrade-phase3-summary-first-workflow-v1.md`
 - `Phase 3.1` 已完成
 - `Phase 3.2` 已完成
-- `Phase 3.3` 已完成 preview/apply、统一摘要入口与普通模式主链复验，当前进入体验收口
+- `Phase 3.3` 已完成 preview/apply、统一摘要入口、普通模式主链复验与浏览器级最终验收
 - 当前判断：
-  - `Phase 3` 仍在进行中
-  - `Phase 4` 暂不启动
+  - `Phase 3` 已完成
+  - `Phase 4` 可以启动
 
 ### Phase 4. Read-Only MCP 与 LSP 基础设施
 

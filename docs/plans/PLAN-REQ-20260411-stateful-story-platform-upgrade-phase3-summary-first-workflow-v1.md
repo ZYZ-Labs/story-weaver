@@ -2,7 +2,7 @@
 
 - Req ID: REQ-20260411-stateful-story-platform-upgrade
 - Plan ID: PLAN-REQ-20260411-stateful-story-platform-upgrade-phase3-summary-first-workflow-v1
-- Status: In Progress
+- Status: Completed
 - Created At: 2026-04-12 Asia/Shanghai
 - Updated At: 2026-04-13 Asia/Shanghai
 
@@ -28,7 +28,7 @@
 - 这是 `Phase 3` 的详细实施计划文档
 - `Phase 3.1` 已完成
 - `Phase 3.2` 已完成
-- `Phase 3.3` 进行中
+- `Phase 3.3` 已完成
 - 后续代码开发建议按 `Phase 3.1 -> 3.2 -> 3.3` 顺序推进
 
 ## 本轮原则
@@ -284,10 +284,22 @@
       - `让 AI 继续整理`
     - 见：
       - `docs/reports/REPORT-20260413-summary-workflow-live-validation-round6.md`
+- 已完成浏览器级真实点击验收：
+  - `Character` 新增通过
+  - `WorldSetting` 新增通过
+  - `Chapter` 新增通过
+  - `Chapter` 摘要编辑通过
+  - 见：
+    - `docs/reports/REPORT-20260413-summary-workflow-browser-validation-round1.md`
+- 已完成最终部署复验：
+  - 顶层普通模式入口减负已部署生效
+  - 四条浏览器级主路径继续全部通过
+  - 见：
+    - `docs/reports/REPORT-20260413-summary-workflow-browser-validation-round2.md`
 - 当前剩余：
-  - 根据真实体验继续收口普通模式的追问节奏和摘要草稿展示
-  - 补一轮浏览器真实点击体验验收
-  - `Phase 3` 真正完成前，不进入 `Phase 4`
+  - `Phase 3` 无阻塞剩余项
+  - 后续仅保留小幅 UX 微调，不再扩本阶段 scope
+  - 下一阶段进入 `Phase 4`
 - 已新增统一前端入口：
   - `front/src/components/SummaryWorkflowDialog.vue`
 - 已新增前端 API：

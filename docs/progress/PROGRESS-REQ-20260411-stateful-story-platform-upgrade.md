@@ -7,14 +7,13 @@
 
 ## 当前快照
 
-- Current Phase: `Phase 3.3` 持续推进
-- Current Task: 在普通模式主链已恢复可用的前提下，继续收口追问节奏、浏览器交互体验与普通作者默认入口
-- Last Completed: 已完成普通模式 `chat-turns` 与 `proposal / preview` 的线上部署复验
+- Current Phase: `Phase 4` 准备启动
+- Current Task: 在 `Phase 3` 已完成的基础上，准备进入 Read-Only `MCP / LSP` 基础设施
+- Last Completed: 已完成 `Phase 3` 的最终部署复验与收口
 - Next Action:
-  - 继续收口普通模式的追问节奏、摘要草稿展示和普通作者默认入口
-  - 补一轮浏览器真实点击体验验收
-  - 补一份面向普通作者的使用手册与测试数据包，降低系统上手门槛
-  - 在 `Phase 3` 真正完成后再恢复 `Phase 4` 推进
+  - 编写 `Phase 4` 的详细实施计划与首轮开发清单
+  - 冻结首批只读 `MCP / LSP` 工具与查询对象
+  - 开始统一只读查询服务
 - Blockers:
   - 旧主线 `REQ-20260409-generation-reliability-refactor` 已归档，但其代码成果和回归报告仍需作为迁移基线继续参考
   - `MCP` 与 `LSP` 的边界尚未形成代码级实现，只完成讨论与文档收敛

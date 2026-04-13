@@ -571,7 +571,12 @@ async function refreshCharacterInventorySummary() {
   >
     <template #actions>
       <div class="d-flex flex-wrap ga-2 align-center">
-        <v-segmented-button v-model="editorMode" color="primary" mandatory>
+        <template v-if="summaryFirstMode">
+          <v-chip color="primary" variant="tonal">普通模式</v-chip>
+          <div class="text-caption text-medium-emphasis">默认只需要说人物想法，AI 会继续追问并整理。</div>
+          <v-btn variant="text" color="secondary" @click="editorMode = 'EXPERT'">切到专家模式</v-btn>
+        </template>
+        <v-segmented-button v-else v-model="editorMode" color="primary" mandatory>
           <v-btn value="DEFAULT">普通模式</v-btn>
           <v-btn value="EXPERT">专家模式</v-btn>
         </v-segmented-button>
