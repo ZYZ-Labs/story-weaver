@@ -10,7 +10,10 @@ import java.util.Objects;
 public record StructuredPatchProposal(
         String proposalId,
         StoryUnitRef targetRef,
+        Long projectId,
         StoryPatch patch,
+        SummaryInputIntent inputIntent,
+        SummaryOperatorMode operatorMode,
         String inputSummary,
         String proposalSummary,
         List<FacetType> affectedFacets,
@@ -21,7 +24,10 @@ public record StructuredPatchProposal(
     public StructuredPatchProposal {
         proposalId = Objects.requireNonNull(proposalId, "proposalId must not be null").trim();
         targetRef = Objects.requireNonNull(targetRef, "targetRef must not be null");
+        projectId = Objects.requireNonNull(projectId, "projectId must not be null");
         patch = Objects.requireNonNull(patch, "patch must not be null");
+        inputIntent = Objects.requireNonNull(inputIntent, "inputIntent must not be null");
+        operatorMode = Objects.requireNonNull(operatorMode, "operatorMode must not be null");
         inputSummary = normalize(inputSummary);
         proposalSummary = normalize(proposalSummary);
         affectedFacets = affectedFacets == null ? List.of() : List.copyOf(affectedFacets);

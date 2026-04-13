@@ -10,6 +10,7 @@ import MarkdownContent from '@/components/MarkdownContent.vue'
 import MarkdownEditor from '@/components/MarkdownEditor.vue'
 import NameSuggestionDialog from '@/components/NameSuggestionDialog.vue'
 import PageContainer from '@/components/PageContainer.vue'
+import SummaryWorkflowDialog from '@/components/SummaryWorkflowDialog.vue'
 import { generateNameSuggestions } from '@/api/name-suggestion'
 import { useCharacterStore } from '@/stores/character'
 import { useChapterStore } from '@/stores/chapter'
@@ -19,7 +20,12 @@ import { useProjectStore } from '@/stores/project'
 import { useProviderStore } from '@/stores/provider'
 import { useSettingsStore } from '@/stores/settings'
 import { useWritingStore } from '@/stores/writing'
-import type { AIWritingRecord, Chapter } from '@/types'
+import type {
+  AIWritingRecord,
+  Chapter,
+  SummaryWorkflowApplyResult,
+  SummaryWorkflowOperatorMode,
+} from '@/types'
 import { resolveOutputLengthProfile } from '@/utils/ai-model'
 import { formatDateTime } from '@/utils/format'
 import { readStorage, storageKeys, writeStorage } from '@/utils/storage'
@@ -52,8 +58,14 @@ const chapterAiError = ref('')
 const chapterAiLatestRecord = ref<AIWritingRecord | null>(null)
 const chapterAiStreamingContent = ref('')
 const lastChapterAiModelSignature = ref('')
+const summaryWorkflowVisible = ref(false)
+const summaryWorkflowTarget = ref<Chapter | null>(null)
+const summaryWorkflowCreateMode = ref(false)
+const editorMode = ref<SummaryWorkflowOperatorMode>('DEFAULT')
 
 const currentProjectId = computed(() => projectStore.selectedProjectId)
+const summaryFirstMode = computed(() => editorMode.value === 'DEFAULT')
+const createButtonLabel = computed(() => (summaryFirstMode.value ? '说想法新增章节' : '摘要新增章节'))
 const currentPreview = computed(() => chapterStore.currentChapter)
 const currentPreviewHasContent = computed(() => Boolean(currentPreview.value?.content?.trim()))
 const currentChapterStreamState = computed(() => writingStore.getStreamState(currentPreview.value?.id || null))
@@ -332,20 +344,47 @@ function syncDraftMaxTokens() {
   )
 }
 
-function openCreate() {
+function openCreateForm() {
   editingId.value = null
   fillForm(null)
   dialog.value = true
 }
 
-function openEdit(chapter: Chapter) {
+function openCreate() {
+  summaryWorkflowCreateMode.value = true
+  summaryWorkflowTarget.value = null
+  summaryWorkflowVisible.value = true
+}
+
+function openEditForm(chapter: Chapter) {
   editingId.value = chapter.id
   fillForm(chapter)
   dialog.value = true
 }
 
+function openEdit(chapter: Chapter) {
+  openSummaryWorkflow(chapter)
+}
+
 function selectChapter(chapter: Chapter) {
   chapterStore.currentChapter = chapter
+}
+
+function openSummaryWorkflow(chapter?: Chapter | null) {
+  summaryWorkflowCreateMode.value = !chapter
+  summaryWorkflowTarget.value = chapter || null
+  summaryWorkflowVisible.value = true
+}
+
+function handleSummaryWorkflowExpertEditRequest() {
+  summaryWorkflowVisible.value = false
+  if (summaryWorkflowCreateMode.value) {
+    openCreateForm()
+    return
+  }
+  if (summaryWorkflowTarget.value) {
+    openEditForm(summaryWorkflowTarget.value)
+  }
 }
 
 function requestDelete(chapter: Chapter) {
@@ -417,6 +456,18 @@ async function submit() {
   }
 
   dialog.value = false
+}
+
+async function handleSummaryWorkflowApplied(result: SummaryWorkflowApplyResult) {
+  if (!currentProjectId.value) {
+    return
+  }
+  await chapterStore.fetchByProject(currentProjectId.value)
+  const chapterId = Number(result.updatedUnitRef.unitId || summaryWorkflowTarget.value?.id || 0)
+  if (chapterId > 0) {
+    await chapterStore.fetchDetail(currentProjectId.value, chapterId)
+    chapterStore.currentChapter = chapterStore.chapters.find((item) => item.id === chapterId) || chapterStore.currentChapter
+  }
 }
 
 async function generateTitleSuggestions() {
@@ -564,9 +615,15 @@ async function confirmDelete() {
     description="维护章节顺序和正文内容，并在右侧直接生成初稿、查看生成流水线日志、沉淀背景聊天。"
   >
     <template #actions>
-      <v-btn color="primary" prepend-icon="mdi-plus" :disabled="!currentProjectId" @click="openCreate">
-        新建章节
-      </v-btn>
+      <div class="d-flex flex-wrap ga-2 align-center">
+        <v-segmented-button v-model="editorMode" color="primary" mandatory>
+          <v-btn value="DEFAULT">普通模式</v-btn>
+          <v-btn value="EXPERT">专家模式</v-btn>
+        </v-segmented-button>
+        <v-btn color="primary" prepend-icon="mdi-plus" :disabled="!currentProjectId" @click="openCreate">
+          {{ createButtonLabel }}
+        </v-btn>
+      </div>
     </template>
 
     <EmptyState
@@ -580,12 +637,22 @@ async function confirmDelete() {
       title="当前还没有章节"
       description="先创建第一章，后续的剧情推进和 AI 初稿都会围绕章节展开。"
     >
-      <v-btn color="primary" prepend-icon="mdi-plus" @click="openCreate">创建章节</v-btn>
+      <v-btn color="primary" prepend-icon="mdi-plus" @click="openCreate">{{ createButtonLabel }}</v-btn>
     </EmptyState>
 
     <div v-else class="chapter-layout">
       <v-card class="soft-panel chapter-list-card">
         <v-card-title>章节列表</v-card-title>
+        <v-card-subtitle>章节现在统一先走摘要工作流，普通模式会通过对话补全，专家模式再决定是否切回旧表单。</v-card-subtitle>
+        <v-card-text class="pt-0">
+          <v-alert type="info" variant="tonal">
+            {{
+              summaryFirstMode
+                ? '当前是普通模式：新增和编辑都会先进入对话式摘要工作流；你只要说本章模糊想法，AI 会继续追问并整理。'
+                : '当前是专家模式：新增和编辑仍先进入摘要工作流，但默认直填摘要；需要深度字段时可切到旧表单。'
+            }}
+          </v-alert>
+        </v-card-text>
         <v-data-table
           class="chapter-table"
           :headers="tableHeaders"
@@ -609,7 +676,16 @@ async function confirmDelete() {
           </template>
 
           <template #[`item.actions`]="{ item }">
-            <div class="d-flex ga-2 justify-end">
+            <div class="chapter-table-actions">
+              <v-btn
+                size="small"
+                color="primary"
+                prepend-icon="mdi-text-box-edit-outline"
+                variant="flat"
+                @click.stop="openSummaryWorkflow(item)"
+              >
+                摘要优先
+              </v-btn>
               <v-btn size="small" variant="text" @click.stop="selectChapter(item)">预览</v-btn>
               <v-btn size="small" variant="text" @click.stop="openEdit(item)">编辑</v-btn>
               <v-btn size="small" color="error" variant="text" @click.stop="requestDelete(item)">删除</v-btn>
@@ -622,7 +698,18 @@ async function confirmDelete() {
         <v-card class="soft-panel chapter-preview-card">
           <v-card-title>章节预览</v-card-title>
           <v-card-text v-if="currentPreview" class="chapter-preview-body">
-            <div class="text-h6">{{ currentPreview.title }}</div>
+            <div class="d-flex justify-space-between align-start ga-3">
+              <div class="text-h6">{{ currentPreview.title }}</div>
+              <v-btn
+                color="primary"
+                prepend-icon="mdi-text-box-edit-outline"
+                variant="flat"
+                size="small"
+                @click="openSummaryWorkflow(currentPreview)"
+              >
+                摘要优先编辑
+              </v-btn>
+            </div>
             <div class="text-body-2 text-medium-emphasis mt-2">
               顺序：{{ currentPreview.orderNum || '-' }} | 状态：{{ getChapterStatusLabel(currentPreview.chapterStatus) }} | 字数：{{ getWordCount(currentPreview) }} | 预计阅读：{{ currentPreview.readingTimeMinutes || 0 }} 分钟
             </div>
@@ -630,6 +717,17 @@ async function confirmDelete() {
               <div class="text-caption text-medium-emphasis mb-1">章节摘要</div>
               <MarkdownContent :source="currentPreview.summary" compact />
             </div>
+            <v-card class="mt-4" variant="tonal">
+              <v-card-text class="d-flex flex-wrap justify-space-between align-center ga-3">
+                <div>
+                  <div class="text-subtitle-2">摘要优先编辑</div>
+                  <div class="text-body-2 text-medium-emphasis mt-1">
+                    先调整章节摘要，再让系统生成提案并确认写回；这一入口不会直接修改正文。
+                  </div>
+                </div>
+                <v-btn color="primary" @click="openSummaryWorkflow(currentPreview)">打开摘要工作流</v-btn>
+              </v-card-text>
+            </v-card>
             <div class="d-flex flex-wrap ga-2 mt-3">
               <v-chip v-if="currentPreview.outlineTitle" size="small" color="primary" variant="tonal">
                 大纲：{{ currentPreview.outlineTitle }}
@@ -1005,6 +1103,21 @@ async function confirmDelete() {
       @refresh="generateTitleSuggestions"
       @select="applySuggestedTitle"
     />
+
+    <SummaryWorkflowDialog
+      v-model="summaryWorkflowVisible"
+      :project-id="currentProjectId"
+      target-type="CHAPTER"
+      :create-mode="summaryWorkflowCreateMode"
+      :initial-operator-mode="editorMode"
+      :allow-expert-form-switch="true"
+      :target-source-id="summaryWorkflowTarget?.id || null"
+      :title="summaryWorkflowTarget?.title || '新章节'"
+      target-label="章节"
+      :initial-summary="summaryWorkflowTarget?.summary || ''"
+      @applied="handleSummaryWorkflowApplied"
+      @expert-edit-request="handleSummaryWorkflowExpertEditRequest"
+    />
   </PageContainer>
 </template>
 
@@ -1019,6 +1132,13 @@ async function confirmDelete() {
 .chapter-preview-stack {
   display: grid;
   gap: 16px;
+}
+
+.chapter-table-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
 }
 
 .chapter-list-card,

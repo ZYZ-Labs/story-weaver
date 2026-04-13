@@ -4,7 +4,7 @@
 - Plan ID: PLAN-REQ-20260411-stateful-story-platform-upgrade-phase3-summary-first-workflow-v1
 - Status: In Progress
 - Created At: 2026-04-12 Asia/Shanghai
-- Updated At: 2026-04-12 Asia/Shanghai
+- Updated At: 2026-04-13 Asia/Shanghai
 
 ## 本轮目标
 
@@ -26,7 +26,9 @@
 ## 当前阶段定位
 
 - 这是 `Phase 3` 的详细实施计划文档
-- 当前已启动 `Phase 3.1` 的协议壳落地
+- `Phase 3.1` 已完成
+- `Phase 3.2` 已完成
+- `Phase 3.3` 进行中
 - 后续代码开发建议按 `Phase 3.1 -> 3.2 -> 3.3` 顺序推进
 
 ## 本轮原则
@@ -132,7 +134,7 @@
 
 当前状态：
 
-- 已启动
+- 已完成
 - 已新增：
   - `SummaryInputDraft`
   - `SummaryInputIntent`
@@ -167,6 +169,55 @@
   - 变化预览
   - 确认写回
 
+当前状态：
+
+- 已启动并完成首轮骨架
+- 已新增：
+  - `CharacterStorySummaryTargetHandler`
+  - `WorldSettingStorySummaryTargetHandler`
+  - `ChapterStorySummaryTargetHandler`
+  - `DefaultStorySummaryProposalWorkflowService`
+  - `DefaultStorySummaryPreviewWorkflowService`
+  - `DefaultStorySummaryApplyWorkflowService`
+  - `SummaryProposalStore`
+  - `ResilientSummaryProposalStore`
+  - `SummaryWorkflowController`
+- 已提供最小 API：
+  - `POST /api/summary-workflow/proposals`
+  - `POST /api/summary-workflow/previews`
+  - `POST /api/summary-workflow/apply`
+- 已支持：
+  - proposal 默认尝试持久化到 Redis
+  - Redis 不可用时自动回退到内存态
+  - `preview / apply` 可仅基于 `proposalId`
+- 已完成配置外置：
+  - `STORY_SUMMARY_WORKFLOW_REDIS_PROPOSAL_STORE_ENABLED`
+  - `STORY_SUMMARY_WORKFLOW_PROPOSAL_TTL_MINUTES`
+  - `STORY_SUMMARY_WORKFLOW_PROPOSAL_KEY_PREFIX`
+- 已完成异常口径细化：
+  - proposal 不存在/过期 -> `404`
+  - proposal 目标冲突 -> `409`
+  - 参数缺失/输入非法 -> `400`
+- 已补最小单测：
+  - `DefaultStorySummaryProposalWorkflowServiceTest`
+  - `DefaultStorySummaryApplyWorkflowServiceTest`
+  - `ResilientSummaryProposalStoreTest`
+- 已完成首轮线上联调：
+  - `proposal / preview / apply` 已在部署环境真实跑通
+  - `proposalId` 取回式 `preview / apply` 可用
+  - `404 / 409` 异常口径已验证
+  - 第 31 章摘要写回与恢复已验证
+  - 见：
+    - `docs/reports/REPORT-20260413-summary-workflow-live-validation-round1.md`
+- 当前仍属于首轮最小实现：
+  - `Character / Chapter` 写回先复用 `StructuredSummaryApplyServiceImpl`
+  - `WorldSetting` 写回先复用 `WorldSettingService`
+  - 摘要拆分仍是规则型最小实现，不引入模型强依赖
+  - Redis proposal store 已完成线上修复
+  - “跨重启 proposal 恢复”已完成第二轮联调验证
+  - 见：
+    - `docs/reports/REPORT-20260413-summary-workflow-live-validation-round2.md`
+
 ### `Phase 3.3` 前端最小摘要工作流入口
 
 目标：
@@ -183,6 +234,57 @@
 退出条件：
 
 - 对象页默认可用摘要流修改对象，不再强依赖字段表单
+
+当前状态：
+
+- 已启动
+- 已完成首轮前端接线与本地构建验证
+- 已完成首轮线上部署验收：
+  - 已确认 `Character / WorldSetting / Chapter` 三处页面对应构建产物中存在更显式入口文案
+  - 已确认当前线上版本包含：
+    - `摘要优先编辑`
+    - `摘要优先`
+    - `打开摘要工作流`
+- `Phase 3.3` 尚未完成
+- 已完成的最近一轮推进：
+  - 三处页面的新增与编辑已统一先进入摘要工作流
+  - 普通模式已从“直填摘要”升级为“对话采集 + 摘要草稿”
+  - 后端已新增：
+    - `POST /api/summary-workflow/chat-turns`
+  - 专家模式已调整为默认直填摘要，并保留切回旧表单入口
+  - 已完成本地验证：
+    - `mvn -Dmaven.repo.local=/usr/local/project/github/story-weaver/.cache/m2 -DskipTests compile`
+    - `mvn test -pl backend -am -Dtest=DefaultStorySummaryConversationServiceTest,DefaultStorySummaryProposalWorkflowServiceTest,DefaultStorySummaryApplyWorkflowServiceTest,ResilientSummaryProposalStoreTest -Dsurefire.failIfNoSpecifiedTests=false -Dmaven.repo.local=/usr/local/project/github/story-weaver/.cache/m2`
+    - `npm run type-check`
+    - `npm run build`
+  - 已继续降低普通作者认知负担：
+    - 普通模式的主按钮文案收口为“说想法新增”
+    - 工作流步骤收口为“说想法 -> AI 整理 -> 看变化 -> 确认写回”
+    - 普通模式不再强制作者先选 `REFINE / UPDATE / ENRICH`
+- 最新状态修正：
+  - 已确认线上 `POST /api/summary-workflow/chat-turns` 在普通模式下仍会超时
+  - 已确认当前阻塞点不是前端入口，而是后端对话链路缺少短超时与快速回退
+  - 已完成本地修复：
+    - `summary-workflow` 优先路由到 `naming_ai_provider_id / naming_ai_model`
+    - 新增 `conversation-timeout-seconds`
+    - 新增 `conversation-max-tokens`
+    - `DefaultStorySummaryConversationService` 加入虚拟线程超时回退
+  - 已完成线上测试数据恢复：
+    - 第 31 章摘要已恢复为原值
+  - 见：
+    - `docs/reports/REPORT-20260413-summary-workflow-live-validation-round5.md`
+- 当前剩余：
+  - 部署并复验新的 chat 式摘要采集版本
+  - 根据真实体验继续收口普通模式的追问节奏和摘要草稿展示
+  - `Phase 3` 真正完成前，不进入 `Phase 4`
+- 已新增统一前端入口：
+  - `front/src/components/SummaryWorkflowDialog.vue`
+- 已新增前端 API：
+  - `front/src/api/summary-workflow.ts`
+- 已开始接线：
+  - `CharacterListView`
+  - `WorldSettingView`
+  - `ChapterListView`
 
 ## 建议协议
 
@@ -360,11 +462,10 @@
   - `StorySummaryService`
   - 规则型摘要回生成
   - 统一 `ProjectedStoryUnit` 读模型
-- 当前进入：
-  - `Phase 3.1`
+- `Phase 3` 仍在进行中
 - 下一步建议：
-  - 继续完成对象族 translator / handler 边界
-  - 再进入 `Phase 3.2` 的后端提案、预览与写回服务
+  - 继续完成 `Phase 3.3` 的真实部署验收与交互收口
+  - `Phase 4` 暂不启动
 
 ## 贡献与署名说明
 

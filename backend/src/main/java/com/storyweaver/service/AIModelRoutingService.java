@@ -91,6 +91,7 @@ public class AIModelRoutingService {
             case "draft" -> "draft_ai_provider_id";
             case "director", "planner", "orchestrator" -> "director_ai_provider_id";
             case "naming", "name", "character", "character-attribute" -> "naming_ai_provider_id";
+            case "summary-workflow", "summary_workflow", "summary" -> "naming_ai_provider_id";
             case "item", "inventory", "loot" -> "item_ai_provider_id";
             case "writing-center", "writing_center", "writing" -> "writing_ai_provider_id";
             default -> "default_ai_provider_id";
@@ -102,6 +103,7 @@ public class AIModelRoutingService {
             case "draft" -> "draft_ai_model";
             case "director", "planner", "orchestrator" -> "director_ai_model";
             case "naming", "name", "character", "character-attribute" -> "naming_ai_model";
+            case "summary-workflow", "summary_workflow", "summary" -> "naming_ai_model";
             case "item", "inventory", "loot" -> "item_ai_model";
             case "writing-center", "writing_center", "writing" -> "writing_ai_model";
             default -> "default_ai_model";

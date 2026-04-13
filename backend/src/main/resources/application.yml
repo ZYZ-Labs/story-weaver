@@ -23,3 +23,11 @@ jwt:
   expiration: 86400000
   header: Authorization
   token-prefix: "Bearer "
+
+story:
+  summary-workflow:
+    redis-proposal-store-enabled: ${STORY_SUMMARY_WORKFLOW_REDIS_PROPOSAL_STORE_ENABLED:true}
+    proposal-ttl-minutes: ${STORY_SUMMARY_WORKFLOW_PROPOSAL_TTL_MINUTES:30}
+    proposal-key-prefix: ${STORY_SUMMARY_WORKFLOW_PROPOSAL_KEY_PREFIX:story:summary-proposal:}
+    conversation-timeout-seconds: ${STORY_SUMMARY_WORKFLOW_CONVERSATION_TIMEOUT_SECONDS:12}
+    conversation-max-tokens: ${STORY_SUMMARY_WORKFLOW_CONVERSATION_MAX_TOKENS:900}

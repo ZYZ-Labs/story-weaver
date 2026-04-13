@@ -30,6 +30,7 @@ Thumbs.db
 *.pem
 .deploy/dockerhub.env
 .deploy/registry.env
+.cache/
 
 # Test output
 coverage/

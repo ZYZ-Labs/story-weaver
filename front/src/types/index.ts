@@ -159,6 +159,89 @@ export interface WorldSetting {
   updateTime?: string
 }
 
+export type SummaryWorkflowTargetType = 'CHARACTER' | 'WORLD_SETTING' | 'CHAPTER'
+export type SummaryWorkflowIntent = 'CREATE' | 'UPDATE' | 'REFINE' | 'ENRICH'
+export type SummaryWorkflowOperatorMode = 'DEFAULT' | 'EXPERT' | 'SYSTEM'
+
+export interface SummaryWorkflowSummaryView {
+  displayTitle?: string
+  oneLineSummary?: string
+  longSummary?: string
+  stateSummary?: string
+  relationSummary?: string
+  changeSummary?: string
+  pendingQuestions?: string[]
+}
+
+export interface SummaryWorkflowUnitRef {
+  unitId: string
+  unitKey: string
+  unitType: SummaryWorkflowTargetType
+}
+
+export interface SummaryWorkflowPatchOperation {
+  op: string
+  path: string
+  value?: string
+}
+
+export interface SummaryWorkflowProposal {
+  proposalId: string
+  targetRef: SummaryWorkflowUnitRef
+  projectId: number
+  inputIntent: SummaryWorkflowIntent
+  operatorMode: SummaryWorkflowOperatorMode
+  inputSummary: string
+  proposalSummary: string
+  affectedFacets: string[]
+  riskNotes: string[]
+  pendingQuestions: string[]
+  requiresConfirmation: boolean
+  patch: {
+    patchId: string
+    targetUnit: SummaryWorkflowUnitRef
+    facetType: string
+    operations: SummaryWorkflowPatchOperation[]
+    summary: string
+    status: string
+  }
+}
+
+export interface SummaryWorkflowPreview {
+  beforeSummary: SummaryWorkflowSummaryView
+  afterSummary: SummaryWorkflowSummaryView
+  changeSummary: string
+  affectedFacets: string[]
+  requiresConfirmation: boolean
+  warnings: string[]
+}
+
+export interface SummaryWorkflowProposalResponse {
+  proposal: SummaryWorkflowProposal
+  preview: SummaryWorkflowPreview
+}
+
+export interface SummaryWorkflowApplyResult {
+  applied: boolean
+  updatedSummary: SummaryWorkflowSummaryView
+  updatedUnitRef: SummaryWorkflowUnitRef
+  warnings: string[]
+}
+
+export interface SummaryWorkflowChatMessage {
+  role: 'assistant' | 'user' | 'system' | string
+  content: string
+}
+
+export interface SummaryWorkflowChatTurnResult {
+  assistantMessage: string
+  draftSummary: string
+  pendingQuestions: string[]
+  readyForPreview: boolean
+  selectedProviderId?: number | null
+  selectedModel?: string
+}
+
 export interface AIWritingRequest {
   chapterId: number
   currentContent: string

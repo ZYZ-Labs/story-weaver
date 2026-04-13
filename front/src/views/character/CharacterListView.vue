@@ -10,10 +10,16 @@ import MarkdownContent from '@/components/MarkdownContent.vue'
 import MarkdownEditor from '@/components/MarkdownEditor.vue'
 import NameSuggestionDialog from '@/components/NameSuggestionDialog.vue'
 import PageContainer from '@/components/PageContainer.vue'
+import SummaryWorkflowDialog from '@/components/SummaryWorkflowDialog.vue'
 import { useCharacterStore } from '@/stores/character'
 import { useChapterStore } from '@/stores/chapter'
 import { useProjectStore } from '@/stores/project'
-import type { Character, CharacterAttributeSuggestionResult } from '@/types'
+import type {
+  Character,
+  CharacterAttributeSuggestionResult,
+  SummaryWorkflowApplyResult,
+  SummaryWorkflowOperatorMode,
+} from '@/types'
 import {
   buildCharacterAttributesJson,
   cloneCharacterAttributeForm,
@@ -40,11 +46,18 @@ const nameSuggestionSourceLabel = ref('')
 
 const attributeSuggestionLoading = ref(false)
 const attributeSuggestionSourceLabel = ref('')
+const summaryWorkflowVisible = ref(false)
+const summaryWorkflowTarget = ref<Character | null>(null)
+const summaryWorkflowCreateMode = ref(false)
+const editorMode = ref<SummaryWorkflowOperatorMode>('DEFAULT')
 
 const currentProjectId = computed(() => projectStore.selectedProjectId)
 const currentProject = computed(() =>
   projectStore.projects.find((item) => item.id === currentProjectId.value) || null,
 )
+const summaryFirstMode = computed(() => editorMode.value === 'DEFAULT')
+const createButtonLabel = computed(() => (summaryFirstMode.value ? '说想法新增人物' : '摘要新增人物'))
+const emptyCreateButtonLabel = computed(() => (summaryFirstMode.value ? '说想法创建人物' : '摘要创建人物'))
 
 const projectRoleOptions = ['主角', '群像主角', '配角', '反派', '导师', '重要 NPC', '线索人物', '客串']
 const campOptions = ['主角阵营', '伙伴阵营', '中立阵营', '反派阵营', '组织成员', '家族势力']
@@ -281,10 +294,20 @@ function fillForm(character?: Character | null) {
   attributeSuggestionSourceLabel.value = ''
 }
 
-function openCreate() {
+function openCreateForm() {
   editingId.value = null
   fillForm(null)
   dialog.value = true
+}
+
+function openCreateSummaryWorkflow() {
+  summaryWorkflowCreateMode.value = true
+  summaryWorkflowTarget.value = null
+  summaryWorkflowVisible.value = true
+}
+
+function openCreate() {
+  openCreateSummaryWorkflow()
 }
 
 function openAttach() {
@@ -304,10 +327,31 @@ function openAttach() {
   dialog.value = true
 }
 
-function openEdit(character: Character) {
+function openEditForm(character: Character) {
   editingId.value = character.id
   fillForm(character)
   dialog.value = true
+}
+
+function openEdit(character: Character) {
+  openSummaryWorkflow(character)
+}
+
+function openSummaryWorkflow(character?: Character | null) {
+  summaryWorkflowCreateMode.value = !character
+  summaryWorkflowTarget.value = character || null
+  summaryWorkflowVisible.value = true
+}
+
+function handleSummaryWorkflowExpertEditRequest() {
+  summaryWorkflowVisible.value = false
+  if (summaryWorkflowCreateMode.value) {
+    openCreateForm()
+    return
+  }
+  if (summaryWorkflowTarget.value) {
+    openEditForm(summaryWorkflowTarget.value)
+  }
 }
 
 function requestDelete(character: Character) {
@@ -369,6 +413,16 @@ async function submit() {
   } finally {
     submitLoading.value = false
   }
+}
+
+async function handleSummaryWorkflowApplied(_result: SummaryWorkflowApplyResult) {
+  if (!currentProjectId.value) {
+    return
+  }
+  await Promise.allSettled([
+    characterStore.fetchByProject(currentProjectId.value),
+    characterStore.fetchLibrary(),
+  ])
 }
 
 async function generateCharacterNames() {
@@ -516,9 +570,13 @@ async function refreshCharacterInventorySummary() {
     description="人物现在以可复用的角色库来管理。一个人物可以关联到多个项目，而当前项目里再单独标注主角、配角、反派等定位。"
   >
     <template #actions>
-      <div class="d-flex ga-2">
+      <div class="d-flex flex-wrap ga-2 align-center">
+        <v-segmented-button v-model="editorMode" color="primary" mandatory>
+          <v-btn value="DEFAULT">普通模式</v-btn>
+          <v-btn value="EXPERT">专家模式</v-btn>
+        </v-segmented-button>
         <v-btn color="primary" prepend-icon="mdi-account-plus-outline" :disabled="!currentProjectId" @click="openCreate">
-          新增人物
+          {{ createButtonLabel }}
         </v-btn>
         <v-btn variant="outlined" prepend-icon="mdi-link-variant" :disabled="!currentProjectId" @click="openAttach">
           关联已有
@@ -538,12 +596,21 @@ async function refreshCharacterInventorySummary() {
       description="可以新建人物，也可以把角色库里已有的人物直接关联到当前项目。"
     >
       <div class="d-flex ga-2">
-        <v-btn color="primary" prepend-icon="mdi-account-plus-outline" @click="openCreate">创建人物</v-btn>
+        <v-btn color="primary" prepend-icon="mdi-account-plus-outline" @click="openCreate">{{ emptyCreateButtonLabel }}</v-btn>
         <v-btn variant="outlined" prepend-icon="mdi-link-variant" @click="openAttach">关联已有</v-btn>
       </div>
     </EmptyState>
 
-    <v-row v-else>
+    <div v-else>
+      <v-alert class="mb-4" type="info" variant="tonal">
+        {{
+          summaryFirstMode
+            ? '当前是普通模式：新增和编辑都先走对话式摘要工作流；你只要给模糊印象，AI 会继续追问并整理。'
+            : '当前是专家模式：新增和编辑仍先进入摘要工作流，但会默认使用直填摘要；如需深度字段可切到专家表单。'
+        }}
+      </v-alert>
+
+      <v-row>
       <v-col v-for="item in charactersWithProfiles" :key="item.id" cols="12" md="6" xl="4">
         <v-card class="soft-panel h-100">
           <v-card-text class="d-flex flex-column h-100">
@@ -640,15 +707,19 @@ async function refreshCharacterInventorySummary() {
               </div>
             </div>
 
-            <div class="d-flex ga-2 mt-auto pt-4">
-              <v-btn color="primary" variant="tonal" @click="openInventory(item)">背包</v-btn>
-              <v-btn variant="outlined" @click="openEdit(item)">编辑</v-btn>
+            <div class="d-flex flex-wrap ga-2 mt-auto pt-4">
+              <v-btn color="primary" prepend-icon="mdi-text-box-edit-outline" @click="openSummaryWorkflow(item)">
+                摘要优先编辑
+              </v-btn>
+              <v-btn color="secondary" variant="outlined" @click="openInventory(item)">背包</v-btn>
+              <v-btn variant="text" @click="openEdit(item)">编辑</v-btn>
               <v-btn color="error" variant="text" @click="requestDelete(item)">移出项目</v-btn>
             </div>
           </v-card-text>
         </v-card>
       </v-col>
-    </v-row>
+      </v-row>
+    </div>
 
     <v-dialog v-model="dialog" max-width="960">
       <v-card>
@@ -1056,6 +1127,21 @@ async function refreshCharacterInventorySummary() {
       :project-id="currentProjectId"
       :character="inventoryCharacter"
       @changed="refreshCharacterInventorySummary"
+    />
+
+    <SummaryWorkflowDialog
+      v-model="summaryWorkflowVisible"
+      :project-id="currentProjectId"
+      target-type="CHARACTER"
+      :create-mode="summaryWorkflowCreateMode"
+      :initial-operator-mode="editorMode"
+      :allow-expert-form-switch="true"
+      :target-source-id="summaryWorkflowTarget?.id || null"
+      :title="summaryWorkflowTarget?.name || '新人物'"
+      target-label="人物"
+      :initial-summary="summaryWorkflowTarget?.description || ''"
+      @applied="handleSummaryWorkflowApplied"
+      @expert-edit-request="handleSummaryWorkflowExpertEditRequest"
     />
   </PageContainer>
 </template>

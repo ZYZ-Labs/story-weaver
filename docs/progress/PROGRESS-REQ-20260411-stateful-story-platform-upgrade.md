@@ -3,16 +3,17 @@
 - Req ID: REQ-20260411-stateful-story-platform-upgrade
 - Status: In Progress
 - Created At: 2026-04-11 Asia/Shanghai
-- Updated At: 2026-04-12 Asia/Shanghai
+- Updated At: 2026-04-13 Asia/Shanghai
 
 ## 当前快照
 
-- Current Phase: `Phase 3` 进行中
-- Current Task: 推进 `Phase 3.1` 协议壳，冻结 `Summary First` 的 proposal / preview / apply 工作流
-- Last Completed: 已完成 `Phase 2.3` 的 `StorySummaryService`、规则型摘要回生成与统一读模型收口
+- Current Phase: `Phase 3.3` 持续推进
+- Current Task: 修复普通模式 `chat-turns` 在线上部署环境中的超时问题，并把“对话采集 + 摘要草稿”收口到真实可用态
+- Last Completed: 已完成 `summary-workflow` 普通模式后端短超时回退、本地回归验证与线上测试数据恢复
 - Next Action:
-  - 继续补 `Character / WorldSetting / Chapter` 的 translator / handler 边界
-  - 进入 `Phase 3.2` 前冻结后端服务落点
+  - 部署并复验带“短超时 + 回退”的 `POST /api/summary-workflow/chat-turns`
+  - 继续收口普通模式的追问节奏、摘要草稿展示和普通作者默认入口
+  - 在 `Phase 3` 真正完成后再恢复 `Phase 4` 推进
 - Blockers:
   - 旧主线 `REQ-20260409-generation-reliability-refactor` 已归档，但其代码成果和回归报告仍需作为迁移基线继续参考
   - `MCP` 与 `LSP` 的边界尚未形成代码级实现，只完成讨论与文档收敛
@@ -118,6 +119,110 @@
     - `CharacterService`
     - `WorldSettingService`
     - `ChapterService`
+  - 已启动 `Phase 3.2` 首轮实现：
+    - `CharacterStorySummaryTargetHandler`
+    - `WorldSettingStorySummaryTargetHandler`
+    - `ChapterStorySummaryTargetHandler`
+    - `DefaultStorySummaryProposalWorkflowService`
+    - `DefaultStorySummaryPreviewWorkflowService`
+    - `DefaultStorySummaryApplyWorkflowService`
+    - `SummaryProposalStore`
+    - `ResilientSummaryProposalStore`
+    - `SummaryWorkflowController`
+  - 已打通最小 API 草案：
+    - `POST /api/summary-workflow/proposals`
+    - `POST /api/summary-workflow/previews`
+    - `POST /api/summary-workflow/apply`
+  - 已支持 proposal 持久化与恢复：
+    - 默认尝试写入 Redis
+    - Redis 不可用时回退内存态
+    - `preview / apply` 可仅传 `proposalId`
+  - 已支持配置外置：
+    - `STORY_SUMMARY_WORKFLOW_REDIS_PROPOSAL_STORE_ENABLED`
+    - `STORY_SUMMARY_WORKFLOW_PROPOSAL_TTL_MINUTES`
+    - `STORY_SUMMARY_WORKFLOW_PROPOSAL_KEY_PREFIX`
+  - 已完成异常口径细化：
+    - proposal 不存在/过期 -> `404`
+    - proposal 目标冲突 -> `409`
+    - 参数非法 -> `400`
+  - 已完成 `Phase 3.2` 首轮编译验证：
+    - `mvn -Dmaven.repo.local=/usr/local/project/github/story-weaver/.cache/m2 -DskipTests compile`
+  - 已完成 `Phase 3.2` 首轮最小回归：
+    - `DefaultStorySummaryProposalWorkflowServiceTest`
+    - `DefaultStorySummaryApplyWorkflowServiceTest`
+    - `RuleBasedStorySummaryServiceTest`
+    - `ResilientSummaryProposalStoreTest`
+    - `mvn test -pl backend -am -Dtest=RuleBasedStorySummaryServiceTest,DefaultStorySummaryProposalWorkflowServiceTest,DefaultStorySummaryApplyWorkflowServiceTest,ResilientSummaryProposalStoreTest -Dsurefire.failIfNoSpecifiedTests=false -Dmaven.repo.local=/usr/local/project/github/story-weaver/.cache/m2`
+  - 已完成 `Phase 3.2` 首轮线上联调：
+    - `summary-workflow` 的 proposal / preview / apply 已在线上部署环境真实跑通
+    - `proposalId` 取回式 preview / apply 已可用
+    - `404 / 409` 异常口径与实现一致
+    - 测试过程已恢复第 31 章原摘要
+    - 联调报告：
+      - `docs/reports/REPORT-20260413-summary-workflow-live-validation-round1.md`
+  - 已完成 `Phase 3.2` 第二轮线上联调：
+    - 已定位 Redis proposal store 根因为部署 env 中的 Redis 密码错误
+    - 已修复 `/usr/local/project/docker/env/story-weaver/backend.env`
+    - 已重建 `story-weaver-backend`
+    - 已验证 proposal key 可落 Redis
+    - 已验证 `proposalId` 可跨重启继续 `preview / apply`
+    - 已验证 apply 后 Redis key 删除成功
+    - 联调报告：
+      - `docs/reports/REPORT-20260413-summary-workflow-live-validation-round2.md`
+  - 已完成 `Phase 3.2` 第三轮线上复验：
+    - 已确认新一轮部署后 backend 容器再次带入旧 Redis 密码
+    - 已重新修正现网 `backend.env` 并重建 backend
+    - 已确认容器环境变量恢复为正确密码
+    - 已确认 proposal key 再次真实落入 Redis
+    - 联调报告：
+      - `docs/reports/REPORT-20260413-summary-workflow-live-validation-round3.md`
+  - 已启动 `Phase 3.3` 前端最小摘要入口：
+    - 新增 `front/src/components/SummaryWorkflowDialog.vue`
+    - 新增 `front/src/api/summary-workflow.ts`
+    - 已接入：
+      - `front/src/views/character/CharacterListView.vue`
+      - `front/src/views/world-setting/WorldSettingView.vue`
+      - `front/src/views/chapter/ChapterListView.vue`
+  - 已完成 `Phase 3.3` 本地验证：
+    - `npm run type-check`
+    - `npm run build`
+  - 已完成 `Phase 3.3` 首轮线上部署验收：
+    - 已确认线上静态资源包含：
+      - `摘要优先编辑`
+      - `摘要优先`
+      - `打开摘要工作流`
+    - 已确认三处页面的新入口已进入线上构建产物
+  - 已继续推进 `Phase 3.3` 的前端层次收口：
+    - 已进一步提高 `摘要优先编辑` 的按钮显著性
+    - 已继续降低旧 `编辑` 入口的视觉优先级
+    - 已完成本轮前端 `type-check / build`
+  - 已继续推进 `Phase 3.3` 的摘要弹层交互：
+    - 已新增 `普通模式 / 专家模式` 切换
+    - 已新增 `精修摘要 / 改写摘要 / 补充细节` 意图切换
+    - 已新增“摘要未变更时不生成提案”的前端拦截
+    - 已补三步式工作流提示
+  - 已完成 `Phase 3.3` 第二轮线上部署验收：
+    - 已确认部署产物包含：
+      - `普通模式`
+      - `专家模式`
+      - `精修摘要`
+      - `改写摘要`
+      - `补充细节`
+    - 已确认 `operatorMode=EXPERT` 与 `intent=REFINE` 在线上 backend 可用
+    - 已确认 proposal key 继续真实落入 Redis
+    - 联调报告：
+      - `docs/reports/REPORT-20260413-summary-workflow-live-validation-round4.md`
+  - 已完成 `Phase 3.3` 第三轮线上复验与本地修复基线冻结：
+    - 已确认线上 `POST /api/summary-workflow/chat-turns` 在普通模式下仍会超时
+    - 已确认当前不能将 `Phase 3.3` 视为完成
+    - 已将第 31 章测试摘要恢复为原值
+    - 本地已补：
+      - `summary-workflow -> naming` 路由收口
+      - `conversation-timeout-seconds`
+      - `conversation-max-tokens`
+      - 虚拟线程超时回退
+    - 联调与修复报告：
+      - `docs/reports/REPORT-20260413-summary-workflow-live-validation-round5.md`
   - 已完成物理迁移：
     - `domain/entity -> story-domain`
     - `item/domain -> story-domain`
@@ -135,7 +240,7 @@
   - 模块化单体的首轮拆分方案是否会影响现有主链
   - 前端信息架构在真实页面中的可用性
   - `storyunit` 与现有 domain/repository 的迁移耦合面还没有正式开始切
-  - `Phase 3.2` 的后端 handler 与写回实现尚未开始
+  - `Phase 4` 的代码级实现尚未开始，当前仍停留在计划草案
 
 ## 当前阶段完成度判断
 
@@ -154,8 +259,26 @@
   - `StoryUnit` 对外统一读模型已收口
   - `Phase 3` 详细实施计划已建立
   - `Phase 3.1` 协议壳已建立
+  - `Phase 3.2` 首轮后端骨架已建立
+  - `Phase 3.2` 最小 API 已建立
+  - `Phase 3.2` 首轮线上联调已完成
+  - `Phase 3.2` 的 Redis proposal store 已恢复可用
+  - `Phase 3.2` 的跨重启恢复验证已完成
+  - `Phase 3.3` 已启动
+  - `Phase 3.3` 已完成三处页面接线与多轮线上验收，但普通模式后端链路仍在收口
+  - 已确认仅有“摘要文本框 + preview/apply”仍不足以支撑普通模式
+  - 已新增 `POST /api/summary-workflow/chat-turns`
+  - 已将普通模式升级为“对话采集 + 摘要草稿”双栏交互
+  - 已确认普通模式线上最大阻塞点是 `chat-turns` 模型调用超时，不是按钮显著性
+  - 已继续收口普通模式文案与交互：
+    - 将主入口文案从“对话新增”收口为“说想法新增”
+    - 将步骤文案改为“说想法 -> AI 整理 -> 看变化 -> 确认写回”
+    - 普通模式下不再强行暴露意图分段按钮
+  - 已将 `Character / WorldSetting / Chapter` 的新增与编辑统一收口到摘要工作流
+  - 专家模式已调整为默认直填摘要，并保留切回旧表单的入口
 - 当前未完成：
-  - `Phase 3.2 / 3.3` 尚未开始编码
+  - `Phase 3.3` 仍需真实部署验收新的 chat 式摘要采集版本
+  - `Phase 4` 详细计划与首批代码尚未开始
 
 ## 关键节点记录
 

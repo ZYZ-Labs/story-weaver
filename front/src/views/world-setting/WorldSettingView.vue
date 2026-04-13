@@ -6,9 +6,10 @@ import EmptyState from '@/components/EmptyState.vue'
 import MarkdownContent from '@/components/MarkdownContent.vue'
 import MarkdownEditor from '@/components/MarkdownEditor.vue'
 import PageContainer from '@/components/PageContainer.vue'
+import SummaryWorkflowDialog from '@/components/SummaryWorkflowDialog.vue'
 import { useProjectStore } from '@/stores/project'
 import { useWorldSettingStore } from '@/stores/world-setting'
-import type { WorldSetting } from '@/types'
+import type { SummaryWorkflowApplyResult, SummaryWorkflowOperatorMode, WorldSetting } from '@/types'
 
 const projectStore = useProjectStore()
 const worldSettingStore = useWorldSettingStore()
@@ -20,11 +21,17 @@ const pendingItem = ref<WorldSetting | null>(null)
 const pendingAction = ref<'detach' | 'delete'>('detach')
 const submitLoading = ref(false)
 const actionLoading = ref(false)
+const summaryWorkflowVisible = ref(false)
+const summaryWorkflowTarget = ref<WorldSetting | null>(null)
+const summaryWorkflowCreateMode = ref(false)
+const editorMode = ref<SummaryWorkflowOperatorMode>('DEFAULT')
 
 const projectId = computed(() => projectStore.selectedProjectId)
 const currentProject = computed(() =>
   projectStore.projects.find((item) => item.id === projectId.value) || null,
 )
+const summaryFirstMode = computed(() => editorMode.value === 'DEFAULT')
+const createButtonLabel = computed(() => (summaryFirstMode.value ? '说想法新增世界观' : '摘要新增世界观'))
 
 const associatedIdSet = computed(() => new Set(worldSettingStore.items.map((item) => item.id)))
 const libraryCandidates = computed(() =>
@@ -73,16 +80,43 @@ function fillForm(setting?: WorldSetting | null) {
   })
 }
 
-function openCreate() {
+function openCreateForm() {
   editingId.value = null
   fillForm(null)
   dialog.value = true
 }
 
-function openEdit(setting: WorldSetting) {
+function openCreate() {
+  summaryWorkflowCreateMode.value = true
+  summaryWorkflowTarget.value = null
+  summaryWorkflowVisible.value = true
+}
+
+function openEditForm(setting: WorldSetting) {
   editingId.value = setting.id
   fillForm(setting)
   dialog.value = true
+}
+
+function openEdit(setting: WorldSetting) {
+  openSummaryWorkflow(setting)
+}
+
+function openSummaryWorkflow(setting?: WorldSetting | null) {
+  summaryWorkflowCreateMode.value = !setting
+  summaryWorkflowTarget.value = setting || null
+  summaryWorkflowVisible.value = true
+}
+
+function handleSummaryWorkflowExpertEditRequest() {
+  summaryWorkflowVisible.value = false
+  if (summaryWorkflowCreateMode.value) {
+    openCreateForm()
+    return
+  }
+  if (summaryWorkflowTarget.value) {
+    openEditForm(summaryWorkflowTarget.value)
+  }
 }
 
 function requestDetach(setting: WorldSetting) {
@@ -160,6 +194,13 @@ async function attachItem(setting: WorldSetting) {
 async function loadData(id: number) {
   await Promise.allSettled([worldSettingStore.fetchByProject(id), worldSettingStore.fetchLibrary()])
 }
+
+async function handleSummaryWorkflowApplied(_result: SummaryWorkflowApplyResult) {
+  if (!projectId.value) {
+    return
+  }
+  await loadData(projectId.value)
+}
 </script>
 
 <template>
@@ -168,9 +209,15 @@ async function loadData(id: number) {
     description="把世界规则、势力、地理、历史和关键设定沉淀成可复用的世界观模型。当前项目可以直接关联已有模型，不需要重复创建。"
   >
     <template #actions>
-      <v-btn color="primary" prepend-icon="mdi-plus" :disabled="!projectId" @click="openCreate">
-        新建世界观模型
-      </v-btn>
+      <div class="d-flex flex-wrap ga-2 align-center">
+        <v-segmented-button v-model="editorMode" color="primary" mandatory>
+          <v-btn value="DEFAULT">普通模式</v-btn>
+          <v-btn value="EXPERT">专家模式</v-btn>
+        </v-segmented-button>
+        <v-btn color="primary" prepend-icon="mdi-plus" :disabled="!projectId" @click="openCreate">
+          {{ createButtonLabel }}
+        </v-btn>
+      </div>
     </template>
 
     <EmptyState
@@ -180,6 +227,14 @@ async function loadData(id: number) {
     />
 
     <div v-else class="page-grid">
+      <v-alert class="mb-4" type="info" variant="tonal">
+        {{
+          summaryFirstMode
+            ? '当前是普通模式：新增和编辑都先走对话式摘要工作流；你只需要说模糊印象，AI 会继续追问并整理。'
+            : '当前是专家模式：新增和编辑仍先进入摘要工作流，但默认直填摘要；如需分类、名称等细字段可切到专家表单。'
+        }}
+      </v-alert>
+
       <v-card class="soft-panel">
         <v-card-title>当前项目已关联世界观</v-card-title>
         <v-card-subtitle>
@@ -216,8 +271,11 @@ async function loadData(id: number) {
                     />
                   </div>
 
-                  <div class="d-flex ga-2 mt-auto pt-4">
-                    <v-btn variant="outlined" @click="openEdit(item)">编辑</v-btn>
+                  <div class="d-flex flex-wrap ga-2 mt-auto pt-4">
+                    <v-btn color="primary" prepend-icon="mdi-text-box-edit-outline" @click="openSummaryWorkflow(item)">
+                      摘要优先编辑
+                    </v-btn>
+                    <v-btn variant="text" @click="openEdit(item)">编辑</v-btn>
                     <v-btn variant="text" color="warning" @click="requestDetach(item)">取消关联</v-btn>
                     <v-btn variant="text" color="error" @click="requestDelete(item)">彻底删除</v-btn>
                   </div>
@@ -268,11 +326,19 @@ async function loadData(id: number) {
                     />
                   </div>
 
-                  <div class="d-flex ga-2 mt-auto pt-4">
+                  <div class="d-flex flex-wrap ga-2 mt-auto pt-4">
                     <v-btn color="primary" variant="flat" :loading="actionLoading" @click="attachItem(item)">
                       关联到当前项目
                     </v-btn>
-                    <v-btn variant="outlined" @click="openEdit(item)">编辑</v-btn>
+                    <v-btn
+                      color="primary"
+                      prepend-icon="mdi-text-box-edit-outline"
+                      variant="tonal"
+                      @click="openSummaryWorkflow(item)"
+                    >
+                      摘要优先编辑
+                    </v-btn>
+                    <v-btn variant="text" @click="openEdit(item)">编辑</v-btn>
                   </div>
                 </v-card-text>
               </v-card>
@@ -321,6 +387,21 @@ async function loadData(id: number) {
           : '这会从世界观模型库中彻底删除该模型，并从所有已关联项目中移除。'
       "
       @confirm="confirmAction"
+    />
+
+    <SummaryWorkflowDialog
+      v-model="summaryWorkflowVisible"
+      :project-id="projectId"
+      target-type="WORLD_SETTING"
+      :create-mode="summaryWorkflowCreateMode"
+      :initial-operator-mode="editorMode"
+      :allow-expert-form-switch="true"
+      :target-source-id="summaryWorkflowTarget?.id || null"
+      :title="summaryWorkflowTarget?.name || summaryWorkflowTarget?.title || '新世界观模型'"
+      target-label="世界观模型"
+      :initial-summary="summaryWorkflowTarget?.description || summaryWorkflowTarget?.content || ''"
+      @applied="handleSummaryWorkflowApplied"
+      @expert-edit-request="handleSummaryWorkflowExpertEditRequest"
     />
   </PageContainer>
 </template>

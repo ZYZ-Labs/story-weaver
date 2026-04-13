@@ -4,7 +4,7 @@
 - Plan Version: v1
 - Status: In Progress
 - Created At: 2026-04-11 Asia/Shanghai
-- Updated At: 2026-04-12 Asia/Shanghai
+- Updated At: 2026-04-13 Asia/Shanghai
 
 ## 计划定位
 
@@ -156,6 +156,23 @@
 
 - 重做人物、世界观、物品、技能、剧情等对象的创建和修改方式。
 
+当前状态：
+
+- `Phase 3.1` 已完成
+- `Phase 3.2` 已完成
+- `Phase 3.2` 已完成 Redis proposal store 修复与跨重启恢复验证
+- `Phase 3.3` 进行中
+- 最小 API 已建立：
+  - `POST /api/summary-workflow/proposals`
+  - `POST /api/summary-workflow/previews`
+  - `POST /api/summary-workflow/apply`
+- 线上验证报告：
+  - `docs/reports/REPORT-20260413-summary-workflow-live-validation-round1.md`
+  - `docs/reports/REPORT-20260413-summary-workflow-live-validation-round2.md`
+  - `docs/reports/REPORT-20260413-summary-workflow-live-validation-round3.md`
+  - `docs/reports/REPORT-20260413-summary-workflow-live-validation-round4.md`
+  - `docs/reports/REPORT-20260413-summary-workflow-live-validation-round5.md`
+
 默认流程：
 
 1. 用户输入摘要
@@ -174,8 +191,12 @@
 - 已启动详细计划编写
 - 详细计划：
   - `docs/plans/PLAN-REQ-20260411-stateful-story-platform-upgrade-phase3-summary-first-workflow-v1.md`
-- `Phase 3.1` 已启动协议壳落地
-- 下一步继续完成 `Phase 3.1`
+- `Phase 3.1` 已完成
+- `Phase 3.2` 已完成
+- `Phase 3.3` 已完成 preview/apply 与统一摘要入口，但普通模式 chat 式摘要采集仍需部署复验
+- 当前判断：
+  - `Phase 3` 仍在进行中
+  - `Phase 4` 暂不启动
 
 ### Phase 4. Read-Only MCP 与 LSP 基础设施
 

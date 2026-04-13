@@ -9,6 +9,8 @@ import org.springframework.security.core.AuthenticationException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import com.storyweaver.storyunit.workflow.exception.SummaryProposalConflictException;
+import com.storyweaver.storyunit.workflow.exception.SummaryProposalNotFoundException;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
@@ -36,6 +38,18 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ApiErrorResponse> handleIllegalStateException(IllegalStateException ex) {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                 .body(new ApiErrorResponse(400, ex.getMessage()));
+    }
+
+    @ExceptionHandler(SummaryProposalNotFoundException.class)
+    public ResponseEntity<ApiErrorResponse> handleSummaryProposalNotFoundException(SummaryProposalNotFoundException ex) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(new ApiErrorResponse(404, ex.getMessage()));
+    }
+
+    @ExceptionHandler(SummaryProposalConflictException.class)
+    public ResponseEntity<ApiErrorResponse> handleSummaryProposalConflictException(SummaryProposalConflictException ex) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(new ApiErrorResponse(409, ex.getMessage()));
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
