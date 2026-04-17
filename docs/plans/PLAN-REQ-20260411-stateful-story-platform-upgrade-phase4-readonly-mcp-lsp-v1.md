@@ -2,7 +2,7 @@
 
 - Req ID: REQ-20260411-stateful-story-platform-upgrade
 - Plan ID: PLAN-REQ-20260411-stateful-story-platform-upgrade-phase4-readonly-mcp-lsp-v1
-- Status: In Progress
+- Status: Completed
 - Created At: 2026-04-13 Asia/Shanghai
 - Updated At: 2026-04-17 Asia/Shanghai
 
@@ -215,7 +215,15 @@
     - `get_reader_known_state`
     - `get_character_runtime_state`
     - `get_recent_story_progress`
-- 当前剩余项只剩真实部署联调，不再是本地开发缺口
+- 已完成首轮真实部署联调并发现 `runtime-state` 空值缺陷
+- 已完成修复版部署后二次联调：
+  - `GET /api/story-context/projects/28/brief` -> `200`
+  - `GET /api/story-context/story-units/summary` -> `200`
+  - `GET /api/story-context/projects/28/chapters/31/anchors` -> `200`
+  - `GET /api/story-context/projects/28/chapters/31/reader-known-state` -> `200`
+  - `GET /api/story-context/projects/28/characters/15/runtime-state` -> `200`
+  - `GET /api/story-context/projects/28/progress` -> `200`
+- 当前已无 `Phase 4` 开发缺口，可切入 `Phase 5`
 
 ## 首批只读工具建议
 

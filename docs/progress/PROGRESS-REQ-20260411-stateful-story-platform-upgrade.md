@@ -7,13 +7,12 @@
 
 ## 当前快照
 
-- Current Phase: `Phase 4` 已启动
-- Current Task: `Phase 4.3` 首轮真实联调已完成，等待修复版部署后复验 `runtime-state`
-- Last Completed: 已完成 `Phase 4.3` 首轮线上联调，确认 `story-context` 首批接口 `5/6` 通过
+- Current Phase: `Phase 4` 已完成
+- Current Task: `Phase 4` 已收口，准备进入 `Phase 5`
+- Last Completed: 已完成 `Phase 4.3` 修复版线上复验，确认 `story-context` 首批接口 `6/6` 全通过
 - Next Action:
-  - 部署 `DefaultCharacterRuntimeStateQueryService` 空值修复
-  - 复验 `GET /api/story-context/projects/28/characters/15/runtime-state`
-  - 复验通过后切入 `Phase 5`
+  - 编写 `Phase 5` 详细实施计划
+  - 开始消费 `Phase 4` 只读上下文能力
 - Blockers:
   - 旧主线 `REQ-20260409-generation-reliability-refactor` 已归档，但其代码成果和回归报告仍需作为迁移基线继续参考
   - `MCP` 与 `LSP` 的边界尚未形成代码级实现，只完成讨论与文档收敛
@@ -78,6 +77,10 @@
     - 已通过：
       - `mvn -Dmaven.repo.local=/usr/local/project/github/story-weaver/.cache/m2 -DskipTests compile`
       - `mvn test -pl backend -am -Dtest=DefaultCharacterRuntimeStateQueryServiceTest,StoryContextControllerTest,DefaultProjectBriefQueryServiceTest,DefaultStoryUnitSummaryQueryServiceTest,DefaultStoryContextQueryServiceTest -Dsurefire.failIfNoSpecifiedTests=false -Dmaven.repo.local=/usr/local/project/github/story-weaver/.cache/m2`
+  - 已完成 `Phase 4.3` 修复版二次联调：
+    - `GET /api/story-context/projects/28/characters/15/runtime-state` -> `200`
+    - 其余 `story-context` 接口继续保持 `200`
+    - 当前首批只读上下文接口已达到 `6/6` 全通过
   - 已确认用户界面默认只展示摘要是新的硬原则
   - 已确认结构化字段主要服务于 MCP/LSP、编排层和状态机
   - 已确认不采用“万能基类”，而采用 `StoryUnit + Facets` 协议壳
