@@ -7,12 +7,13 @@
 
 ## 当前快照
 
-- Current Phase: `Phase 4` 已完成
-- Current Task: `Phase 4` 已收口，准备进入 `Phase 5`
-- Last Completed: 已完成 `Phase 4.3` 修复版线上复验，确认 `story-context` 首批接口 `6/6` 全通过
+- Current Phase: `Phase 6` 已启动
+- Current Task: `Phase 6.1` 兼容型 `SceneExecutionStateQueryService` 已落地，等待部署联调
+- Last Completed: 已完成 `Phase 6.1` 第一批代码与本地回归
 - Next Action:
-  - 编写 `Phase 5` 详细实施计划
-  - 开始消费 `Phase 4` 只读上下文能力
+  - 部署 `Phase 6.1`
+  - 验证 `sceneBindingContext` 是否从 `SCENE_QUERY_UNAVAILABLE` 升级为真实绑定语义
+  - 再进入 `Phase 6.2` 的章节骨架生成
 - Blockers:
   - 旧主线 `REQ-20260409-generation-reliability-refactor` 已归档，但其代码成果和回归报告仍需作为迁移基线继续参考
   - `MCP` 与 `LSP` 的边界尚未形成代码级实现，只完成讨论与文档收敛
@@ -81,6 +82,109 @@
     - `GET /api/story-context/projects/28/characters/15/runtime-state` -> `200`
     - 其余 `story-context` 接口继续保持 `200`
     - 当前首批只读上下文接口已达到 `6/6` 全通过
+  - 已启动 `Phase 5.1`：
+    - 已新增 `docs/plans/PLAN-REQ-20260411-stateful-story-platform-upgrade-phase5-multi-session-orchestration-v1.md`
+    - 已新增多 session 编排首批合同：
+      - `StorySessionContextPacket`
+      - `SessionExecutionTrace`
+      - `SessionExecutionTraceItem`
+      - `StorySessionContextAssembler`
+      - `StorySessionOrchestrator`
+    - 已新增 backend 首批实现：
+      - `DefaultStorySessionContextAssembler`
+      - `DefaultStorySessionOrchestrator`
+    - 已新增最小单测：
+      - `DefaultStorySessionContextAssemblerTest`
+  - 已启动 `Phase 5.2`：
+    - 已新增多 session 编排合同：
+      - `DirectorSessionService`
+      - `SelectorSessionService`
+      - `WriterExecutionBriefBuilder`
+      - `StorySessionPreview`
+    - 已新增 backend 首批实现：
+      - `RuleBasedDirectorSessionService`
+      - `RuleBasedSelectorSessionService`
+      - `DefaultWriterExecutionBriefBuilder`
+      - `StorySessionOrchestrationController`
+    - 已新增部署测试入口：
+      - `GET /api/story-orchestration/projects/{projectId}/chapters/{chapterId}/preview`
+    - 已通过本地验证：
+      - `mvn -Dmaven.repo.local=/usr/local/project/github/story-weaver/.cache/m2 -DskipTests compile`
+      - `mvn test -pl backend -am -Dtest=DefaultStorySessionContextAssemblerTest,DefaultStorySessionOrchestratorTest,StorySessionOrchestrationControllerTest -Dsurefire.failIfNoSpecifiedTests=false -Dmaven.repo.local=/usr/local/project/github/story-weaver/.cache/m2`
+  - 已启动 `Phase 5.3`：
+    - 已新增多 session 编排合同：
+      - `WriterSessionService`
+      - `ReviewerSessionService`
+      - `WriterSessionResult`
+    - 已新增 backend 首批实现：
+      - `RuleBasedWriterSessionService`
+      - `RuleBasedReviewerSessionService`
+      - `DefaultStorySessionOrchestrator` 已升级为四 session 最小闭环
+    - 当前 `StorySessionPreview` 已可返回：
+      - `contextPacket`
+      - `candidates`
+      - `selectionDecision`
+      - `writerExecutionBrief`
+      - `writerSessionResult`
+      - `reviewDecision`
+      - `trace`
+    - 当前 trace 已包含 5 个最小阶段：
+      - `director-candidates`
+      - `selector-decision`
+      - `writer-brief`
+      - `writer-result`
+      - `reviewer-decision`
+    - 已完成首轮真实联调：
+      - `GET /api/story-orchestration/projects/28/chapters/31/preview` -> `200`
+      - 返回结构包含：
+        - `contextPacket`
+        - `candidates`
+        - `selectionDecision`
+        - `writerExecutionBrief`
+        - `writerSessionResult`
+        - `reviewDecision`
+        - `trace`
+      - `GET /api/story-orchestration/projects/28/chapters/31/preview?sceneId=scene-2` -> `200`
+      - 未认证访问 -> `401`
+  - 已确认当前缺口：
+    - `sceneId` 已透传，但尚未绑定真实 `SceneExecutionState`
+    - 不同 `sceneId` 当前除字段值外，返回结果基本一致
+  - 已完成 `Phase 5.4` 本地收口：
+    - 已新增：
+      - `SceneBindingContext`
+      - `SceneBindingMode`
+    - `StorySessionContextPacket` 当前已显式返回：
+      - `sceneId`
+      - `sceneBindingContext`
+    - `DefaultStorySessionContextAssembler` 已明确区分：
+      - `SCENE_BOUND`
+      - `SCENE_FALLBACK_TO_LATEST`
+      - `CHAPTER_COLD_START`
+      - `SCENE_QUERY_UNAVAILABLE`
+    - `DefaultStorySessionOrchestrator` 已新增编排首步：
+      - `context-scene-binding`
+    - `SessionExecutionTraceItem` 已固定新增字段：
+      - `attempt`
+      - `retryable`
+      - `details`
+    - `writer / reviewer` trace 已补：
+      - 自动修复可否重试
+      - 风险数量
+      - writer brief 的承接信息与目标字数
+    - 已完成本地回归：
+      - `DefaultStorySessionContextAssemblerTest`
+      - `DefaultStorySessionOrchestratorTest`
+      - `StorySessionOrchestrationControllerTest`
+  - 已完成 `Phase 5.4` 真实联调：
+    - `GET /api/story-orchestration/projects/28/chapters/31/preview` -> `200`
+    - `GET /api/story-orchestration/projects/28/chapters/31/preview?sceneId=scene-2` -> `200`
+    - `GET /api/story-orchestration/projects/28/chapters/31/preview?sceneId=scene-999` -> `200`
+    - `contextPacket.sceneBindingContext` 已真实返回
+    - `trace.items[*].attempt / retryable / details` 已真实返回
+    - 当前真实返回已明确：
+      - `mode=SCENE_QUERY_UNAVAILABLE`
+      - `sceneId` 仅做参数透传
+    - 已确认当前剩余缺口不再属于 `Phase 5`，而属于 `Phase 6` 的真实 scene 状态承接
   - 已确认用户界面默认只展示摘要是新的硬原则
   - 已确认结构化字段主要服务于 MCP/LSP、编排层和状态机
   - 已确认不采用“万能基类”，而采用 `StoryUnit + Facets` 协议壳

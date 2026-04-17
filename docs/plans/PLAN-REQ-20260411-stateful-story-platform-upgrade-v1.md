@@ -207,7 +207,7 @@
 
 当前状态：
 
-- 已启动
+- 已完成
 - 已完成 `Phase 4` 开场收口：
   - 后端共享 Maven 模块已从项目根目录物理收拢到 `backend/modules/*`
   - 根工程构建入口保持不变
@@ -215,10 +215,10 @@
 - `Phase 4.1` 首批只读视图与统一查询合同已冻结
 - `Phase 4.2` 首批查询实现已启动，并完成第一批服务骨架与最小 service 级测试
 - `Phase 4.3` 已启动，并落下最小只读查询出口
-- `Phase 4` 已进入部署前收口阶段，当前只差真实联调
-- 下一步继续 `Phase 4.2 / 4.3`：
-  - 先部署并做真实联调
-  - 通过后再进入 `Phase 5`
+- `Phase 4` 已完成真实联调与修复版复验
+- 当前判断：
+  - `Phase 4` 已完成
+  - 可进入 `Phase 5`
 
 第一批只读工具：
 
@@ -259,6 +259,34 @@
 - 共享统一快照和结构化状态。
 - 除写手外尽量输出结构化结果。
 
+当前状态：
+
+- `Phase 5.1` 已完成
+- `Phase 5.2` 已完成
+- `Phase 5.3` 已完成首轮真实联调
+- `Phase 5.4` 已完成真实联调收口
+- 当前已开放部署测试入口：
+  - `GET /api/story-orchestration/projects/{projectId}/chapters/{chapterId}/preview`
+- 当前 preview 已可返回：
+  - `contextPacket`
+  - `candidates`
+  - `selectionDecision`
+  - `writerExecutionBrief`
+  - `writerSessionResult`
+  - `reviewDecision`
+  - `trace`
+- 当前 `contextPacket` 已新增：
+  - `sceneBindingContext`
+- 当前 `trace` 已固定新增：
+  - `attempt`
+  - `retryable`
+  - `details`
+
+当前判断：
+
+- `Phase 5` 已完成
+- 下一步不再继续扩 `Phase 5`，而是进入 `Phase 6` 的真实 scene 承接与章节骨架
+
 退出条件：
 
 - session 间的输入输出协议可回放、可追踪、可重试。
@@ -280,6 +308,16 @@
 退出条件：
 
 - 镜头之间通过显式 handoff state 交接，而不是隐式承接。
+
+当前状态：
+
+- 详细计划已创建：
+  - `docs/plans/PLAN-REQ-20260411-stateful-story-platform-upgrade-phase6-scene-skeleton-and-execution-v1.md`
+- `Phase 6.1` 已启动并已落兼容型 `SceneExecutionStateQueryService`
+- 当前下一步：
+  - 部署 `Phase 6.1`
+  - 验证 `sceneBindingContext` 是否从 `SCENE_QUERY_UNAVAILABLE` 升级为真实绑定语义
+  - 再进入 `Phase 6.2`
 
 ### Phase 7. 增量状态系统
 

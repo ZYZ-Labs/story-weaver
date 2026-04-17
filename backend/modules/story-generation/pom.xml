@@ -21,6 +21,11 @@
             <artifactId>story-domain</artifactId>
             <version>${project.version}</version>
         </dependency>
+        <dependency>
+            <groupId>com.storyweaver</groupId>
+            <artifactId>story-storyunit</artifactId>
+            <version>${project.version}</version>
+        </dependency>
 
         <dependency>
             <groupId>org.projectlombok</groupId>

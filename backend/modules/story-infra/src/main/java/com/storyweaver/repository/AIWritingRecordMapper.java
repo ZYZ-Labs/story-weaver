@@ -20,4 +20,13 @@ public interface AIWritingRecordMapper extends BaseMapper<AIWritingRecord> {
             ORDER BY r.create_time DESC
             """)
     List<AIWritingRecord> findByProjectId(@Param("projectId") Long projectId);
+
+    @Select("""
+            SELECT *
+            FROM ai_writing_record
+            WHERE chapter_id = #{chapterId}
+              AND deleted = 0
+            ORDER BY create_time ASC, id ASC
+            """)
+    List<AIWritingRecord> findByChapterId(@Param("chapterId") Long chapterId);
 }

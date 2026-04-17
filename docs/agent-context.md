@@ -29,7 +29,7 @@
   - 前端信息架构
   - 文档治理制度
 - `REQ-20260409-generation-reliability-refactor` 已归档，但其 report 仍保留为当前代码稳定性与线上样本基线。
-- `Phase 4` 已启动，当前不再停留在模块归位，而是已经进入首批只读查询服务实现。
+- `Phase 4` 已完成，当前已进入 `Phase 5` 多 session 编排联调前阶段。
 - 第一份详细实施计划已创建：
   - `docs/plans/PLAN-REQ-20260411-stateful-story-platform-upgrade-phase1-foundation-v1.md`
 - 第二份详细实施计划已创建：
@@ -144,8 +144,9 @@
     - 普通模式步骤收口为“说想法 -> AI 整理 -> 看变化 -> 确认写回”
     - 普通模式不再强制先选结构意图
 - 当前下一步应进入：
-  - 编写 `Phase 5` 详细实施计划
-  - 开始基于 `StoryContextQueryService` 与 `/api/story-context/*` 进入下一阶段实现
+  - 部署 `Phase 6.1`
+  - 验证 `sceneBindingContext` 是否升级为真实绑定语义
+  - 再进入 `Phase 6.2` 的章节骨架生成
 - 最新修正：
   - 已确认线上 `POST /api/summary-workflow/chat-turns` 已恢复 `HTTP 200`
   - 已确认普通模式返回结果可继续进入 `proposal / preview`
@@ -168,12 +169,63 @@
       - `docs/reports/REPORT-20260413-summary-workflow-browser-validation-round2.md`
 - 当前阶段已切换为：
   - `Phase 3` 已完成
-  - `Phase 4` 已启动
+  - `Phase 4` 已完成
   - `Phase 4.1` 已完成
   - `Phase 4.2` 已完成首批实现
-  - `Phase 4.3` 已完成本地开发侧收口
+  - `Phase 4.3` 已完成线上联调收口
+  - `Phase 5` 已启动
+  - `Phase 5.1` 已完成
+  - `Phase 5.2` 已完成
+  - `Phase 5.3` 已完成首轮真实联调
+  - `Phase 5.4` 已完成真实联调收口
+  - `Phase 6` 详细计划已创建：
+    - `docs/plans/PLAN-REQ-20260411-stateful-story-platform-upgrade-phase6-scene-skeleton-and-execution-v1.md`
+  - `Phase 6.1` 已启动并已落兼容型 `SceneExecutionStateQueryService`
+  - 当前实现基于现有 `AIWritingRecord` 历史记录衍生 scene 读模型
 - 当前统一构建入口应使用根工程：
   - `mvn -Dmaven.repo.local=/usr/local/project/github/story-weaver/.cache/m2 -DskipTests compile`
+- `Phase 5` 当前已新增：
+  - `docs/plans/PLAN-REQ-20260411-stateful-story-platform-upgrade-phase5-multi-session-orchestration-v1.md`
+  - `backend/modules/story-generation/src/main/java/com/storyweaver/story/generation/orchestration/*`
+  - `backend/src/main/java/com/storyweaver/story/generation/orchestration/impl/*`
+  - `backend/src/main/java/com/storyweaver/controller/StorySessionOrchestrationController.java`
+  - 部署测试入口：
+    - `GET /api/story-orchestration/projects/{projectId}/chapters/{chapterId}/preview`
+  - 当前 preview 已可返回：
+    - `contextPacket`
+    - `candidates`
+    - `selectionDecision`
+    - `writerExecutionBrief`
+    - `writerSessionResult`
+    - `reviewDecision`
+    - `trace`
+  - `Phase 5.4` 当前已新增：
+    - `SceneBindingContext`
+    - `SceneBindingMode`
+    - `contextPacket.sceneBindingContext`
+    - `trace.items[*].attempt`
+    - `trace.items[*].retryable`
+    - `trace.items[*].details`
+  - 已完成首轮真实联调：
+    - `GET /api/story-orchestration/projects/28/chapters/31/preview` -> `200`
+    - `GET /api/story-orchestration/projects/28/chapters/31/preview?sceneId=scene-2` -> `200`
+    - 未认证访问 -> `401`
+  - `Phase 5.4` 已完成本地收口：
+    - `sceneId` 不再只是参数透传
+    - 已显式区分：
+      - `SCENE_BOUND`
+      - `SCENE_FALLBACK_TO_LATEST`
+      - `CHAPTER_COLD_START`
+      - `SCENE_QUERY_UNAVAILABLE`
+    - 编排 trace 首步固定为：
+      - `context-scene-binding`
+  - `Phase 5.4` 已完成真实联调：
+    - `sceneBindingContext` 已真实返回
+    - `trace.items[*].attempt / retryable / details` 已真实返回
+    - 当前线上真实返回为：
+      - `SCENE_QUERY_UNAVAILABLE`
+      - `sceneId` 仅做参数透传
+    - 当前剩余缺口已明确后移到 `Phase 6`
 - 当前后端共享模块物理位置：
   - `backend/modules/story-domain`
   - `backend/modules/story-storyunit`
@@ -205,6 +257,7 @@
    - `docs/plans/PLAN-REQ-20260411-stateful-story-platform-upgrade-phase2-storyunit-storage-v1.md`
    - `docs/plans/PLAN-REQ-20260411-stateful-story-platform-upgrade-phase3-summary-first-workflow-v1.md`
    - `docs/plans/PLAN-REQ-20260411-stateful-story-platform-upgrade-phase4-readonly-mcp-lsp-v1.md`
+   - `docs/plans/PLAN-REQ-20260411-stateful-story-platform-upgrade-phase5-multi-session-orchestration-v1.md`
 5. 再读取：
    - `docs/architecture/ARCH-REQ-20260411-story-unit-and-facets-v1.md`
    - `docs/architecture/ARCH-REQ-20260412-storyunit-mapping-matrix-v1.md`
