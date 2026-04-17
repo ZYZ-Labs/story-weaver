@@ -4,7 +4,7 @@
 - Plan ID: PLAN-REQ-20260411-stateful-story-platform-upgrade-phase4-readonly-mcp-lsp-v1
 - Status: In Progress
 - Created At: 2026-04-13 Asia/Shanghai
-- Updated At: 2026-04-13 Asia/Shanghai
+- Updated At: 2026-04-17 Asia/Shanghai
 
 ## 本轮目标
 
@@ -45,6 +45,7 @@
 - `backend/modules/story-infra`
 - 根工程 `mvn -DskipTests compile` 已通过
 - `backend/modules/story-storyunit/src/main/java/com/storyweaver/storyunit/context/*` 已落下首批只读视图与统一查询接口
+- `backend/src/main/java/com/storyweaver/storyunit/context/impl/*` 已落下 `Phase 4.2` 首批查询实现骨架
 
 这一步不改变模块职责，只为 `Phase 4.1` 的只读查询服务和未来 `story-mcp / story-lsp` 模块落位打底。
 
@@ -120,6 +121,24 @@
 
 - 首批上下文可由服务端统一读取，不再散落在 controller 或 prompt builder 中
 
+当前进展：
+
+- 已实现：
+  - `DefaultProjectBriefQueryService`
+  - `DefaultStoryUnitSummaryQueryService`
+  - `DefaultChapterAnchorBundleQueryService`
+  - `DefaultReaderKnownStateQueryService`
+  - `DefaultCharacterRuntimeStateQueryService`
+  - `DefaultRecentStoryProgressQueryService`
+  - `DefaultStoryContextQueryService`
+- 已完成根工程编译验证
+- 已完成首批 service 级测试：
+  - `DefaultProjectBriefQueryServiceTest`
+  - `DefaultStoryUnitSummaryQueryServiceTest`
+  - `DefaultStoryContextQueryServiceTest`
+- 尚未开始：
+  - 对外工具化出口
+
 ### `Phase 4.3` 工具化出口与最小联调
 
 目标：
@@ -136,6 +155,23 @@
 
 - 应用层可通过“工具调用风格”读取上下文，而不是继续直接拼 repository 查询
 
+当前进展：
+
+- 已新增最小只读查询出口：
+  - `GET /api/story-context/projects/{projectId}/brief`
+  - `GET /api/story-context/story-units/summary`
+  - `GET /api/story-context/projects/{projectId}/chapters/{chapterId}/anchors`
+  - `GET /api/story-context/projects/{projectId}/chapters/{chapterId}/reader-known-state`
+  - `GET /api/story-context/projects/{projectId}/characters/{characterId}/runtime-state`
+  - `GET /api/story-context/projects/{projectId}/progress`
+- 对应 controller：
+  - `backend/src/main/java/com/storyweaver/controller/StoryContextController.java`
+- 已完成根工程编译与首批 service 级测试回归
+- 已完成首批 controller 级回归：
+  - `backend/src/test/java/com/storyweaver/controller/StoryContextControllerTest.java`
+- 尚未开始：
+  - 真实部署联调
+
 ### `Phase 4.4` 收口与下一阶段准备
 
 目标：
@@ -151,6 +187,25 @@
 退出条件：
 
 - `Phase 5` 可直接基于这批只读能力进入实现
+
+当前收口结论：
+
+- `Phase 4` 的开发侧主链已经齐备：
+  - 只读视图合同
+  - 统一查询服务
+  - 最小工具化出口
+  - service / controller 两层回归
+- `Phase 5` 应优先消费：
+  - `StoryContextQueryService`
+  - `/api/story-context/*` 只读出口
+  - 首批固定工具名：
+    - `get_project_brief`
+    - `get_story_unit_summary`
+    - `get_chapter_anchor_bundle`
+    - `get_reader_known_state`
+    - `get_character_runtime_state`
+    - `get_recent_story_progress`
+- 当前剩余项只剩真实部署联调，不再是本地开发缺口
 
 ## 首批只读工具建议
 
@@ -205,6 +260,7 @@
 - 后端共享模块已统一收拢到 `backend/modules/*`
 - 首批只读工具协议已冻结
 - 统一查询服务已落地
+- 已完成本地 service / controller 回归
 - 至少一条真实上下文读取链已完成联调
 - 主进度和 agent context 已切到 `Phase 4`
 

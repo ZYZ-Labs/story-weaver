@@ -1,6 +1,6 @@
 # Agent Context
 
-- Last Updated: 2026-04-13 Asia/Shanghai
+- Last Updated: 2026-04-17 Asia/Shanghai
 - Current Primary Req: REQ-20260411-stateful-story-platform-upgrade
 
 ## Active Requirements
@@ -29,7 +29,7 @@
   - 前端信息架构
   - 文档治理制度
 - `REQ-20260409-generation-reliability-refactor` 已归档，但其 report 仍保留为当前代码稳定性与线上样本基线。
-- `Phase 4` 已启动，当前第一步不是直接上 `MCP / LSP` 工具，而是先完成后端共享模块的物理归位与构建口径稳定。
+- `Phase 4` 已启动，当前不再停留在模块归位，而是已经进入首批只读查询服务实现。
 - 第一份详细实施计划已创建：
   - `docs/plans/PLAN-REQ-20260411-stateful-story-platform-upgrade-phase1-foundation-v1.md`
 - 第二份详细实施计划已创建：
@@ -65,9 +65,35 @@
 - `Phase 4` 开场收口已完成：
   - 后端共享模块已统一物理迁入 `backend/modules/*`
   - 根工程 `mvn -DskipTests compile` 已继续通过
-- `Phase 4.1` 已开始：
+- `Phase 4.1` 已完成：
   - 已在 `backend/modules/story-storyunit/src/main/java/com/storyweaver/storyunit/context/*` 冻结首批只读视图与统一查询接口
-  - 当前仍未进入 `backend` 侧实现层
+- `Phase 4.2` 已开始：
+  - 已在 `backend/src/main/java/com/storyweaver/storyunit/context/impl/*` 落首批统一只读查询服务
+  - 当前已具备：
+    - `DefaultProjectBriefQueryService`
+    - `DefaultStoryUnitSummaryQueryService`
+    - `DefaultChapterAnchorBundleQueryService`
+    - `DefaultReaderKnownStateQueryService`
+    - `DefaultCharacterRuntimeStateQueryService`
+    - `DefaultRecentStoryProgressQueryService`
+    - `DefaultStoryContextQueryService`
+  - 当前已完成首批 service 级测试：
+    - `DefaultProjectBriefQueryServiceTest`
+    - `DefaultStoryUnitSummaryQueryServiceTest`
+    - `DefaultStoryContextQueryServiceTest`
+  - `Phase 4.3` 已开始：
+  - `Phase 4.3` 已完成本地开发侧收口：
+    - 已新增 `StoryContextController`
+    - 已开放最小只读查询出口：
+      - `GET /api/story-context/projects/{projectId}/brief`
+      - `GET /api/story-context/story-units/summary`
+      - `GET /api/story-context/projects/{projectId}/chapters/{chapterId}/anchors`
+      - `GET /api/story-context/projects/{projectId}/chapters/{chapterId}/reader-known-state`
+      - `GET /api/story-context/projects/{projectId}/characters/{characterId}/runtime-state`
+      - `GET /api/story-context/projects/{projectId}/progress`
+    - 已完成 `StoryContextControllerTest`
+  - 当前尚未进入：
+    - 真实部署联调
 - 当前阶段状态：
   - `Phase 2.1` 已完成
   - `Phase 2.2` 核心实现已完成
@@ -111,9 +137,8 @@
     - 普通模式步骤收口为“说想法 -> AI 整理 -> 看变化 -> 确认写回”
     - 普通模式不再强制先选结构意图
 - 当前下一步应进入：
-  - 开始 `Phase 4.1`
-  - 继续补齐首批只读工具与查询对象
-  - 落统一只读查询服务
+  - 部署后执行 `story-context` 真实联调
+  - 联调通过后进入 `Phase 5`
 - 最新修正：
   - 已确认线上 `POST /api/summary-workflow/chat-turns` 已恢复 `HTTP 200`
   - 已确认普通模式返回结果可继续进入 `proposal / preview`
@@ -137,6 +162,9 @@
 - 当前阶段已切换为：
   - `Phase 3` 已完成
   - `Phase 4` 已启动
+  - `Phase 4.1` 已完成
+  - `Phase 4.2` 已完成首批实现
+  - `Phase 4.3` 已完成本地开发侧收口
 - 当前统一构建入口应使用根工程：
   - `mvn -Dmaven.repo.local=/usr/local/project/github/story-weaver/.cache/m2 -DskipTests compile`
 - 当前后端共享模块物理位置：

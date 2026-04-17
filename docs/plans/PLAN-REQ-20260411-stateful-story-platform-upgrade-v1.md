@@ -4,7 +4,7 @@
 - Plan Version: v1
 - Status: In Progress
 - Created At: 2026-04-11 Asia/Shanghai
-- Updated At: 2026-04-13 Asia/Shanghai
+- Updated At: 2026-04-17 Asia/Shanghai
 
 ## 计划定位
 
@@ -212,9 +212,13 @@
   - 后端共享 Maven 模块已从项目根目录物理收拢到 `backend/modules/*`
   - 根工程构建入口保持不变
   - `backend/Dockerfile` 已同步新布局
-- 下一步进入 `Phase 4.1`：
-  - 冻结首批只读工具
-  - 落统一查询服务
+- `Phase 4.1` 首批只读视图与统一查询合同已冻结
+- `Phase 4.2` 首批查询实现已启动，并完成第一批服务骨架与最小 service 级测试
+- `Phase 4.3` 已启动，并落下最小只读查询出口
+- `Phase 4` 已进入部署前收口阶段，当前只差真实联调
+- 下一步继续 `Phase 4.2 / 4.3`：
+  - 先部署并做真实联调
+  - 通过后再进入 `Phase 5`
 
 第一批只读工具：
 

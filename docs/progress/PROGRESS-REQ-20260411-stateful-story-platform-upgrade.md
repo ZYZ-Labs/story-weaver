@@ -3,16 +3,16 @@
 - Req ID: REQ-20260411-stateful-story-platform-upgrade
 - Status: In Progress
 - Created At: 2026-04-11 Asia/Shanghai
-- Updated At: 2026-04-13 Asia/Shanghai
+- Updated At: 2026-04-17 Asia/Shanghai
 
 ## 当前快照
 
 - Current Phase: `Phase 4` 已启动
-- Current Task: 已开始 `Phase 4.1` 的只读视图与统一查询合同冻结
-- Last Completed: 已完成 `Phase 4` 开场收口，并落下 `Phase 4.1` 首批只读查询合同
+- Current Task: `Phase 4` 已进入部署前收口，等待真实联调
+- Last Completed: 已完成 `Phase 4.3` 最小只读查询出口与 controller 级回归
 - Next Action:
-  - 冻结首批只读 `MCP / LSP` 工具与查询对象
-  - 开始统一只读查询服务
+  - 部署后执行 `story-context` 真实联调
+  - 联调通过后切入 `Phase 5`
 - Blockers:
   - 旧主线 `REQ-20260409-generation-reliability-refactor` 已归档，但其代码成果和回归报告仍需作为迁移基线继续参考
   - `MCP` 与 `LSP` 的边界尚未形成代码级实现，只完成讨论与文档收敛
@@ -40,6 +40,27 @@
     - `CharacterRuntimeStateView`
     - `RecentStoryProgressView`
     - `StoryContextQueryService`
+  - 已在 `backend/src/main/java/com/storyweaver/storyunit/context/impl` 落下 `Phase 4.2` 首批查询实现：
+    - `DefaultProjectBriefQueryService`
+    - `DefaultStoryUnitSummaryQueryService`
+    - `DefaultChapterAnchorBundleQueryService`
+    - `DefaultReaderKnownStateQueryService`
+    - `DefaultCharacterRuntimeStateQueryService`
+    - `DefaultRecentStoryProgressQueryService`
+    - `DefaultStoryContextQueryService`
+  - 已完成 `Phase 4.2` 首批 service 级测试：
+    - `DefaultProjectBriefQueryServiceTest`
+    - `DefaultStoryUnitSummaryQueryServiceTest`
+    - `DefaultStoryContextQueryServiceTest`
+  - 已启动 `Phase 4.3` 并新增最小只读查询出口：
+    - `GET /api/story-context/projects/{projectId}/brief`
+    - `GET /api/story-context/story-units/summary`
+    - `GET /api/story-context/projects/{projectId}/chapters/{chapterId}/anchors`
+    - `GET /api/story-context/projects/{projectId}/chapters/{chapterId}/reader-known-state`
+    - `GET /api/story-context/projects/{projectId}/characters/{characterId}/runtime-state`
+    - `GET /api/story-context/projects/{projectId}/progress`
+  - 已完成 `Phase 4.3` controller 级回归：
+    - `StoryContextControllerTest`
   - 已确认用户界面默认只展示摘要是新的硬原则
   - 已确认结构化字段主要服务于 MCP/LSP、编排层和状态机
   - 已确认不采用“万能基类”，而采用 `StoryUnit + Facets` 协议壳
@@ -310,8 +331,8 @@
   - 已将 `Character / WorldSetting / Chapter` 的新增与编辑统一收口到摘要工作流
   - 专家模式已调整为默认直填摘要，并保留切回旧表单的入口
 - 当前未完成：
-  - `Phase 4.1` 的首批只读工具与查询对象尚未冻结
-  - `Phase 4.1` 的统一只读查询服务尚未开始
+  - `Phase 4.2` 的查询覆盖面仍偏窄，但已满足首批只读工具目标
+  - `Phase 4` 的真实部署联调尚未开始
 
 ## [2026-04-13 Asia/Shanghai] 启动 Phase 4：后端共享模块物理归位
 
@@ -360,8 +381,31 @@
   - `backend/modules/story-storyunit/src/main/java/com/storyweaver/storyunit/context/RecentStoryProgressView.java`
   - `backend/modules/story-storyunit/src/main/java/com/storyweaver/storyunit/context/StoryContextQueryService.java`
 - 当前仍未开始：
-  - `backend` 侧的统一查询实现
   - 任何 `MCP / LSP` 工具化出口
+
+### `Phase 4.2` 首批统一只读查询服务
+
+- 已新增查询接口：
+  - `backend/modules/story-storyunit/src/main/java/com/storyweaver/storyunit/context/ProjectBriefQueryService.java`
+  - `backend/modules/story-storyunit/src/main/java/com/storyweaver/storyunit/context/StoryUnitSummaryQueryService.java`
+  - `backend/modules/story-storyunit/src/main/java/com/storyweaver/storyunit/context/ChapterAnchorBundleQueryService.java`
+  - `backend/modules/story-storyunit/src/main/java/com/storyweaver/storyunit/context/ReaderKnownStateQueryService.java`
+  - `backend/modules/story-storyunit/src/main/java/com/storyweaver/storyunit/context/CharacterRuntimeStateQueryService.java`
+  - `backend/modules/story-storyunit/src/main/java/com/storyweaver/storyunit/context/RecentStoryProgressQueryService.java`
+- 已新增 `backend` 侧默认实现：
+  - `DefaultProjectBriefQueryService`
+  - `DefaultStoryUnitSummaryQueryService`
+  - `DefaultChapterAnchorBundleQueryService`
+  - `DefaultReaderKnownStateQueryService`
+  - `DefaultCharacterRuntimeStateQueryService`
+  - `DefaultRecentStoryProgressQueryService`
+  - `DefaultStoryContextQueryService`
+- 当前口径：
+  - 已完成第一批只读查询服务骨架与聚合入口
+  - 已完成根工程编译验证
+  - 已完成首批 service 级测试
+  - 已完成最小对外工具化出口
+  - 已完成 controller 级回归
 
 ## 关键节点记录
 
