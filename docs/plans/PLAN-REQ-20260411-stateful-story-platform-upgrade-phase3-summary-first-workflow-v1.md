@@ -104,7 +104,7 @@
 ## 范围外
 
 - 不在本阶段落地 MCP Server
-- 不在本阶段落地 LSP Server
+- 不在本阶段落地 State Server
 - 不在本阶段做四 session 编排主链接入
 - 不在本阶段做所有对象页全面重构
 - 不在本阶段引入 Items / Skills / Factions / Locations 的完整支持

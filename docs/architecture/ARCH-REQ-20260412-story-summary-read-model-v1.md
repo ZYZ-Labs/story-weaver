@@ -98,6 +98,6 @@ assembler 不再直接生成最终 `DefaultSummaryFacet`，而是先组装 `Stor
 
 ## 贡献与署名说明
 
-- `Summary First`、用户默认只看摘要、结构字段主要服务于 MCP/LSP 的方向：用户提出。
+- `Summary First`、用户默认只看摘要、结构字段主要服务于 MCP/State Server 的方向：用户提出。
 - `StorySummaryDraft`、规则型摘要回生成、统一读模型收口实现：Codex 完成。
 - 本文档由 Codex 撰写整理，方案基于双方共同讨论形成。

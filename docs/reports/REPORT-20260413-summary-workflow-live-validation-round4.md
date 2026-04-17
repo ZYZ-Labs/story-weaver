@@ -82,7 +82,7 @@
 
 下一阶段应切换到：
 
-- `Phase 4. Read-Only MCP 与 LSP 基础设施`
+- `Phase 4. Read-Only MCP 与 State Server 基础设施`
 
 ## 备注
 

@@ -16,7 +16,7 @@
   - 再进入 `Phase 6.2` 的章节骨架生成
 - Blockers:
   - 旧主线 `REQ-20260409-generation-reliability-refactor` 已归档，但其代码成果和回归报告仍需作为迁移基线继续参考
-  - `MCP` 与 `LSP` 的边界尚未形成代码级实现，只完成讨论与文档收敛
+  - `MCP` 与 `State Server` 的边界尚未形成代码级实现，只完成讨论与文档收敛
   - 前端现有页面结构仍是旧工作流，尚未切到新信息架构
 - Latest Verified:
   - 已完成 `Phase 4` 开场收口：
@@ -186,7 +186,7 @@
       - `sceneId` 仅做参数透传
     - 已确认当前剩余缺口不再属于 `Phase 5`，而属于 `Phase 6` 的真实 scene 状态承接
   - 已确认用户界面默认只展示摘要是新的硬原则
-  - 已确认结构化字段主要服务于 MCP/LSP、编排层和状态机
+  - 已确认结构化字段主要服务于 MCP/State Server、编排层和状态机
   - 已确认不采用“万能基类”，而采用 `StoryUnit + Facets` 协议壳
   - 已确认后续采用四 session：
     - 总导
@@ -413,7 +413,7 @@
     - `git diff --check`
 - Latest Unverified:
   - `StoryUnit` 的存储落地方式
-  - `MCP/LSP` 的实际运行形态
+  - `MCP/State Server` 的实际运行形态
   - 模块化单体的首轮拆分方案是否会影响现有主链
   - 前端信息架构在真实页面中的可用性
   - `storyunit` 与现有 domain/repository 的迁移耦合面还没有正式开始切
@@ -505,7 +505,7 @@
   - `backend/modules/story-storyunit/src/main/java/com/storyweaver/storyunit/context/RecentStoryProgressView.java`
   - `backend/modules/story-storyunit/src/main/java/com/storyweaver/storyunit/context/StoryContextQueryService.java`
 - 当前仍未开始：
-  - 任何 `MCP / LSP` 工具化出口
+  - 任何 `MCP / State Server` 工具化出口
 
 ### `Phase 4.2` 首批统一只读查询服务
 
@@ -542,7 +542,7 @@
   - 确认采用 `Summary First`
   - 确认采用 `StoryUnit + Facets`
   - 确认采用模块化单体
-  - 确认采用 `MCP/LSP + 四 session 编排 + 镜头级写作`
+  - 确认采用 `MCP/State Server + 四 session 编排 + 镜头级写作`
   - 启动新版 requirement / plan / progress 文档编写
 - 修改文件:
   - `docs/requirements/REQ-20260411-stateful-story-platform-upgrade.md`
@@ -584,7 +584,7 @@
   - `docs/agent-context.md`
 - 风险/遗留:
   - 当前仍是协议层，不含 repository/service 实现
-  - `MCP/LSP` 仍未进入可运行服务阶段
+  - `MCP/State Server` 仍未进入可运行服务阶段
   - 粗粒度模块拆分尚未开始
 - 下一步:
   - 收敛 Phase 1A 剩余命名与边界后，切到 `Phase 1B` 详细拆分计划

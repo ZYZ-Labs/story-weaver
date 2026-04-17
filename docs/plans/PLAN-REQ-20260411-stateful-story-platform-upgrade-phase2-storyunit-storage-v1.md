@@ -11,7 +11,7 @@
 在不引入“大总表”和不打断现有业务主链的前提下，完成 `StoryUnit + Facets` 的首轮存储映射策略、服务协议和首批对象族落地方案，为后续：
 
 - `Summary First` 对象工作流
-- `MCP / LSP` 只读接入
+- `MCP / State Server` 只读接入
 - 多 session 编排读取统一上下文
 
 提供稳定基础。
@@ -60,7 +60,7 @@
 原因：
 
 - 当前业务已经有成熟实体表，强行一次性折叠到新表风险过高
-- 先做 projection，可以尽快让 MCP/LSP 和多 session 有统一读取对象
+- 先做 projection，可以尽快让 MCP/State Server 和多 session 有统一读取对象
 - 后续如果确实需要专用 snapshot / event / patch 存储，再增量引入
 
 ### 2. SummaryFacet 先成为默认输出
@@ -77,7 +77,7 @@
 原因：
 
 - 用户层只看摘要
-- MCP/LSP 第一阶段也更依赖稳定摘要和 canon，而不是所有运行时状态一次做完
+- MCP/State Server 第一阶段也更依赖稳定摘要和 canon，而不是所有运行时状态一次做完
 
 ### 3. 首批对象族只做三类
 
@@ -110,7 +110,7 @@
 ## 范围外
 
 - 不在本阶段落地 MCP 运行服务
-- 不在本阶段落地 LSP 服务器实现
+- 不在本阶段落地 State Server 服务器实现
 - 不在本阶段继续迁移 `generation.impl`
 - 不在本阶段继续迁移 controller / security / provider 实现层
 - 不在本阶段重写前端对象页
@@ -229,7 +229,7 @@
 
 - 现有实体表负责“事实存储”
 - `StoryUnitProjectionService` 负责“统一读取视图”
-- 后续 MCP/LSP 默认优先读投影结果，而不是直接读底层表结构
+- 后续 MCP/State Server 默认优先读投影结果，而不是直接读底层表结构
 
 这样做的结果是：
 
@@ -607,6 +607,6 @@
 
 ## 贡献与署名说明
 
-- `StoryUnit` 需要承载 MCP/LSP 基础读写，但不能变成超级大对象的方向：用户提出。
+- `StoryUnit` 需要承载 MCP/State Server 基础读写，但不能变成超级大对象的方向：用户提出。
 - `projection-first`、首批对象族、阶段拆解与实施路线：Codex 完成。
 - 当前方案由用户与 Codex 共同讨论形成。

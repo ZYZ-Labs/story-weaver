@@ -1,4 +1,4 @@
-# 模块边界、MCP 与 LSP 运行架构
+# 模块边界、MCP 与 State Server 运行架构
 
 - Req ID: REQ-20260411-stateful-story-platform-upgrade
 - Arch Doc Version: v1
@@ -11,16 +11,16 @@
 本架构文档解决三个问题：
 
 1. 当前单模块工程如何升级成模块化单体。
-2. `MCP Server` 与 `LSP Server` 的职责如何划分。
+2. `MCP Server` 与 `State Server` 的职责如何划分。
 3. 未来状态、摘要、候选、镜头、trace 应该从哪里读、往哪里写。
 
 ## 命名约定
 
-为了避免和常见的 `Language Server Protocol` 混淆，这里把本项目内的 `LSP` 明确定义为：
+为避免和常见的 `Language Server Protocol` 混淆，本文不再使用 `LSP` 这个缩写，统一改称：
 
-- `Local Story Protocol Server`
+- `State Server`
 
-它的职责不是代码补全，而是本地故事状态协议服务。
+它的职责不是代码补全，而是本地故事状态管理与状态协议服务。
 
 ## 打包策略
 
@@ -32,7 +32,7 @@
 ### 后续可能演进
 
 - `MCP Server` 可独立进程化
-- `LSP Server` 可独立进程化
+- `State Server` 可独立进程化
 - Provider Adapter 可按需外拆
 
 但在第一阶段，不要求立即拆成多进程。
@@ -104,7 +104,7 @@
 - 对外暴露稳定工具面
 - 主要承接上下文读取与受控写回
 
-### 10. `story-lsp-server`
+### 10. `story-state-server`
 
 - 本地故事状态协议服务
 - 快照、patch、event、state read model
@@ -147,7 +147,7 @@
 - `story-generation-orchestrator -> director/writer/reviewer/mcp/lsp/provider`
 - `story-director / writer / reviewer -> domain + mcp/lsp + provider`
 - `story-mcp-server -> canon/state/relation/reveal/execution read services`
-- `story-lsp-server -> snapshot/patch/event/state services`
+- `story-state-server -> snapshot/patch/event/state services`
 - `story-provider` 不依赖前端和业务 controller
 
 不允许：
@@ -186,9 +186,9 @@
 - 写回必须受控
 - 不把 MCP 当成“模型自由探索数据库”的通道
 
-## LSP Server 职责
+## State Server 职责
 
-### LSP 的核心价值
+### State Server 的核心价值
 
 - 管理运行时状态
 - 管理快照
@@ -196,7 +196,7 @@
 - 管理 event
 - 管理 session handoff
 
-### LSP 应承载的内容
+### State Server 应承载的内容
 
 - `StorySnapshot`
 - `StoryPatch`
@@ -206,10 +206,10 @@
 - `CharacterStateDelta`
 - `OpenLoopState`
 
-### 为什么要单独设 LSP
+### 为什么要单独设 State Server
 
-因为 MCP 更像工具暴露面，而 LSP 更像状态协议和状态读模型。  
-MCP 适合“调用什么”，LSP 适合“状态现在是什么”。
+因为 MCP 更像工具暴露面，而 State Server 更像状态协议和状态读模型。
+MCP 适合“调用什么”，State Server 适合“状态现在是什么”。
 
 ## 读写边界矩阵
 
@@ -269,7 +269,7 @@ MCP 适合“调用什么”，LSP 适合“状态现在是什么”。
 
 ### 第三阶段
 
-- 把总导、写手、审校链路逐步改成只读 MCP/LSP。
+- 把总导、写手、审校链路逐步改成只读 MCP/State Server。
 
 ### 第四阶段
 
@@ -277,7 +277,6 @@ MCP 适合“调用什么”，LSP 适合“状态现在是什么”。
 
 ## 贡献与署名说明
 
-- “必须拆模块，并把 MCP/LSP 纳入主架构”的方向：用户提出。
+- “必须拆模块，并把 MCP/State Server 纳入主架构”的方向：用户提出。
 - 模块边界、运行职责、依赖方向和迁移策略整理：Codex 完成。
-- MCP/LSP 的边界判断与单 JAR 前提下的实施方式：用户与 Codex 共同讨论形成。
-
+- MCP/State Server 的边界判断与单 JAR 前提下的实施方式：用户与 Codex 共同讨论形成。

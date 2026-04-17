@@ -92,13 +92,13 @@
 - 镜头执行
 - 审校结果
 - generation trace
-- MCP/LSP 调用检查
+- MCP/State Server 调用检查
 
 ### 5. 系统台
 
 - Provider
 - MCP Server
-- LSP Server
+- State Server
 - 设置
 - 策略开关
 
@@ -193,7 +193,7 @@
 
 - raw trace
 - MCP tool call
-- LSP snapshot
+- state snapshot
 - provider errors
 
 ## 最先需要重构的页面
@@ -209,4 +209,3 @@
 - “现有前端问题不在样式而在结构”以及“字段表单必须退居二线”的判断：用户提出。
 - 顶层信息架构、模式分层、章节工作区和对象详情结构设计：Codex 完成。
 - “用户只看摘要、结构下沉为协议层”的前端原则由用户与 Codex 共同讨论形成。
-

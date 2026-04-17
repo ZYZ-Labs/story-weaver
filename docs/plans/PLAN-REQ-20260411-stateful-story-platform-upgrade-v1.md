@@ -106,7 +106,7 @@
 - `story-writer`
 - `story-reviewer`
 - `story-mcp-server`
-- `story-lsp-server`
+- `story-state-server`
 - `story-provider`
 - `story-settings`
 - `story-web`
@@ -121,7 +121,7 @@
 目标：
 
 - 建立统一的基础读写单位。
-- 让未来所有 MCP/LSP 调用和状态承接都围绕统一协议进行。
+- 让未来所有 MCP/State Server 调用和状态承接都围绕统一协议进行。
 
 核心对象：
 
@@ -199,7 +199,7 @@
   - `Phase 3` 已完成
   - `Phase 4` 可以启动
 
-### Phase 4. Read-Only MCP 与 LSP 基础设施
+### Phase 4. Read-Only MCP 与 State Server 基础设施
 
 目标：
 
@@ -240,7 +240,7 @@
 
 退出条件：
 
-- 应用编排层可通过 MCP/LSP 稳定读取上下文，而不是继续拼超长 prompt。
+- 应用编排层可通过 MCP/State Server 稳定读取上下文，而不是继续拼超长 prompt。
 
 ### Phase 5. 多 Session 编排落地
 

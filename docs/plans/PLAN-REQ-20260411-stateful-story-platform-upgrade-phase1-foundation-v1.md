@@ -11,7 +11,7 @@
 在不立即打散现有单模块工程的前提下，先把未来平台升级最关键的协议骨架和细分包边界冻结下来，为后续的：
 
 - 模块化单体拆分
-- MCP / LSP 接入
+- MCP / State Server 接入
 - 多 session 编排
 - Summary First 对象工作流
 
@@ -45,7 +45,7 @@
 - 落 `StoryUnit`、`Facet`、`Patch`、`Snapshot`、`StoryEvent` 的代码骨架
 - 定义首批枚举、接口、基础值对象
 - 定义旧实体到新协议层的 adapter 接口
-- 定义 MCP/LSP 第一批 read service 接口
+- 定义 MCP/State Server 第一批 read service 接口
 - 定义多 session 编排需要的最小输入输出协议
 
 ### 范围外
@@ -54,7 +54,7 @@
 - 不立即改前端页面
 - 不立即改数据库结构
 - 不立即把写作主链切到新协议层
-- 不立即实现 MCP/LSP 运行服务
+- 不立即实现 MCP/State Server 运行服务
 
 ## 当前实施快照
 
@@ -109,7 +109,7 @@
 当前实现定位：
 
 - 这是协议冻结和命名冻结，不是业务迁移
-- 这批代码允许 `Phase 1B` 开始拆模块，也允许后续 generation / MCP / LSP 从统一契约起步
+- 这批代码允许 `Phase 1B` 开始拆模块，也允许后续 generation / MCP / State Server 从统一契约起步
 - 当前状态：
   - `Phase 1A` 已完成
   - 后续不再回到本阶段补零散协议命名
@@ -249,7 +249,7 @@
 
 目标：
 
-- 给未来 MCP/LSP 读取侧固定接口
+- 给未来 MCP/State Server 读取侧固定接口
 
 ### Task 7. 落多 session 最小协议
 
@@ -337,7 +337,7 @@
 
 再下一步：
 
-- `Phase 1D：MCP/LSP 只读接口与本地调试入口`
+- `Phase 1D：MCP/State Server 只读接口与本地调试入口`
 
 ## 贡献与署名说明
 

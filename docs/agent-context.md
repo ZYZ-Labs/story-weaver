@@ -7,7 +7,7 @@
 
 | Priority | Req ID | Name | Status | Requirement Doc | Plan Doc | Progress Doc |
 | --- | --- | --- | --- | --- | --- | --- |
-| High | REQ-20260411-stateful-story-platform-upgrade | Story 平台级架构升级：Summary First、StoryUnit、MCP/LSP 与多 Session 编排 | In Progress | `docs/requirements/REQ-20260411-stateful-story-platform-upgrade.md` | `docs/plans/PLAN-REQ-20260411-stateful-story-platform-upgrade-v1.md` | `docs/progress/PROGRESS-REQ-20260411-stateful-story-platform-upgrade.md` |
+| High | REQ-20260411-stateful-story-platform-upgrade | Story 平台级架构升级：Summary First、StoryUnit、MCP/State Server 与多 Session 编排 | In Progress | `docs/requirements/REQ-20260411-stateful-story-platform-upgrade.md` | `docs/plans/PLAN-REQ-20260411-stateful-story-platform-upgrade-v1.md` | `docs/progress/PROGRESS-REQ-20260411-stateful-story-platform-upgrade.md` |
 
 ## Archived Requirements
 
@@ -24,7 +24,7 @@
 - 当前第一优先级不再是继续修旧总导 prompt，而是建立：
   - `StoryUnit + Facets`
   - 模块化单体边界
-  - `MCP / LSP`
+  - `MCP / State Server`
   - 多 session 写作管线
   - 前端信息架构
   - 文档治理制度
@@ -240,7 +240,7 @@
 
 - 新主线已完成 `Phase 1`、`Phase 2` 与 `Phase 3`，当前进入 `Phase 4`。
 - `StoryUnit` 已完成第一批协议、代码骨架与模块迁移，但尚未完成存储映射与 service/repository 实装。
-- `MCP / LSP` 边界已明确，但还没有形成服务层和接口层实现。
+- `MCP / State Server` 边界已明确，但还没有形成服务层和接口层实现。
 - 前端仍是旧信息架构，尚未切到工作台模式。
 - 旧主线中的真实 provider fallback 问题仍存在，后续需要作为平台升级前的稳定性基线继续跟踪。
 - `summary-workflow` 已在线上真实跑通 proposal / preview / apply，Redis proposal store 也已恢复可用。
@@ -256,13 +256,13 @@
    - `docs/plans/PLAN-REQ-20260411-stateful-story-platform-upgrade-phase1-modularization-v1.md`
    - `docs/plans/PLAN-REQ-20260411-stateful-story-platform-upgrade-phase2-storyunit-storage-v1.md`
    - `docs/plans/PLAN-REQ-20260411-stateful-story-platform-upgrade-phase3-summary-first-workflow-v1.md`
-   - `docs/plans/PLAN-REQ-20260411-stateful-story-platform-upgrade-phase4-readonly-mcp-lsp-v1.md`
+   - `docs/plans/PLAN-REQ-20260411-stateful-story-platform-upgrade-phase4-readonly-mcp-state-server-v1.md`
    - `docs/plans/PLAN-REQ-20260411-stateful-story-platform-upgrade-phase5-multi-session-orchestration-v1.md`
 5. 再读取：
    - `docs/architecture/ARCH-REQ-20260411-story-unit-and-facets-v1.md`
    - `docs/architecture/ARCH-REQ-20260412-storyunit-mapping-matrix-v1.md`
    - `docs/architecture/ARCH-REQ-20260412-story-summary-read-model-v1.md`
-   - `docs/architecture/ARCH-REQ-20260411-module-boundaries-and-mcp-lsp-v1.md`
+   - `docs/architecture/ARCH-REQ-20260411-module-boundaries-and-mcp-state-server-v1.md`
    - `docs/architecture/ARCH-REQ-20260411-writing-pipeline-and-scene-execution-v1.md`
    - `docs/architecture/ARCH-REQ-20260411-frontend-information-architecture-v1.md`
    - `docs/governance/GOV-REQ-20260411-documentation-and-planning-workflow-v1.md`
@@ -283,7 +283,7 @@
 - 新主线的硬原则已固定：
   - `Summary First`
   - `StoryUnit + Facets`
-  - `MCP / LSP`
+  - `MCP / State Server`
   - 四 session 编排
   - 章节骨架 + 镜头执行
   - 每次开发前必须拆详细计划

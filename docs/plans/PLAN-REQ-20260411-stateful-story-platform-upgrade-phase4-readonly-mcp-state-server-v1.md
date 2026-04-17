@@ -1,14 +1,14 @@
-# Story 平台升级 Phase 4 详细实施计划：Read-Only MCP 与 LSP 基础设施
+# Story 平台升级 Phase 4 详细实施计划：Read-Only MCP 与 State Server 基础设施
 
 - Req ID: REQ-20260411-stateful-story-platform-upgrade
-- Plan ID: PLAN-REQ-20260411-stateful-story-platform-upgrade-phase4-readonly-mcp-lsp-v1
+- Plan ID: PLAN-REQ-20260411-stateful-story-platform-upgrade-phase4-readonly-mcp-state-server-v1
 - Status: Completed
 - Created At: 2026-04-13 Asia/Shanghai
 - Updated At: 2026-04-17 Asia/Shanghai
 
 ## 本轮目标
 
-在 `Phase 3` 已完成 `Summary First` 对象工作流的基础上，开始建设只读 `MCP / LSP` 基础设施，为后续多 session 编排、章节骨架、镜头执行和状态交接提供稳定的外部上下文读取能力。
+在 `Phase 3` 已完成 `Summary First` 对象工作流的基础上，开始建设只读 `MCP / State Server` 基础设施，为后续多 session 编排、章节骨架、镜头执行和状态交接提供稳定的外部上下文读取能力。
 
 本阶段只做三件事：
 
@@ -29,7 +29,7 @@
 
 ## Phase 4 开场动作
 
-在正式进入只读 `MCP / LSP` 查询协议之前，先完成工程收口：
+在正式进入只读 `MCP / State Server` 查询协议之前，先完成工程收口：
 
 - 将后端共享 Maven 模块从项目根目录统一迁入 `backend/modules/*`
 - 保持根工程聚合入口不变，继续使用根 `pom.xml` 统一构建
