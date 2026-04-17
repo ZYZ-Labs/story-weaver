@@ -92,8 +92,13 @@
       - `GET /api/story-context/projects/{projectId}/characters/{characterId}/runtime-state`
       - `GET /api/story-context/projects/{projectId}/progress`
     - 已完成 `StoryContextControllerTest`
-  - 当前尚未进入：
-    - 真实部署联调
+  - `Phase 4.3` 已完成首轮真实部署联调：
+    - `project brief / story unit summary / anchors / reader known state / progress` 已线上通过
+    - `character runtime state` 在真实数据下触发 `HTTP 500`
+    - 根因已定位为 `DefaultCharacterRuntimeStateQueryService` 的 `List.of(null)` 空值缺陷
+    - 本地已完成修复并新增 `DefaultCharacterRuntimeStateQueryServiceTest`
+  - 当前尚未完成：
+    - 修复版部署后复验 `runtime-state`
 - 当前阶段状态：
   - `Phase 2.1` 已完成
   - `Phase 2.2` 核心实现已完成
@@ -137,8 +142,9 @@
     - 普通模式步骤收口为“说想法 -> AI 整理 -> 看变化 -> 确认写回”
     - 普通模式不再强制先选结构意图
 - 当前下一步应进入：
-  - 部署后执行 `story-context` 真实联调
-  - 联调通过后进入 `Phase 5`
+  - 部署后复验 `GET /api/story-context/projects/28/characters/15/runtime-state`
+  - 复验通过后收口 `Phase 4.3`
+  - 再进入 `Phase 4.4 / Phase 5`
 - 最新修正：
   - 已确认线上 `POST /api/summary-workflow/chat-turns` 已恢复 `HTTP 200`
   - 已确认普通模式返回结果可继续进入 `proposal / preview`

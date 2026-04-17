@@ -8,11 +8,12 @@
 ## 当前快照
 
 - Current Phase: `Phase 4` 已启动
-- Current Task: `Phase 4` 已进入部署前收口，等待真实联调
-- Last Completed: 已完成 `Phase 4.3` 最小只读查询出口与 controller 级回归
+- Current Task: `Phase 4.3` 首轮真实联调已完成，等待修复版部署后复验 `runtime-state`
+- Last Completed: 已完成 `Phase 4.3` 首轮线上联调，确认 `story-context` 首批接口 `5/6` 通过
 - Next Action:
-  - 部署后执行 `story-context` 真实联调
-  - 联调通过后切入 `Phase 5`
+  - 部署 `DefaultCharacterRuntimeStateQueryService` 空值修复
+  - 复验 `GET /api/story-context/projects/28/characters/15/runtime-state`
+  - 复验通过后切入 `Phase 5`
 - Blockers:
   - 旧主线 `REQ-20260409-generation-reliability-refactor` 已归档，但其代码成果和回归报告仍需作为迁移基线继续参考
   - `MCP` 与 `LSP` 的边界尚未形成代码级实现，只完成讨论与文档收敛
@@ -61,6 +62,22 @@
     - `GET /api/story-context/projects/{projectId}/progress`
   - 已完成 `Phase 4.3` controller 级回归：
     - `StoryContextControllerTest`
+  - 已完成 `Phase 4.3` 首轮真实部署联调：
+    - `GET /api/story-context/projects/28/brief` -> `200`
+    - `GET /api/story-context/story-units/summary?unitId=31&unitKey=chapter:31&unitType=CHAPTER` -> `200`
+    - `GET /api/story-context/projects/28/chapters/31/anchors` -> `200`
+    - `GET /api/story-context/projects/28/chapters/31/reader-known-state` -> `200`
+    - `GET /api/story-context/projects/28/progress?limit=5` -> `200`
+    - `GET /api/story-context/projects/28/characters/15/runtime-state` -> `500`
+  - 已完成缺陷定位：
+    - `DefaultCharacterRuntimeStateQueryService` 使用 `List.of(...)` 拼装 `stateTags`
+    - 真实数据存在空值组合，触发 `NullPointerException`
+  - 已完成本地修复与回归：
+    - `DefaultCharacterRuntimeStateQueryService` 已改为 `Arrays.asList(...) + sanitizeDistinct(...)`
+    - 已新增 `DefaultCharacterRuntimeStateQueryServiceTest`
+    - 已通过：
+      - `mvn -Dmaven.repo.local=/usr/local/project/github/story-weaver/.cache/m2 -DskipTests compile`
+      - `mvn test -pl backend -am -Dtest=DefaultCharacterRuntimeStateQueryServiceTest,StoryContextControllerTest,DefaultProjectBriefQueryServiceTest,DefaultStoryUnitSummaryQueryServiceTest,DefaultStoryContextQueryServiceTest -Dsurefire.failIfNoSpecifiedTests=false -Dmaven.repo.local=/usr/local/project/github/story-weaver/.cache/m2`
   - 已确认用户界面默认只展示摘要是新的硬原则
   - 已确认结构化字段主要服务于 MCP/LSP、编排层和状态机
   - 已确认不采用“万能基类”，而采用 `StoryUnit + Facets` 协议壳

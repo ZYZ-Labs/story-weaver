@@ -13,6 +13,7 @@ import com.storyweaver.storyunit.context.CharacterRuntimeStateQueryService;
 import com.storyweaver.storyunit.context.CharacterRuntimeStateView;
 import org.springframework.stereotype.Service;
 
+import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -55,7 +56,7 @@ public class DefaultCharacterRuntimeStateQueryService implements CharacterRuntim
         }
 
         List<String> inventoryNames = loadInventoryNames(projectId, characterId);
-        List<String> stateTags = ContextViewSupport.sanitizeDistinct(List.of(
+        List<String> stateTags = ContextViewSupport.sanitizeDistinct(Arrays.asList(
                 projectLink.getRoleType(),
                 projectLink.getProjectRole(),
                 character.getActiveStage(),

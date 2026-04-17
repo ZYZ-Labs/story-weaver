@@ -169,8 +169,18 @@
 - 已完成根工程编译与首批 service 级测试回归
 - 已完成首批 controller 级回归：
   - `backend/src/test/java/com/storyweaver/controller/StoryContextControllerTest.java`
-- 尚未开始：
-  - 真实部署联调
+- 已完成首轮真实部署联调：
+  - `project brief` 通过
+  - `story unit summary` 通过
+  - `chapter anchor bundle` 通过
+  - `reader known state` 通过
+  - `recent story progress` 通过
+  - `character runtime state` 发现真实空值缺陷并触发 `HTTP 500`
+- 已完成本地修复：
+  - `DefaultCharacterRuntimeStateQueryService` 已修复 `List.of(null)` 导致的 `NullPointerException`
+  - 已补 `DefaultCharacterRuntimeStateQueryServiceTest`
+- 当前剩余项：
+  - 部署修复版后复验 `runtime-state`
 
 ### `Phase 4.4` 收口与下一阶段准备
 
