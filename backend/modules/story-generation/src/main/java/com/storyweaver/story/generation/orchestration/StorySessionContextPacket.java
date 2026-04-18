@@ -6,6 +6,7 @@ import com.storyweaver.storyunit.context.ProjectBriefView;
 import com.storyweaver.storyunit.context.ReaderKnownStateView;
 import com.storyweaver.storyunit.context.RecentStoryProgressView;
 import com.storyweaver.storyunit.context.StoryUnitSummaryView;
+import com.storyweaver.storyunit.session.SceneHandoffSnapshot;
 import com.storyweaver.storyunit.session.SceneExecutionState;
 
 import java.util.List;
@@ -22,6 +23,7 @@ public record StorySessionContextPacket(
         ReaderKnownStateView readerKnownState,
         RecentStoryProgressView recentStoryProgress,
         List<CharacterRuntimeStateView> characterRuntimeStates,
+        SceneHandoffSnapshot previousSceneHandoff,
         List<SceneExecutionState> existingSceneStates) {
 
     public StorySessionContextPacket {

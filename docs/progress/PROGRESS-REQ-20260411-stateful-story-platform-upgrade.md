@@ -3,22 +3,80 @@
 - Req ID: REQ-20260411-stateful-story-platform-upgrade
 - Status: In Progress
 - Created At: 2026-04-11 Asia/Shanghai
-- Updated At: 2026-04-17 Asia/Shanghai
+- Updated At: 2026-04-18 Asia/Shanghai
 
 ## 当前快照
 
-- Current Phase: `Phase 6` 已启动
-- Current Task: `Phase 6.1` 兼容型 `SceneExecutionStateQueryService` 已落地，等待部署联调
-- Last Completed: 已完成 `Phase 6.1` 第一批代码与本地回归
+- Current Phase: `Phase 6` 进行中
+- Current Task: `Phase 6.3` 已完成最小执行写回与 handoff 落库骨架，进入可部署联调阶段
+- Last Completed: 已完成 `Phase 6.1 / 6.2` 第二轮线上联调收口，并完成 `Phase 6.3` 本地可编译可测试收口
 - Next Action:
-  - 部署 `Phase 6.1`
-  - 验证 `sceneBindingContext` 是否从 `SCENE_QUERY_UNAVAILABLE` 升级为真实绑定语义
-  - 再进入 `Phase 6.2` 的章节骨架生成
+  - 部署 `Phase 6.3` 修订版
+  - 联调 `POST /api/story-orchestration/projects/{projectId}/chapters/{chapterId}/execute`
+  - 验证 `scene runtime state` 与 `handoff snapshot` 的真实写回
+  - 在后续新样本中继续补 `CHAPTER_COLD_START` 真实联调
 - Blockers:
   - 旧主线 `REQ-20260409-generation-reliability-refactor` 已归档，但其代码成果和回归报告仍需作为迁移基线继续参考
-  - `MCP` 与 `State Server` 的边界尚未形成代码级实现，只完成讨论与文档收敛
+  - `MCP` 与 `State Server` 的边界仍未形成独立 server 形态，只完成读模型、查询服务与编排消费层
   - 前端现有页面结构仍是旧工作流，尚未切到新信息架构
+  - 当前 `旧日王座` 样本缺少无历史写作记录章节，暂时无法在线上补齐 `CHAPTER_COLD_START` 验证
 - Latest Verified:
+  - 已完成 `Phase 6.3` 本地开发收口：
+    - 已新增：
+      - `SceneHandoffSnapshot`
+      - `SceneRuntimeStateStore`
+      - `SceneExecutionWriteService`
+      - `SceneExecutionWriteResult`
+      - `StorySessionExecution`
+      - `SceneExecutionRequest`
+    - 已新增执行入口：
+      - `POST /api/story-orchestration/projects/{projectId}/chapters/{chapterId}/execute`
+    - 已完成 runtime store：
+      - `ResilientSceneRuntimeStateStore`
+      - `SceneRuntimeProperties`
+    - 已完成 orchestrator 最小写回接线：
+      - `DefaultStorySessionOrchestrator.execute(...)`
+      - `DefaultSceneExecutionWriteService`
+    - 已新增 `旧日王座` 联调样本设计文档：
+      - `docs/test-data/TESTDATA-20260418-old-throne-phase6-regression-samples-v1.md`
+    - 已完成本地回归：
+      - `DefaultSceneExecutionStateQueryServiceTest`
+      - `DefaultStorySessionContextAssemblerTest`
+      - `DefaultSceneExecutionWriteServiceTest`
+      - `RuleBasedChapterSkeletonPlannerTest`
+      - `StorySessionOrchestrationControllerTest`
+      - `DefaultStorySessionOrchestratorTest`
+    - 已通过：
+      - `mvn -Dmaven.repo.local=/usr/local/project/github/story-weaver/.cache/m2 -DskipTests compile`
+      - `mvn test -pl backend -am -Dtest=DefaultSceneExecutionStateQueryServiceTest,DefaultStorySessionContextAssemblerTest,DefaultSceneExecutionWriteServiceTest,RuleBasedChapterSkeletonPlannerTest,StorySessionOrchestrationControllerTest,DefaultStorySessionOrchestratorTest -Dsurefire.failIfNoSpecifiedTests=false -Dmaven.repo.local=/usr/local/project/github/story-weaver/.cache/m2`
+  - 已完成 `Phase 6.1 / 6.2` 第二轮线上联调：
+    - `chapter 31 + scene-999` -> `SCENE_FALLBACK_TO_LATEST`
+    - `chapter 31 skeleton-preview` -> `200`
+    - `chapter 32 + scene-1` -> `SCENE_BOUND`
+    - `chapter 32 skeleton-preview` -> `200`
+    - `chapter 34 + scene-1` -> `SCENE_BOUND`
+    - `chapter 34 skeleton-preview` -> `200`
+  - 已确认 `ChapterStoryUnitAssembler` 空值修复在线上生效：
+    - `chapter 32 / 34` 不再返回 `500`
+  - 已确认当前线上真实样本已覆盖：
+    - `SCENE_BOUND`
+    - `SCENE_FALLBACK_TO_LATEST`
+  - 已确认当前线上真实样本尚未覆盖：
+    - `CHAPTER_COLD_START`
+  - 已完成 `Phase 6.1 / 6.2` 首轮线上联调：
+    - `chapter 31 + scene-1` -> `SCENE_BOUND`
+    - `chapter 31 + scene-2` -> `SCENE_BOUND`
+    - `chapter 31 + scene-999` -> `SCENE_FALLBACK_TO_LATEST`
+    - `chapter 31 skeleton-preview` -> `200`
+  - 已完成新缺陷定位：
+    - `chapter 32 / 34 preview` 与 `chapter 32 skeleton-preview` -> `500`
+    - 根因位于 `ChapterStoryUnitAssembler` 的 `List.of(null, ...)` 空值问题
+  - 已完成本地修复与回归：
+    - `ChapterStoryUnitAssembler` 已改为 `compactStrings(...)`
+    - 已新增 `ChapterStoryUnitAssemblerTest`
+    - 已通过：
+      - `mvn -Dmaven.repo.local=/usr/local/project/github/story-weaver/.cache/m2 -DskipTests compile`
+      - `mvn test -pl backend -am -Dtest=ChapterStoryUnitAssemblerTest,RuleBasedChapterSkeletonPlannerTest,StorySessionOrchestrationControllerTest -Dsurefire.failIfNoSpecifiedTests=false -Dmaven.repo.local=/usr/local/project/github/story-weaver/.cache/m2`
   - 已完成 `Phase 4` 开场收口：
     - `story-domain`
     - `story-storyunit`

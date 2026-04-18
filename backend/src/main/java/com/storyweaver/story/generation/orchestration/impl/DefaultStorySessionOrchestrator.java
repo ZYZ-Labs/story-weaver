@@ -2,10 +2,14 @@ package com.storyweaver.story.generation.orchestration.impl;
 
 import com.storyweaver.story.generation.orchestration.DirectorSessionService;
 import com.storyweaver.story.generation.orchestration.SceneBindingMode;
+import com.storyweaver.story.generation.orchestration.SceneExecutionRequest;
+import com.storyweaver.story.generation.orchestration.SceneExecutionWriteResult;
+import com.storyweaver.story.generation.orchestration.SceneExecutionWriteService;
 import com.storyweaver.story.generation.orchestration.SessionExecutionTrace;
 import com.storyweaver.story.generation.orchestration.SessionExecutionTraceItem;
 import com.storyweaver.story.generation.orchestration.SessionTraceStatus;
 import com.storyweaver.story.generation.orchestration.SelectorSessionService;
+import com.storyweaver.story.generation.orchestration.StorySessionExecution;
 import com.storyweaver.story.generation.orchestration.StorySessionContextAssembler;
 import com.storyweaver.story.generation.orchestration.StorySessionContextPacket;
 import com.storyweaver.story.generation.orchestration.StorySessionOrchestrator;
@@ -35,6 +39,7 @@ public class DefaultStorySessionOrchestrator implements StorySessionOrchestrator
     private final WriterExecutionBriefBuilder writerExecutionBriefBuilder;
     private final WriterSessionService writerSessionService;
     private final ReviewerSessionService reviewerSessionService;
+    private final SceneExecutionWriteService sceneExecutionWriteService;
 
     public DefaultStorySessionOrchestrator(
             StorySessionContextAssembler storySessionContextAssembler,
@@ -42,13 +47,15 @@ public class DefaultStorySessionOrchestrator implements StorySessionOrchestrator
             SelectorSessionService selectorSessionService,
             WriterExecutionBriefBuilder writerExecutionBriefBuilder,
             WriterSessionService writerSessionService,
-            ReviewerSessionService reviewerSessionService) {
+            ReviewerSessionService reviewerSessionService,
+            SceneExecutionWriteService sceneExecutionWriteService) {
         this.storySessionContextAssembler = storySessionContextAssembler;
         this.directorSessionService = directorSessionService;
         this.selectorSessionService = selectorSessionService;
         this.writerExecutionBriefBuilder = writerExecutionBriefBuilder;
         this.writerSessionService = writerSessionService;
         this.reviewerSessionService = reviewerSessionService;
+        this.sceneExecutionWriteService = sceneExecutionWriteService;
     }
 
     @Override
@@ -68,6 +75,38 @@ public class DefaultStorySessionOrchestrator implements StorySessionOrchestrator
 
     @Override
     public Optional<StorySessionPreview> preview(Long projectId, Long chapterId, String sceneId) {
+        return buildPreview(projectId, chapterId, sceneId);
+    }
+
+    @Override
+    public Optional<StorySessionExecution> execute(SceneExecutionRequest request) {
+        return buildPreview(request.projectId(), request.chapterId(), request.sceneId())
+                .map(preview -> {
+                    SceneExecutionWriteResult writeResult = sceneExecutionWriteService.write(
+                            preview.contextPacket(),
+                            preview.writerExecutionBrief(),
+                            preview.writerSessionResult(),
+                            preview.reviewDecision()
+                    );
+                    SessionExecutionTrace trace = preview.trace().append(new SessionExecutionTraceItem(
+                            SessionRole.ORCHESTRATOR,
+                            "scene-writeback",
+                            SessionTraceStatus.COMPLETED,
+                            "已写回 scene runtime state 与 handoff 快照。",
+                            "sceneExecutionWriteResult",
+                            1,
+                            false,
+                            traceDetails(
+                                    "sceneId", writeResult.sceneExecutionState().sceneId(),
+                                    "status", writeResult.sceneExecutionState().status().name(),
+                                    "nextSceneId", writeResult.handoffSnapshot().toSceneId()
+                            )
+                    ));
+                    return new StorySessionExecution(preview, writeResult, trace);
+                });
+    }
+
+    private Optional<StorySessionPreview> buildPreview(Long projectId, Long chapterId, String sceneId) {
         Optional<StorySessionContextPacket> contextPacket = prepareContext(projectId, chapterId, sceneId);
         if (contextPacket.isEmpty()) {
             return Optional.empty();

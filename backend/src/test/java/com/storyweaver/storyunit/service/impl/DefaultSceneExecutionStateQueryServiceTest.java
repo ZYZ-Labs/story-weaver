@@ -5,12 +5,15 @@ import com.storyweaver.domain.entity.AIWritingRecord;
 import com.storyweaver.domain.entity.Chapter;
 import com.storyweaver.repository.AIWritingRecordMapper;
 import com.storyweaver.service.ChapterService;
+import com.storyweaver.storyunit.service.SceneRuntimeStateStore;
 import com.storyweaver.storyunit.session.SceneExecutionState;
 import com.storyweaver.storyunit.session.SceneExecutionStatus;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.ObjectProvider;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -24,6 +27,8 @@ class DefaultSceneExecutionStateQueryServiceTest {
     void shouldDeriveSceneStatesFromWritingRecords() {
         AIWritingRecordMapper mapper = mock(AIWritingRecordMapper.class);
         ChapterService chapterService = mock(ChapterService.class);
+        @SuppressWarnings("unchecked")
+        ObjectProvider<SceneRuntimeStateStore> runtimeStoreProvider = mock(ObjectProvider.class);
 
         Chapter chapter = new Chapter();
         chapter.setId(31L);
@@ -71,11 +76,13 @@ class DefaultSceneExecutionStateQueryServiceTest {
 
         when(chapterService.getById(31L)).thenReturn(chapter);
         when(mapper.findByChapterId(31L)).thenReturn(List.of(first, second));
+        when(runtimeStoreProvider.getIfAvailable()).thenReturn(null);
 
         DefaultSceneExecutionStateQueryService service = new DefaultSceneExecutionStateQueryService(
                 mapper,
                 chapterService,
-                new ObjectMapper()
+                new ObjectMapper(),
+                runtimeStoreProvider
         );
 
         List<SceneExecutionState> scenes = service.listChapterScenes(28L, 31L);
@@ -93,6 +100,8 @@ class DefaultSceneExecutionStateQueryServiceTest {
     void shouldPreferLatestNonFailedSceneForFallback() {
         AIWritingRecordMapper mapper = mock(AIWritingRecordMapper.class);
         ChapterService chapterService = mock(ChapterService.class);
+        @SuppressWarnings("unchecked")
+        ObjectProvider<SceneRuntimeStateStore> runtimeStoreProvider = mock(ObjectProvider.class);
 
         Chapter chapter = new Chapter();
         chapter.setId(31L);
@@ -121,11 +130,13 @@ class DefaultSceneExecutionStateQueryServiceTest {
 
         when(chapterService.getById(31L)).thenReturn(chapter);
         when(mapper.findByChapterId(31L)).thenReturn(List.of(first, second));
+        when(runtimeStoreProvider.getIfAvailable()).thenReturn(null);
 
         DefaultSceneExecutionStateQueryService service = new DefaultSceneExecutionStateQueryService(
                 mapper,
                 chapterService,
-                new ObjectMapper()
+                new ObjectMapper(),
+                runtimeStoreProvider
         );
 
         Optional<SceneExecutionState> latest = service.findLatestChapterScene(28L, 31L);
@@ -133,6 +144,66 @@ class DefaultSceneExecutionStateQueryServiceTest {
         assertTrue(latest.isPresent());
         assertEquals("scene-1", latest.orElseThrow().sceneId());
         assertEquals(SceneExecutionStatus.COMPLETED, latest.orElseThrow().status());
+    }
+
+    @Test
+    void shouldOverlayRuntimeStateOnTopOfLegacyScene() {
+        AIWritingRecordMapper mapper = mock(AIWritingRecordMapper.class);
+        ChapterService chapterService = mock(ChapterService.class);
+        @SuppressWarnings("unchecked")
+        ObjectProvider<SceneRuntimeStateStore> runtimeStoreProvider = mock(ObjectProvider.class);
+        SceneRuntimeStateStore runtimeStateStore = mock(SceneRuntimeStateStore.class);
+
+        Chapter chapter = new Chapter();
+        chapter.setId(31L);
+        chapter.setProjectId(28L);
+
+        AIWritingRecord first = record(
+                101L,
+                31L,
+                "accepted",
+                "draft",
+                "先做开场",
+                "第一段正文。主角收到了邀请。",
+                null,
+                LocalDateTime.of(2026, 4, 17, 10, 0)
+        );
+
+        SceneExecutionState runtimeScene = new SceneExecutionState(
+                28L,
+                31L,
+                "scene-2",
+                2,
+                SceneExecutionStatus.COMPLETED,
+                "mainline-31",
+                "推进邀请函主线",
+                "主角决定赴约后停住。",
+                List.of("主角决定赴约"),
+                List.of(),
+                List.of(),
+                Map.of("source", "runtime"),
+                "林沉舟按下发送键。",
+                "主角最终决定赴约。"
+        );
+
+        when(chapterService.getById(31L)).thenReturn(chapter);
+        when(mapper.findByChapterId(31L)).thenReturn(List.of(first));
+        when(runtimeStoreProvider.getIfAvailable()).thenReturn(runtimeStateStore);
+        when(runtimeStateStore.listChapterScenes(28L, 31L)).thenReturn(List.of(runtimeScene));
+
+        DefaultSceneExecutionStateQueryService service = new DefaultSceneExecutionStateQueryService(
+                mapper,
+                chapterService,
+                new ObjectMapper(),
+                runtimeStoreProvider
+        );
+
+        List<SceneExecutionState> scenes = service.listChapterScenes(28L, 31L);
+
+        assertEquals(2, scenes.size());
+        assertEquals("scene-1", scenes.get(0).sceneId());
+        assertEquals("scene-2", scenes.get(1).sceneId());
+        assertEquals("主角最终决定赴约。", scenes.get(1).outcomeSummary());
     }
 
     private AIWritingRecord record(

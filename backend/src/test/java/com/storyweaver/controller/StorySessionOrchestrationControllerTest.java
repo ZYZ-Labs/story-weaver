@@ -1,11 +1,17 @@
 package com.storyweaver.controller;
 
 import com.storyweaver.exception.GlobalExceptionHandler;
+import com.storyweaver.story.generation.orchestration.ChapterSkeleton;
+import com.storyweaver.story.generation.orchestration.ChapterSkeletonPlanner;
 import com.storyweaver.story.generation.orchestration.SessionExecutionTrace;
 import com.storyweaver.story.generation.orchestration.SessionExecutionTraceItem;
 import com.storyweaver.story.generation.orchestration.SceneBindingContext;
 import com.storyweaver.story.generation.orchestration.SceneBindingMode;
+import com.storyweaver.story.generation.orchestration.SceneExecutionRequest;
+import com.storyweaver.story.generation.orchestration.SceneExecutionWriteResult;
+import com.storyweaver.story.generation.orchestration.SceneSkeletonItem;
 import com.storyweaver.story.generation.orchestration.SessionTraceStatus;
+import com.storyweaver.story.generation.orchestration.StorySessionExecution;
 import com.storyweaver.story.generation.orchestration.StorySessionContextPacket;
 import com.storyweaver.story.generation.orchestration.StorySessionOrchestrator;
 import com.storyweaver.story.generation.orchestration.StorySessionPreview;
@@ -21,6 +27,9 @@ import com.storyweaver.storyunit.session.DirectorCandidate;
 import com.storyweaver.storyunit.session.DirectorCandidateType;
 import com.storyweaver.storyunit.session.ReviewDecision;
 import com.storyweaver.storyunit.session.ReviewResult;
+import com.storyweaver.storyunit.session.SceneExecutionState;
+import com.storyweaver.storyunit.session.SceneExecutionStatus;
+import com.storyweaver.storyunit.session.SceneHandoffSnapshot;
 import com.storyweaver.storyunit.session.SelectionDecision;
 import com.storyweaver.storyunit.session.SessionRole;
 import com.storyweaver.storyunit.session.WriterExecutionBrief;
@@ -33,8 +42,10 @@ import java.util.List;
 import java.util.Optional;
 
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.eq;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -42,11 +53,13 @@ class StorySessionOrchestrationControllerTest {
 
     private MockMvc mockMvc;
     private StorySessionOrchestrator storySessionOrchestrator;
+    private ChapterSkeletonPlanner chapterSkeletonPlanner;
 
     @BeforeEach
     void setUp() {
         storySessionOrchestrator = mock(StorySessionOrchestrator.class);
-        mockMvc = MockMvcBuilders.standaloneSetup(new StorySessionOrchestrationController(storySessionOrchestrator))
+        chapterSkeletonPlanner = mock(ChapterSkeletonPlanner.class);
+        mockMvc = MockMvcBuilders.standaloneSetup(new StorySessionOrchestrationController(storySessionOrchestrator, chapterSkeletonPlanner))
                 .setControllerAdvice(new GlobalExceptionHandler())
                 .build();
     }
@@ -60,31 +73,7 @@ class StorySessionOrchestrationControllerTest {
 
     @Test
     void shouldReturnPreviewWhenAvailable() throws Exception {
-        StorySessionContextPacket contextPacket = new StorySessionContextPacket(
-                28L,
-                31L,
-                "scene-1",
-                new SceneBindingContext("scene-1", "", SceneBindingMode.CHAPTER_COLD_START, false, "当前章节暂无 scene 执行状态，按冷启动处理。", null),
-                new ProjectBriefView(28L, "旧日王座", "logline", "summary"),
-                new StoryUnitSummaryView(new StoryUnitRef("31", "chapter:31", StoryUnitType.CHAPTER), StoryUnitType.CHAPTER, "退役者的邀请函", "章节摘要"),
-                new ChapterAnchorBundleView(28L, 31L, "退役者的邀请函", 9L, "第一卷", 15L, "林沉舟", List.of("林沉舟"), List.of("剧情"), List.of("剧情"), "章节摘要"),
-                new ReaderKnownStateView(28L, 31L, List.of(), List.of("待揭晓")),
-                new RecentStoryProgressView(28L, List.of()),
-                List.of(),
-                List.of()
-        );
-        StorySessionPreview preview = new StorySessionPreview(
-                contextPacket,
-                List.of(new DirectorCandidate("opening-31", DirectorCandidateType.OPENING, "先做开场定向", List.of("待揭晓"), List.of("pov=林沉舟"), List.of("不要跳过开场"), "完成触发点后停住。", 900, "首段优先开场")),
-                new SelectionDecision("opening-31", "当前是第一段，优先开场。", List.of(), List.of()),
-                new WriterExecutionBrief(28L, 31L, "scene-1", "opening-31", "先做开场定向", List.of("待揭晓"), List.of("pov=林沉舟"), List.of("不要跳过开场"), "完成触发点后停住。", 900, List.of(), ""),
-                new WriterSessionResult("scene-1", "opening-31", "【目标】先做开场定向\n\n【收束点】完成触发点后停住。", "退役者的邀请函 / 先做开场定向"),
-                new ReviewDecision("scene-1", ReviewResult.PASS, "规则审校通过。", List.of(), false, ""),
-                new SessionExecutionTrace(28L, 31L, "scene-1", List.of(
-                        new SessionExecutionTraceItem(SessionRole.ORCHESTRATOR, "context-scene-binding", SessionTraceStatus.COMPLETED, "当前章节暂无 scene 执行状态，按冷启动处理。", "sceneBindingContext", 1, false, java.util.Map.of()),
-                        new SessionExecutionTraceItem(SessionRole.DIRECTOR, "director-candidates", SessionTraceStatus.COMPLETED, "已生成 1 个候选。", "directorCandidates", 1, false, java.util.Map.of("candidateCount", 1))
-                ))
-        );
+        StorySessionPreview preview = samplePreview();
         when(storySessionOrchestrator.preview(28L, 31L, "scene-1")).thenReturn(Optional.of(preview));
 
         mockMvc.perform(get("/api/story-orchestration/projects/28/chapters/31/preview")
@@ -97,5 +86,88 @@ class StorySessionOrchestrationControllerTest {
                 .andExpect(jsonPath("$.data.trace.items[0].role").value("ORCHESTRATOR"))
                 .andExpect(jsonPath("$.data.trace.items[0].attempt").value(1))
                 .andExpect(jsonPath("$.data.trace.items[1].role").value("DIRECTOR"));
+    }
+
+    @Test
+    void shouldReturnExecutionWhenAvailable() throws Exception {
+        StorySessionPreview preview = samplePreview();
+        StorySessionExecution execution = new StorySessionExecution(
+                preview,
+                new SceneExecutionWriteResult(
+                        new SceneExecutionState(28L, 31L, "scene-1", 1, SceneExecutionStatus.COMPLETED, "opening-31",
+                                "先做开场定向", "完成触发点后停住。", List.of("待揭晓"), List.of(), List.of(),
+                                java.util.Map.of("source", "test"), "林沉舟推开门。", "主角完成现实状态定向。"),
+                        new SceneHandoffSnapshot(28L, 31L, "scene-1", "scene-2", "林沉舟推开门。", "主角完成现实状态定向。",
+                                List.of("待揭晓"), List.of(), List.of(), java.util.Map.of("source", "test"), "PASS", "规则审校通过。", java.time.LocalDateTime.of(2026, 4, 18, 12, 0))
+                ),
+                preview.trace().append(new SessionExecutionTraceItem(
+                        SessionRole.ORCHESTRATOR, "scene-writeback", SessionTraceStatus.COMPLETED,
+                        "已写回 scene runtime state 与 handoff 快照。", "sceneExecutionWriteResult", 1, false, java.util.Map.of("sceneId", "scene-1")
+                ))
+        );
+        when(storySessionOrchestrator.execute(eq(new SceneExecutionRequest(28L, 31L, "scene-1")))).thenReturn(Optional.of(execution));
+
+        mockMvc.perform(post("/api/story-orchestration/projects/28/chapters/31/execute")
+                        .param("sceneId", "scene-1")
+                        .header("Authorization", "Bearer test-token"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(200))
+                .andExpect(jsonPath("$.data.writeResult.sceneExecutionState.sceneId").value("scene-1"))
+                .andExpect(jsonPath("$.data.writeResult.handoffSnapshot.toSceneId").value("scene-2"))
+                .andExpect(jsonPath("$.data.trace.items[2].stepKey").value("scene-writeback"));
+    }
+
+    @Test
+    void shouldReturnSkeletonPreviewWhenAvailable() throws Exception {
+        ChapterSkeleton skeleton = new ChapterSkeleton(
+                28L,
+                31L,
+                "skeleton_31_v1",
+                3,
+                "揭晓一条关键信息并留下后续空间后停住。",
+                List.of(
+                        new SceneSkeletonItem("scene-1", 1, SceneExecutionStatus.PLANNED, "完成现实状态定向", List.of("林沉舟已退役两年"), List.of("pov=林沉舟"), "回到家，进入书房前。", 900, "director-candidate")
+                ),
+                List.of("当前章节暂无已执行镜头，骨架按冷启动三镜头生成。")
+        );
+        when(chapterSkeletonPlanner.plan(28L, 31L)).thenReturn(Optional.of(skeleton));
+
+        mockMvc.perform(get("/api/story-orchestration/projects/28/chapters/31/skeleton-preview")
+                        .header("Authorization", "Bearer test-token"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(200))
+                .andExpect(jsonPath("$.data.skeletonId").value("skeleton_31_v1"))
+                .andExpect(jsonPath("$.data.sceneCount").value(3))
+                .andExpect(jsonPath("$.data.scenes[0].sceneId").value("scene-1"))
+                .andExpect(jsonPath("$.data.scenes[0].status").value("PLANNED"));
+    }
+
+    private StorySessionPreview samplePreview() {
+        StorySessionContextPacket contextPacket = new StorySessionContextPacket(
+                28L,
+                31L,
+                "scene-1",
+                new SceneBindingContext("scene-1", "", SceneBindingMode.CHAPTER_COLD_START, false, "当前章节暂无 scene 执行状态，按冷启动处理。", null),
+                new ProjectBriefView(28L, "旧日王座", "logline", "summary"),
+                new StoryUnitSummaryView(new StoryUnitRef("31", "chapter:31", StoryUnitType.CHAPTER), StoryUnitType.CHAPTER, "退役者的邀请函", "章节摘要"),
+                new ChapterAnchorBundleView(28L, 31L, "退役者的邀请函", 9L, "第一卷", 15L, "林沉舟", List.of("林沉舟"), List.of("剧情"), List.of("剧情"), "章节摘要"),
+                new ReaderKnownStateView(28L, 31L, List.of(), List.of("待揭晓")),
+                new RecentStoryProgressView(28L, List.of()),
+                List.of(),
+                null,
+                List.of()
+        );
+        return new StorySessionPreview(
+                contextPacket,
+                List.of(new DirectorCandidate("opening-31", DirectorCandidateType.OPENING, "先做开场定向", List.of("待揭晓"), List.of("pov=林沉舟"), List.of("不要跳过开场"), "完成触发点后停住。", 900, "首段优先开场")),
+                new SelectionDecision("opening-31", "当前是第一段，优先开场。", List.of(), List.of()),
+                new WriterExecutionBrief(28L, 31L, "scene-1", "opening-31", "先做开场定向", List.of("待揭晓"), List.of("pov=林沉舟"), List.of("不要跳过开场"), "完成触发点后停住。", 900, List.of(), ""),
+                new WriterSessionResult("scene-1", "opening-31", "【目标】先做开场定向\n\n【收束点】完成触发点后停住。", "退役者的邀请函 / 先做开场定向"),
+                new ReviewDecision("scene-1", ReviewResult.PASS, "规则审校通过。", List.of(), false, ""),
+                new SessionExecutionTrace(28L, 31L, "scene-1", List.of(
+                        new SessionExecutionTraceItem(SessionRole.ORCHESTRATOR, "context-scene-binding", SessionTraceStatus.COMPLETED, "当前章节暂无 scene 执行状态，按冷启动处理。", "sceneBindingContext", 1, false, java.util.Map.of()),
+                        new SessionExecutionTraceItem(SessionRole.DIRECTOR, "director-candidates", SessionTraceStatus.COMPLETED, "已生成 1 个候选。", "directorCandidates", 1, false, java.util.Map.of("candidateCount", 1))
+                ))
+        );
     }
 }

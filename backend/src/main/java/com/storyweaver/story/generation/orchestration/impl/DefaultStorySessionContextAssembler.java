@@ -9,8 +9,10 @@ import com.storyweaver.storyunit.context.StoryContextQueryService;
 import com.storyweaver.storyunit.model.StoryUnitRef;
 import com.storyweaver.storyunit.model.StoryUnitType;
 import com.storyweaver.storyunit.service.SceneExecutionStateQueryService;
+import com.storyweaver.storyunit.service.SceneRuntimeStateStore;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
+import org.springframework.util.StringUtils;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -21,12 +23,15 @@ public class DefaultStorySessionContextAssembler implements StorySessionContextA
 
     private final StoryContextQueryService storyContextQueryService;
     private final ObjectProvider<SceneExecutionStateQueryService> sceneExecutionStateQueryServiceProvider;
+    private final ObjectProvider<SceneRuntimeStateStore> sceneRuntimeStateStoreProvider;
 
     public DefaultStorySessionContextAssembler(
             StoryContextQueryService storyContextQueryService,
-            ObjectProvider<SceneExecutionStateQueryService> sceneExecutionStateQueryServiceProvider) {
+            ObjectProvider<SceneExecutionStateQueryService> sceneExecutionStateQueryServiceProvider,
+            ObjectProvider<SceneRuntimeStateStore> sceneRuntimeStateStoreProvider) {
         this.storyContextQueryService = storyContextQueryService;
         this.sceneExecutionStateQueryServiceProvider = sceneExecutionStateQueryServiceProvider;
+        this.sceneRuntimeStateStoreProvider = sceneRuntimeStateStoreProvider;
     }
 
     @Override
@@ -76,6 +81,13 @@ public class DefaultStorySessionContextAssembler implements StorySessionContextA
             );
         }
 
+        com.storyweaver.storyunit.session.SceneHandoffSnapshot previousSceneHandoff = resolvePreviousSceneHandoff(
+                projectId,
+                chapterId,
+                sceneId,
+                sceneBindingContext
+        );
+
         return Optional.of(new StorySessionContextPacket(
                 projectId,
                 chapterId,
@@ -87,6 +99,7 @@ public class DefaultStorySessionContextAssembler implements StorySessionContextA
                 readerKnownState.get(),
                 storyContextQueryService.getRecentStoryProgress(projectId, 5),
                 characterRuntimeStates,
+                previousSceneHandoff,
                 existingSceneStates
         ));
     }
@@ -136,5 +149,21 @@ public class DefaultStorySessionContextAssembler implements StorySessionContextA
                 "scene 查询可用，但当前没有可绑定的 scene 执行状态。",
                 null
         );
+    }
+
+    private com.storyweaver.storyunit.session.SceneHandoffSnapshot resolvePreviousSceneHandoff(
+            Long projectId,
+            Long chapterId,
+            String requestedSceneId,
+            SceneBindingContext sceneBindingContext) {
+        SceneRuntimeStateStore runtimeStateStore = sceneRuntimeStateStoreProvider.getIfAvailable();
+        if (runtimeStateStore == null) {
+            return null;
+        }
+        String targetSceneId = StringUtils.hasText(requestedSceneId) ? requestedSceneId.trim() : sceneBindingContext.resolvedSceneId();
+        if (!StringUtils.hasText(targetSceneId)) {
+            return null;
+        }
+        return runtimeStateStore.findHandoffToScene(projectId, chapterId, targetSceneId).orElse(null);
     }
 }

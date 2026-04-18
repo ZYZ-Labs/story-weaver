@@ -80,8 +80,8 @@ public class ChapterStoryUnitAssembler extends AbstractStoryUnitAssembler<Chapte
             StorySummaryDraft draft = new StorySummaryDraft(
                     StoryUnitType.CHAPTER,
                     displayTitle,
-                    List.of(source.chapter().getSummary(), displayTitle),
-                    List.of(source.chapter().getSummary(), abbreviate(source.chapter().getContent(), 240)),
+                    compactStrings(source.chapter().getSummary(), displayTitle),
+                    compactStrings(source.chapter().getSummary(), abbreviate(source.chapter().getContent(), 240)),
                     buildStateFacts(source),
                     buildRelationFacts(source),
                     List.of(),
@@ -223,6 +223,23 @@ public class ChapterStoryUnitAssembler extends AbstractStoryUnitAssembler<Chapte
             return normalized;
         }
         return normalized.substring(0, maxLength).trim() + "...";
+    }
+
+    private static List<String> compactStrings(String... values) {
+        if (values == null || values.length == 0) {
+            return List.of();
+        }
+        List<String> normalized = new ArrayList<>();
+        for (String value : values) {
+            if (!hasText(value)) {
+                continue;
+            }
+            String trimmed = value.trim();
+            if (!normalized.contains(trimmed)) {
+                normalized.add(trimmed);
+            }
+        }
+        return List.copyOf(normalized);
     }
 
     private static void putIfHasText(Map<String, Object> target, String key, String value) {

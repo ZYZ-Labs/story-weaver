@@ -12,6 +12,8 @@ import com.storyweaver.storyunit.context.StoryUnitSummaryView;
 import com.storyweaver.storyunit.model.StoryUnitRef;
 import com.storyweaver.storyunit.model.StoryUnitType;
 import com.storyweaver.storyunit.service.SceneExecutionStateQueryService;
+import com.storyweaver.storyunit.service.SceneRuntimeStateStore;
+import com.storyweaver.storyunit.session.SceneHandoffSnapshot;
 import com.storyweaver.storyunit.session.SceneExecutionState;
 import com.storyweaver.storyunit.session.SceneExecutionStatus;
 import org.junit.jupiter.api.Test;
@@ -34,6 +36,8 @@ class DefaultStorySessionContextAssemblerTest {
         StoryContextQueryService storyContextQueryService = mock(StoryContextQueryService.class);
         @SuppressWarnings("unchecked")
         ObjectProvider<SceneExecutionStateQueryService> sceneStateProvider = mock(ObjectProvider.class);
+        @SuppressWarnings("unchecked")
+        ObjectProvider<SceneRuntimeStateStore> runtimeStoreProvider = mock(ObjectProvider.class);
 
         ProjectBriefView projectBriefView = new ProjectBriefView(28L, "旧日王座", "退役者归来", "摘要");
         StoryUnitSummaryView chapterSummaryView = new StoryUnitSummaryView(
@@ -60,10 +64,12 @@ class DefaultStorySessionContextAssemblerTest {
         when(storyContextQueryService.getCharacterRuntimeState(28L, 15L)).thenReturn(Optional.of(runtimeStateView));
         when(storyContextQueryService.getRecentStoryProgress(28L, 5)).thenReturn(recentStoryProgressView);
         when(sceneStateProvider.getIfAvailable()).thenReturn(null);
+        when(runtimeStoreProvider.getIfAvailable()).thenReturn(null);
 
         DefaultStorySessionContextAssembler assembler = new DefaultStorySessionContextAssembler(
                 storyContextQueryService,
-                sceneStateProvider
+                sceneStateProvider,
+                runtimeStoreProvider
         );
 
         Optional<StorySessionContextPacket> result = assembler.assemble(28L, 31L, "scene-1");
@@ -75,6 +81,7 @@ class DefaultStorySessionContextAssemblerTest {
         assertEquals("林沉舟", result.orElseThrow().characterRuntimeStates().getFirst().characterName());
         assertEquals("scene-1", result.orElseThrow().sceneId());
         assertEquals(SceneBindingMode.SCENE_QUERY_UNAVAILABLE, result.orElseThrow().sceneBindingContext().mode());
+        assertEquals(null, result.orElseThrow().previousSceneHandoff());
     }
 
     @Test
@@ -82,7 +89,10 @@ class DefaultStorySessionContextAssemblerTest {
         StoryContextQueryService storyContextQueryService = mock(StoryContextQueryService.class);
         @SuppressWarnings("unchecked")
         ObjectProvider<SceneExecutionStateQueryService> sceneStateProvider = mock(ObjectProvider.class);
+        @SuppressWarnings("unchecked")
+        ObjectProvider<SceneRuntimeStateStore> runtimeStoreProvider = mock(ObjectProvider.class);
         SceneExecutionStateQueryService sceneExecutionStateQueryService = mock(SceneExecutionStateQueryService.class);
+        SceneRuntimeStateStore runtimeStateStore = mock(SceneRuntimeStateStore.class);
 
         ProjectBriefView projectBriefView = new ProjectBriefView(28L, "旧日王座", "退役者归来", "摘要");
         StoryUnitSummaryView chapterSummaryView = new StoryUnitSummaryView(
@@ -113,13 +123,19 @@ class DefaultStorySessionContextAssemblerTest {
         when(storyContextQueryService.getCharacterRuntimeState(28L, 15L)).thenReturn(Optional.of(runtimeStateView));
         when(storyContextQueryService.getRecentStoryProgress(28L, 5)).thenReturn(recentStoryProgressView);
         when(sceneStateProvider.getIfAvailable()).thenReturn(sceneExecutionStateQueryService);
+        when(runtimeStoreProvider.getIfAvailable()).thenReturn(runtimeStateStore);
         when(sceneExecutionStateQueryService.listChapterScenes(28L, 31L)).thenReturn(List.of(latestSceneState));
         when(sceneExecutionStateQueryService.getSceneState(28L, 31L, "scene-2")).thenReturn(Optional.empty());
         when(sceneExecutionStateQueryService.findLatestChapterScene(28L, 31L)).thenReturn(Optional.of(latestSceneState));
+        SceneHandoffSnapshot handoffSnapshot = new SceneHandoffSnapshot(
+                28L, 31L, "scene-1", "scene-2", "林沉舟走进书房。", "上一镜头已结束。", List.of(), List.of(), List.of(), java.util.Map.of(), "PASS", "规则审校通过。", java.time.LocalDateTime.now()
+        );
+        when(runtimeStateStore.findHandoffToScene(28L, 31L, "scene-2")).thenReturn(Optional.of(handoffSnapshot));
 
         DefaultStorySessionContextAssembler assembler = new DefaultStorySessionContextAssembler(
                 storyContextQueryService,
-                sceneStateProvider
+                sceneStateProvider,
+                runtimeStoreProvider
         );
 
         Optional<StorySessionContextPacket> result = assembler.assemble(28L, 31L, "scene-2");
@@ -128,5 +144,6 @@ class DefaultStorySessionContextAssemblerTest {
         assertEquals(SceneBindingMode.SCENE_FALLBACK_TO_LATEST, result.orElseThrow().sceneBindingContext().mode());
         assertEquals("scene-1", result.orElseThrow().sceneBindingContext().resolvedSceneId());
         assertTrue(result.orElseThrow().sceneBindingContext().fallbackUsed());
+        assertEquals("scene-1", result.orElseThrow().previousSceneHandoff().fromSceneId());
     }
 }

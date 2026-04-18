@@ -1,6 +1,6 @@
 # Agent Context
 
-- Last Updated: 2026-04-17 Asia/Shanghai
+- Last Updated: 2026-04-18 Asia/Shanghai
 - Current Primary Req: REQ-20260411-stateful-story-platform-upgrade
 
 ## Active Requirements
@@ -144,9 +144,9 @@
     - 普通模式步骤收口为“说想法 -> AI 整理 -> 看变化 -> 确认写回”
     - 普通模式不再强制先选结构意图
 - 当前下一步应进入：
-  - 部署 `Phase 6.1`
-  - 验证 `sceneBindingContext` 是否升级为真实绑定语义
-  - 再进入 `Phase 6.2` 的章节骨架生成
+  - 部署 `Phase 6.3`
+  - 联调 `POST /api/story-orchestration/projects/{projectId}/chapters/{chapterId}/execute`
+  - 验证 `scene runtime state` 与 `handoff snapshot` 的真实写回
 - 最新修正：
   - 已确认线上 `POST /api/summary-workflow/chat-turns` 已恢复 `HTTP 200`
   - 已确认普通模式返回结果可继续进入 `proposal / preview`
@@ -179,9 +179,46 @@
   - `Phase 5.3` 已完成首轮真实联调
   - `Phase 5.4` 已完成真实联调收口
   - `Phase 6` 详细计划已创建：
-    - `docs/plans/PLAN-REQ-20260411-stateful-story-platform-upgrade-phase6-scene-skeleton-and-execution-v1.md`
+  - `docs/plans/PLAN-REQ-20260411-stateful-story-platform-upgrade-phase6-scene-skeleton-and-execution-v1.md`
   - `Phase 6.1` 已启动并已落兼容型 `SceneExecutionStateQueryService`
   - 当前实现基于现有 `AIWritingRecord` 历史记录衍生 scene 读模型
+  - `Phase 6.2` 已启动并已落：
+    - `ChapterSkeleton`
+    - `SceneSkeletonItem`
+    - `ChapterSkeletonPlanner`
+    - `RuleBasedChapterSkeletonPlanner`
+    - `GET /api/story-orchestration/projects/{projectId}/chapters/{chapterId}/skeleton-preview`
+  - `Phase 6.1 / 6.2` 已完成两轮真实联调：
+    - `chapter 31 + scene-1 / scene-2` -> `SCENE_BOUND`
+    - `chapter 31 + scene-999` -> `SCENE_FALLBACK_TO_LATEST`
+    - `chapter 31 / 32 / 34 skeleton-preview` -> `200`
+    - `chapter 32 / 34 preview` -> `200`
+  - 当前结论：
+    - `Phase 6.1 / 6.2` 主链已收口
+    - `CHAPTER_COLD_START` 暂缺真实样本，不阻塞进入 `Phase 6.3`
+  - `Phase 6.3` 已完成本地最小执行写回：
+    - 已新增：
+      - `SceneHandoffSnapshot`
+      - `SceneRuntimeStateStore`
+      - `SceneExecutionWriteService`
+      - `SceneExecutionWriteResult`
+      - `StorySessionExecution`
+      - `SceneExecutionRequest`
+    - 已新增：
+      - `POST /api/story-orchestration/projects/{projectId}/chapters/{chapterId}/execute`
+    - 已完成 runtime store 与写回实现：
+      - `ResilientSceneRuntimeStateStore`
+      - `DefaultSceneExecutionWriteService`
+      - `DefaultStorySessionOrchestrator.execute(...)`
+    - 已完成本地回归：
+      - `DefaultSceneExecutionStateQueryServiceTest`
+      - `DefaultStorySessionContextAssemblerTest`
+      - `DefaultSceneExecutionWriteServiceTest`
+      - `RuleBasedChapterSkeletonPlannerTest`
+      - `StorySessionOrchestrationControllerTest`
+      - `DefaultStorySessionOrchestratorTest`
+    - 已新增联调样本设计文档：
+      - `docs/test-data/TESTDATA-20260418-old-throne-phase6-regression-samples-v1.md`
 - 当前统一构建入口应使用根工程：
   - `mvn -Dmaven.repo.local=/usr/local/project/github/story-weaver/.cache/m2 -DskipTests compile`
 - `Phase 5` 当前已新增：

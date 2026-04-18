@@ -8,8 +8,10 @@ import com.storyweaver.domain.entity.Chapter;
 import com.storyweaver.repository.AIWritingRecordMapper;
 import com.storyweaver.service.ChapterService;
 import com.storyweaver.storyunit.service.SceneExecutionStateQueryService;
+import com.storyweaver.storyunit.service.SceneRuntimeStateStore;
 import com.storyweaver.storyunit.session.SceneExecutionState;
 import com.storyweaver.storyunit.session.SceneExecutionStatus;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
@@ -30,14 +32,17 @@ public class DefaultSceneExecutionStateQueryService implements SceneExecutionSta
     private final AIWritingRecordMapper aiWritingRecordMapper;
     private final ChapterService chapterService;
     private final ObjectMapper objectMapper;
+    private final ObjectProvider<SceneRuntimeStateStore> sceneRuntimeStateStoreProvider;
 
     public DefaultSceneExecutionStateQueryService(
             AIWritingRecordMapper aiWritingRecordMapper,
             ChapterService chapterService,
-            ObjectMapper objectMapper) {
+            ObjectMapper objectMapper,
+            ObjectProvider<SceneRuntimeStateStore> sceneRuntimeStateStoreProvider) {
         this.aiWritingRecordMapper = aiWritingRecordMapper;
         this.chapterService = chapterService;
         this.objectMapper = objectMapper;
+        this.sceneRuntimeStateStoreProvider = sceneRuntimeStateStoreProvider;
     }
 
     @Override
@@ -56,21 +61,29 @@ public class DefaultSceneExecutionStateQueryService implements SceneExecutionSta
             return List.of();
         }
 
+        List<SceneExecutionState> legacyStates = new ArrayList<>();
         List<AIWritingRecord> records = aiWritingRecordMapper.findByChapterId(chapterId);
-        if (records == null || records.isEmpty()) {
-            return List.of();
+        int sceneIndex = 1;
+        if (records != null) {
+            for (AIWritingRecord record : records) {
+                if (!StringUtils.hasText(record.getGeneratedContent())) {
+                    continue;
+                }
+                legacyStates.add(toSceneExecutionState(record, projectId, chapterId, sceneIndex));
+                sceneIndex++;
+            }
         }
 
-        List<SceneExecutionState> states = new ArrayList<>();
-        int sceneIndex = 1;
-        for (AIWritingRecord record : records) {
-            if (!StringUtils.hasText(record.getGeneratedContent())) {
-                continue;
-            }
-            states.add(toSceneExecutionState(record, projectId, chapterId, sceneIndex));
-            sceneIndex++;
+        SceneRuntimeStateStore runtimeStore = sceneRuntimeStateStoreProvider.getIfAvailable();
+        if (runtimeStore == null) {
+            return List.copyOf(legacyStates);
         }
-        return List.copyOf(states);
+
+        List<SceneExecutionState> runtimeStates = runtimeStore.listChapterScenes(projectId, chapterId);
+        if (runtimeStates.isEmpty()) {
+            return List.copyOf(legacyStates);
+        }
+        return mergeStates(legacyStates, runtimeStates);
     }
 
     @Override
@@ -275,5 +288,16 @@ public class DefaultSceneExecutionStateQueryService implements SceneExecutionSta
             return "";
         }
         return normalized.length() <= limit ? normalized : normalized.substring(0, limit) + "...";
+    }
+
+    private List<SceneExecutionState> mergeStates(
+            List<SceneExecutionState> legacyStates,
+            List<SceneExecutionState> runtimeStates) {
+        Map<String, SceneExecutionState> merged = new LinkedHashMap<>();
+        legacyStates.forEach(state -> merged.put(state.sceneId(), state));
+        runtimeStates.forEach(state -> merged.put(state.sceneId(), state));
+        return merged.values().stream()
+                .sorted(java.util.Comparator.comparingInt(SceneExecutionState::sceneIndex).thenComparing(SceneExecutionState::sceneId))
+                .toList();
     }
 }

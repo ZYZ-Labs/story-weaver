@@ -3,6 +3,7 @@ package com.storyweaver.story.generation.orchestration.impl;
 import com.storyweaver.story.generation.orchestration.StorySessionContextPacket;
 import com.storyweaver.story.generation.orchestration.WriterExecutionBriefBuilder;
 import com.storyweaver.storyunit.session.DirectorCandidate;
+import com.storyweaver.storyunit.session.SceneHandoffSnapshot;
 import com.storyweaver.storyunit.session.SceneExecutionState;
 import com.storyweaver.storyunit.session.WriterExecutionBrief;
 import org.springframework.stereotype.Service;
@@ -17,11 +18,15 @@ public class DefaultWriterExecutionBriefBuilder implements WriterExecutionBriefB
     public WriterExecutionBrief build(StorySessionContextPacket contextPacket, DirectorCandidate candidate) {
         List<String> continuityNotes = new ArrayList<>();
         SceneExecutionState resolvedSceneState = contextPacket.sceneBindingContext().resolvedSceneState();
+        SceneHandoffSnapshot previousSceneHandoff = contextPacket.previousSceneHandoff();
         if (!contextPacket.readerKnownState().knownFacts().isEmpty()) {
             continuityNotes.add("读者已知：" + contextPacket.readerKnownState().knownFacts().getFirst());
         }
         if (!contextPacket.recentStoryProgress().items().isEmpty()) {
             continuityNotes.add("最近进度：" + contextPacket.recentStoryProgress().items().getFirst().summary());
+        }
+        if (previousSceneHandoff != null && !previousSceneHandoff.outcomeSummary().isBlank()) {
+            continuityNotes.add("上一镜头交接：" + previousSceneHandoff.outcomeSummary());
         }
         if (resolvedSceneState != null && !resolvedSceneState.outcomeSummary().isBlank()) {
             continuityNotes.add("承接 scene：" + resolvedSceneState.outcomeSummary());
@@ -44,8 +49,10 @@ public class DefaultWriterExecutionBriefBuilder implements WriterExecutionBriefB
                 candidate.stopCondition(),
                 candidate.targetWords(),
                 List.copyOf(continuityNotes),
-                resolvedSceneState != null ? resolvedSceneState.handoffLine()
-                        : (contextPacket.existingSceneStates().isEmpty() ? "" : contextPacket.existingSceneStates().getLast().handoffLine())
+                previousSceneHandoff != null && !previousSceneHandoff.handoffLine().isBlank()
+                        ? previousSceneHandoff.handoffLine()
+                        : (resolvedSceneState != null ? resolvedSceneState.handoffLine()
+                        : (contextPacket.existingSceneStates().isEmpty() ? "" : contextPacket.existingSceneStates().getLast().handoffLine()))
         );
     }
 }

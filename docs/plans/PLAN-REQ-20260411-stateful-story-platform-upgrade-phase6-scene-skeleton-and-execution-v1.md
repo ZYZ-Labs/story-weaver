@@ -2,9 +2,9 @@
 
 - Req ID: REQ-20260411-stateful-story-platform-upgrade
 - Plan ID: PLAN-REQ-20260411-stateful-story-platform-upgrade-phase6-scene-skeleton-and-execution-v1
-- Status: Planned
+- Status: In Progress
 - Created At: 2026-04-17 Asia/Shanghai
-- Updated At: 2026-04-17 Asia/Shanghai
+- Updated At: 2026-04-18 Asia/Shanghai
 
 ## 本轮目标
 
@@ -139,6 +139,53 @@
   - `stopCondition`
   - `targetWords`
 
+当前进展：
+
+- 已启动
+- 已落最小合同：
+  - `backend/modules/story-generation/src/main/java/com/storyweaver/story/generation/orchestration/ChapterSkeleton.java`
+  - `backend/modules/story-generation/src/main/java/com/storyweaver/story/generation/orchestration/SceneSkeletonItem.java`
+  - `backend/modules/story-generation/src/main/java/com/storyweaver/story/generation/orchestration/ChapterSkeletonPlanner.java`
+- 已落规则规划器：
+  - `backend/src/main/java/com/storyweaver/story/generation/orchestration/impl/RuleBasedChapterSkeletonPlanner.java`
+- 当前实现策略：
+  - 先复用 `StorySessionContextAssembler`
+  - 先消费 `director candidates + selection decision`
+  - 先保留既有 `SceneExecutionState`
+  - 再为未执行镜头补 `PLANNED` 骨架
+- 已开放最小预览接口：
+  - `GET /api/story-orchestration/projects/{projectId}/chapters/{chapterId}/skeleton-preview`
+- 当前已补本地回归：
+  - `RuleBasedChapterSkeletonPlannerTest`
+  - `StorySessionOrchestrationControllerTest`
+
+当前判断：
+
+- `Phase 6.2` 已到可部署联调阶段
+- 这版不是最终骨架引擎，而是第一版只读 `ChapterSkeleton` 预览
+- 当前价值是先把章节骨架正式接进真实部署链路
+
+线上联调结果补充：
+
+- 第一轮联调已验证：
+  - `chapter 31 + scene-1` -> `SCENE_BOUND`
+  - `chapter 31 + scene-2` -> `SCENE_BOUND`
+  - `chapter 31 + scene-999` -> `SCENE_FALLBACK_TO_LATEST`
+  - `chapter 31 skeleton-preview` -> `200`
+- 第一轮暴露缺陷：
+  - `chapter 32 / 34 preview` 与 `chapter 32 skeleton-preview` 因 `ChapterStoryUnitAssembler` 处理 `chapter.summary = null` 触发 `500`
+- 当前已完成本地修复：
+  - `ChapterStoryUnitAssembler` 已改为 `compactStrings(...)`
+  - 已新增 `ChapterStoryUnitAssemblerTest`
+- 第二轮联调已验证：
+  - `chapter 32 + scene-1` -> `SCENE_BOUND`
+  - `chapter 32 skeleton-preview` -> `200`
+  - `chapter 34 + scene-1` -> `SCENE_BOUND`
+  - `chapter 34 skeleton-preview` -> `200`
+- 当前结论：
+  - `Phase 6.1 / 6.2` 主链已收口
+  - 当前只剩 `CHAPTER_COLD_START` 缺少真实样本，不构成继续进入 `Phase 6.3` 的阻塞
+
 ### `Phase 6.3` 镜头级执行与 handoff 写回
 
 目标：
@@ -156,6 +203,47 @@
 
 - `scene-1 -> scene-2 -> scene-3` 的承接不再依赖隐式 prompt
 - `writerExecutionBrief` 能消费真实 handoff 信息
+
+当前进展：
+
+- 已启动
+- 已新增最小协议：
+  - `SceneHandoffSnapshot`
+  - `SceneRuntimeStateStore`
+  - `SceneExecutionWriteService`
+  - `SceneExecutionWriteResult`
+  - `StorySessionExecution`
+  - `SceneExecutionRequest`
+- 已新增 backend 实现：
+  - `ResilientSceneRuntimeStateStore`
+  - `DefaultSceneExecutionWriteService`
+  - `DefaultStorySessionOrchestrator.execute(...)`
+- 已完成 `StorySessionContextPacket` 扩展：
+  - `previousSceneHandoff`
+- 已完成 `DefaultStorySessionContextAssembler` 承接补齐：
+  - 可读取目标 `sceneId` 对应的上一镜头 handoff
+- 已完成 `DefaultWriterExecutionBriefBuilder` 承接补齐：
+  - 优先消费 `previousSceneHandoff`
+- 已新增最小执行入口：
+  - `POST /api/story-orchestration/projects/{projectId}/chapters/{chapterId}/execute`
+- 已新增联调样本设计文档：
+  - `docs/test-data/TESTDATA-20260418-old-throne-phase6-regression-samples-v1.md`
+- 已完成本地回归：
+  - `DefaultSceneExecutionStateQueryServiceTest`
+  - `DefaultStorySessionContextAssemblerTest`
+  - `DefaultSceneExecutionWriteServiceTest`
+  - `RuleBasedChapterSkeletonPlannerTest`
+  - `StorySessionOrchestrationControllerTest`
+  - `DefaultStorySessionOrchestratorTest`
+
+当前判断：
+
+- `Phase 6.3` 已到可部署联调阶段
+- 当前实现是“最小执行写回”，不是完整多镜头连续执行
+- 这一步的价值是先让：
+  - 当前镜头执行结果真实写入 runtime state
+  - 下一镜头能读取显式 handoff
+  - 后续 `Phase 6.4` 有章节级联调基础
 
 ### `Phase 6.4` 章节级审校与联调收口
 
@@ -189,8 +277,9 @@
 ## 当前阶段判断
 
 - `Phase 5` 已完成
-- `Phase 6` 还未开始编码
-- 当前第一优先级不是再修 `Phase 5`，而是把真实 scene 状态接进来
+- `Phase 6.1` 已完成真实联调收口
+- `Phase 6.2` 已完成真实联调收口
+- 当前第一优先级已切换到 `Phase 6.3` 的镜头级 handoff 写回
 
 ## 建议代码落点
 
@@ -223,9 +312,10 @@
 
 ## 下一步
 
-1. 先做 `Phase 6.1`
-2. 接入真实 `SceneExecutionStateQueryService`
-3. 再做 `Phase 6.2` 的章节骨架生成
+1. 部署联调 `POST /api/story-orchestration/projects/{projectId}/chapters/{chapterId}/execute`
+2. 验证 `scene runtime state` 与 `handoff snapshot` 的真实写回
+3. 在后续新样本中继续补齐 `CHAPTER_COLD_START` 真实联调
+4. 为 `Phase 6.4` 准备章节级联调样本
 
 ## 贡献与署名说明
 

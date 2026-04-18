@@ -4,7 +4,7 @@
 - Plan Version: v1
 - Status: In Progress
 - Created At: 2026-04-11 Asia/Shanghai
-- Updated At: 2026-04-17 Asia/Shanghai
+- Updated At: 2026-04-18 Asia/Shanghai
 
 ## 计划定位
 
@@ -314,10 +314,27 @@
 - 详细计划已创建：
   - `docs/plans/PLAN-REQ-20260411-stateful-story-platform-upgrade-phase6-scene-skeleton-and-execution-v1.md`
 - `Phase 6.1` 已启动并已落兼容型 `SceneExecutionStateQueryService`
+- `Phase 6.2` 已启动并已落第一版 `ChapterSkeleton` 合同、规则规划器与只读预览接口
+- 当前新增接口：
+  - `GET /api/story-orchestration/projects/{projectId}/chapters/{chapterId}/skeleton-preview`
+- `Phase 6.3` 已启动并已落最小执行写回：
+  - `SceneHandoffSnapshot`
+  - `SceneRuntimeStateStore`
+  - `SceneExecutionWriteService`
+  - `POST /api/story-orchestration/projects/{projectId}/chapters/{chapterId}/execute`
+- 当前已完成两轮真实联调：
+  - `chapter 31 + scene-1 / scene-2` -> `SCENE_BOUND`
+  - `chapter 31 + scene-999` -> `SCENE_FALLBACK_TO_LATEST`
+  - `chapter 31 / 32 / 34 skeleton-preview` -> `200`
+  - `chapter 32 / 34 preview` -> `200`
+- 当前已确认：
+  - `Phase 6.1 / 6.2` 主链已收口
+  - `Phase 6.3` 已到可部署联调阶段
+  - `CHAPTER_COLD_START` 仍缺真实样本，不阻塞继续推进
 - 当前下一步：
-  - 部署 `Phase 6.1`
-  - 验证 `sceneBindingContext` 是否从 `SCENE_QUERY_UNAVAILABLE` 升级为真实绑定语义
-  - 再进入 `Phase 6.2`
+  - 部署联调 `execute`
+  - 验证 scene runtime state / handoff 的真实写回
+  - 继续准备 `Phase 6.4` 的章节级联调
 
 ### Phase 7. 增量状态系统
 

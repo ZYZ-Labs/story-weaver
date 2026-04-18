@@ -9,4 +9,6 @@ public interface StorySessionOrchestrator {
     SessionExecutionTrace initializeTrace(StorySessionContextPacket contextPacket);
 
     Optional<StorySessionPreview> preview(Long projectId, Long chapterId, String sceneId);
+
+    Optional<StorySessionExecution> execute(SceneExecutionRequest request);
 }
