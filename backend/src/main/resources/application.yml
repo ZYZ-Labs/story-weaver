@@ -37,3 +37,13 @@ story:
     scene-state-key-prefix: ${STORY_SCENE_RUNTIME_SCENE_STATE_KEY_PREFIX:story:scene-runtime:state:}
     handoff-key-prefix: ${STORY_SCENE_RUNTIME_HANDOFF_KEY_PREFIX:story:scene-runtime:handoff:}
     chapter-manifest-key-prefix: ${STORY_SCENE_RUNTIME_CHAPTER_MANIFEST_KEY_PREFIX:story:scene-runtime:chapter-scenes:}
+  state-system:
+    redis-store-enabled: ${STORY_STATE_SYSTEM_REDIS_STORE_ENABLED:true}
+    ttl-minutes: ${STORY_STATE_SYSTEM_TTL_MINUTES:720}
+    event-key-prefix: ${STORY_STATE_SYSTEM_EVENT_KEY_PREFIX:story:state:event:}
+    chapter-event-manifest-key-prefix: ${STORY_STATE_SYSTEM_CHAPTER_EVENT_MANIFEST_KEY_PREFIX:story:state:chapter-events:}
+    snapshot-key-prefix: ${STORY_STATE_SYSTEM_SNAPSHOT_KEY_PREFIX:story:state:snapshot:}
+    chapter-snapshot-manifest-key-prefix: ${STORY_STATE_SYSTEM_CHAPTER_SNAPSHOT_MANIFEST_KEY_PREFIX:story:state:chapter-snapshots:}
+    patch-key-prefix: ${STORY_STATE_SYSTEM_PATCH_KEY_PREFIX:story:state:patch:}
+    chapter-patch-manifest-key-prefix: ${STORY_STATE_SYSTEM_CHAPTER_PATCH_MANIFEST_KEY_PREFIX:story:state:chapter-patches:}
+    chapter-reveal-state-key-prefix: ${STORY_STATE_SYSTEM_CHAPTER_REVEAL_STATE_KEY_PREFIX:story:state:chapter-reveal:}

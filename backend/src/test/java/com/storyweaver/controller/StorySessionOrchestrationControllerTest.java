@@ -1,8 +1,11 @@
 package com.storyweaver.controller;
 
 import com.storyweaver.exception.GlobalExceptionHandler;
+import com.storyweaver.story.generation.orchestration.ChapterExecutionReview;
+import com.storyweaver.story.generation.orchestration.ChapterExecutionReviewService;
 import com.storyweaver.story.generation.orchestration.ChapterSkeleton;
 import com.storyweaver.story.generation.orchestration.ChapterSkeletonPlanner;
+import com.storyweaver.story.generation.orchestration.ChapterTraceSummary;
 import com.storyweaver.story.generation.orchestration.SessionExecutionTrace;
 import com.storyweaver.story.generation.orchestration.SessionExecutionTraceItem;
 import com.storyweaver.story.generation.orchestration.SceneBindingContext;
@@ -21,8 +24,14 @@ import com.storyweaver.storyunit.context.ProjectBriefView;
 import com.storyweaver.storyunit.context.ReaderKnownStateView;
 import com.storyweaver.storyunit.context.RecentStoryProgressView;
 import com.storyweaver.storyunit.context.StoryUnitSummaryView;
+import com.storyweaver.storyunit.facet.reveal.ReaderRevealState;
+import com.storyweaver.storyunit.model.FacetType;
 import com.storyweaver.storyunit.model.StoryUnitRef;
 import com.storyweaver.storyunit.model.StoryUnitType;
+import com.storyweaver.storyunit.patch.PatchOperation;
+import com.storyweaver.storyunit.patch.PatchOperationType;
+import com.storyweaver.storyunit.patch.PatchStatus;
+import com.storyweaver.storyunit.patch.StoryPatch;
 import com.storyweaver.storyunit.session.DirectorCandidate;
 import com.storyweaver.storyunit.session.DirectorCandidateType;
 import com.storyweaver.storyunit.session.ReviewDecision;
@@ -33,6 +42,11 @@ import com.storyweaver.storyunit.session.SceneHandoffSnapshot;
 import com.storyweaver.storyunit.session.SelectionDecision;
 import com.storyweaver.storyunit.session.SessionRole;
 import com.storyweaver.storyunit.session.WriterExecutionBrief;
+import com.storyweaver.storyunit.event.StoryEvent;
+import com.storyweaver.storyunit.event.StoryEventType;
+import com.storyweaver.storyunit.model.StorySourceTrace;
+import com.storyweaver.storyunit.snapshot.SnapshotScope;
+import com.storyweaver.storyunit.snapshot.StorySnapshot;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.web.servlet.MockMvc;
@@ -54,12 +68,17 @@ class StorySessionOrchestrationControllerTest {
     private MockMvc mockMvc;
     private StorySessionOrchestrator storySessionOrchestrator;
     private ChapterSkeletonPlanner chapterSkeletonPlanner;
+    private ChapterExecutionReviewService chapterExecutionReviewService;
 
     @BeforeEach
     void setUp() {
         storySessionOrchestrator = mock(StorySessionOrchestrator.class);
         chapterSkeletonPlanner = mock(ChapterSkeletonPlanner.class);
-        mockMvc = MockMvcBuilders.standaloneSetup(new StorySessionOrchestrationController(storySessionOrchestrator, chapterSkeletonPlanner))
+        chapterExecutionReviewService = mock(ChapterExecutionReviewService.class);
+        mockMvc = MockMvcBuilders.standaloneSetup(new StorySessionOrchestrationController(
+                        storySessionOrchestrator,
+                        chapterSkeletonPlanner,
+                        chapterExecutionReviewService))
                 .setControllerAdvice(new GlobalExceptionHandler())
                 .build();
     }
@@ -98,7 +117,29 @@ class StorySessionOrchestrationControllerTest {
                                 "先做开场定向", "完成触发点后停住。", List.of("待揭晓"), List.of(), List.of(),
                                 java.util.Map.of("source", "test"), "林沉舟推开门。", "主角完成现实状态定向。"),
                         new SceneHandoffSnapshot(28L, 31L, "scene-1", "scene-2", "林沉舟推开门。", "主角完成现实状态定向。",
-                                List.of("待揭晓"), List.of(), List.of(), java.util.Map.of("source", "test"), "PASS", "规则审校通过。", java.time.LocalDateTime.of(2026, 4, 18, 12, 0))
+                                List.of("待揭晓"), List.of(), List.of(), java.util.Map.of("source", "test"), "PASS", "规则审校通过。", java.time.LocalDateTime.of(2026, 4, 18, 12, 0)),
+                        new StoryEvent("event-1", StoryEventType.SCENE_COMPLETED, 28L, 31L, "scene-1",
+                                new StoryUnitRef("scene-1", "scene-execution:31:scene-1", StoryUnitType.SCENE_EXECUTION),
+                                "scene-1 已写回为 COMPLETED", java.util.Map.of("status", "COMPLETED"),
+                                new StorySourceTrace("test", "test", "SceneExecutionWriteService", "scene-1")),
+                        new StorySnapshot("snapshot-1", SnapshotScope.SCENE, 28L, 31L, "scene-1",
+                                List.of(new StoryUnitRef("scene-1", "scene-execution:31:scene-1", StoryUnitType.SCENE_EXECUTION)),
+                                "scene-1 snapshot", new StorySourceTrace("test", "test", "SceneExecutionWriteService", "scene-1")),
+                        new StoryPatch(
+                                "patch-1",
+                                new StoryUnitRef("31", "chapter:31", StoryUnitType.CHAPTER),
+                                FacetType.REVEAL,
+                                List.of(new PatchOperation(PatchOperationType.MERGE, "/readerKnown", List.of("待揭晓"))),
+                                "scene-1 的 reveal patch",
+                                PatchStatus.APPLIED,
+                                new StorySourceTrace("test", "test", "SceneExecutionWriteService", "scene-1")
+                        ),
+                        new ReaderRevealState(
+                                28L, 31L, List.of("待揭晓"), List.of("待揭晓"), List.of("待揭晓"), List.of(), "读者已知 1 条，未揭晓 0 条"
+                        ),
+                        new StorySnapshot("snapshot-chapter-state-1", SnapshotScope.CHAPTER, 28L, 31L, "scene-1",
+                                List.of(new StoryUnitRef("31", "chapter:31", StoryUnitType.CHAPTER)),
+                                "读者已知 1 条，未揭晓 0 条", new StorySourceTrace("test", "test", "SceneExecutionWriteService", "scene-1"))
                 ),
                 preview.trace().append(new SessionExecutionTraceItem(
                         SessionRole.ORCHESTRATOR, "scene-writeback", SessionTraceStatus.COMPLETED,
@@ -114,6 +155,11 @@ class StorySessionOrchestrationControllerTest {
                 .andExpect(jsonPath("$.code").value(200))
                 .andExpect(jsonPath("$.data.writeResult.sceneExecutionState.sceneId").value("scene-1"))
                 .andExpect(jsonPath("$.data.writeResult.handoffSnapshot.toSceneId").value("scene-2"))
+                .andExpect(jsonPath("$.data.writeResult.stateEvent.eventId").value("event-1"))
+                .andExpect(jsonPath("$.data.writeResult.stateSnapshot.snapshotId").value("snapshot-1"))
+                .andExpect(jsonPath("$.data.writeResult.statePatch.patchId").value("patch-1"))
+                .andExpect(jsonPath("$.data.writeResult.readerRevealState.readerKnown[0]").value("待揭晓"))
+                .andExpect(jsonPath("$.data.writeResult.chapterStateSnapshot.snapshotId").value("snapshot-chapter-state-1"))
                 .andExpect(jsonPath("$.data.trace.items[2].stepKey").value("scene-writeback"));
     }
 
@@ -140,6 +186,28 @@ class StorySessionOrchestrationControllerTest {
                 .andExpect(jsonPath("$.data.sceneCount").value(3))
                 .andExpect(jsonPath("$.data.scenes[0].sceneId").value("scene-1"))
                 .andExpect(jsonPath("$.data.scenes[0].status").value("PLANNED"));
+    }
+
+    @Test
+    void shouldReturnChapterReviewWhenAvailable() throws Exception {
+        ChapterExecutionReview review = new ChapterExecutionReview(
+                28L,
+                31L,
+                ReviewResult.REVISE,
+                "章节级审校发现仍有未完成镜头或 handoff 缺口。",
+                List.of(),
+                false,
+                new ChapterTraceSummary(28L, 31L, "skeleton_31_v1", 4, 3, 3, 0, 0, 1, "scene-3", List.of("scene-1", "scene-2", "scene-3"), List.of("scene-4"), List.of("scene-4"))
+        );
+        when(chapterExecutionReviewService.review(28L, 31L)).thenReturn(Optional.of(review));
+
+        mockMvc.perform(get("/api/story-orchestration/projects/28/chapters/31/chapter-review")
+                        .header("Authorization", "Bearer test-token"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(200))
+                .andExpect(jsonPath("$.data.result").value("REVISE"))
+                .andExpect(jsonPath("$.data.traceSummary.pendingSceneCount").value(1))
+                .andExpect(jsonPath("$.data.traceSummary.pendingSceneIds[0]").value("scene-4"));
     }
 
     private StorySessionPreview samplePreview() {

@@ -7,6 +7,7 @@ import com.storyweaver.storyunit.context.ChapterAnchorBundleQueryService;
 import com.storyweaver.storyunit.context.ChapterAnchorBundleView;
 import com.storyweaver.storyunit.context.ReaderKnownStateQueryService;
 import com.storyweaver.storyunit.context.ReaderKnownStateView;
+import com.storyweaver.storyunit.service.ReaderRevealStateStore;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
@@ -20,12 +21,15 @@ public class DefaultReaderKnownStateQueryService implements ReaderKnownStateQuer
 
     private final ChapterMapper chapterMapper;
     private final ChapterAnchorBundleQueryService chapterAnchorBundleQueryService;
+    private final ReaderRevealStateStore readerRevealStateStore;
 
     public DefaultReaderKnownStateQueryService(
             ChapterMapper chapterMapper,
-            ChapterAnchorBundleQueryService chapterAnchorBundleQueryService) {
+            ChapterAnchorBundleQueryService chapterAnchorBundleQueryService,
+            ReaderRevealStateStore readerRevealStateStore) {
         this.chapterMapper = chapterMapper;
         this.chapterAnchorBundleQueryService = chapterAnchorBundleQueryService;
+        this.readerRevealStateStore = readerRevealStateStore;
     }
 
     @Override
@@ -63,7 +67,9 @@ public class DefaultReaderKnownStateQueryService implements ReaderKnownStateQuer
                 .map(bundle -> buildUnrevealedFacts(current, bundle))
                 .orElseGet(List::of);
 
-        return Optional.of(new ReaderKnownStateView(projectId, chapterId, knownFacts, unrevealedFacts));
+        Optional<ReaderKnownStateView> persistedState = readerRevealStateStore.findChapterRevealState(projectId, chapterId)
+                .map(state -> new ReaderKnownStateView(projectId, chapterId, state.readerKnown(), state.unrevealed()));
+        return persistedState.or(() -> Optional.of(new ReaderKnownStateView(projectId, chapterId, knownFacts, unrevealedFacts)));
     }
 
     private boolean isEarlierChapter(Chapter candidate, Chapter current) {

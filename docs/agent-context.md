@@ -144,9 +144,9 @@
     - 普通模式步骤收口为“说想法 -> AI 整理 -> 看变化 -> 确认写回”
     - 普通模式不再强制先选结构意图
 - 当前下一步应进入：
-  - 部署 `Phase 6.3`
-  - 联调 `POST /api/story-orchestration/projects/{projectId}/chapters/{chapterId}/execute`
-  - 验证 `scene runtime state` 与 `handoff snapshot` 的真实写回
+  - 开始 `Phase 7.2`
+  - 冻结最小 state patch 边界
+  - 推进 `patch -> apply -> snapshot` 的第一类真实状态链
 - 最新修正：
   - 已确认线上 `POST /api/summary-workflow/chat-turns` 已恢复 `HTTP 200`
   - 已确认普通模式返回结果可继续进入 `proposal / preview`
@@ -218,7 +218,90 @@
       - `StorySessionOrchestrationControllerTest`
       - `DefaultStorySessionOrchestratorTest`
     - 已新增联调样本设计文档：
+  - `Phase 7.1` 已完成真实联调收口：
+    - `execute` 已可在线上真实产出：
+      - `StoryEvent`
+      - `StorySnapshot`
+    - `GET /api/story-state/projects/{projectId}/chapters/{chapterId}/events`
+      已可读回 chapter event
+    - `GET /api/story-state/projects/{projectId}/chapters/{chapterId}/snapshots`
+      已可读回 chapter snapshot
+    - 当前线上 Redis 仍存在：
+      - `/data` 的 `bgsave` `Permission denied`
+      - `stop-writes-on-bgsave-error no` 已写入当前挂载的 `redis.conf`
+      - Redis 重启后业务写入不再被该问题阻断
+    - 当前结论：
+      - `Phase 7.1` 应用链已打通
+      - Redis 持久化目录权限仍是环境侧待修复项
+      - `Phase 7.2` 已到可部署联调阶段：
+        - `StoryPatchStore`
+        - `ReaderRevealStateStore`
+        - `REVEAL` patch 最小 apply 链
+        - `/api/story-state/.../patches`
+        - `/api/story-state/.../reader-reveal-state`
       - `docs/test-data/TESTDATA-20260418-old-throne-phase6-regression-samples-v1.md`
+  - `Phase 6.3` 已完成真实联调收口：
+    - 执行前 `chapter 31 + scene-4` -> `SCENE_FALLBACK_TO_LATEST`
+    - `POST /api/story-orchestration/projects/28/chapters/31/execute?sceneId=scene-4` -> `200`
+    - 已真实写入：
+      - `sceneExecutionState.sceneId = scene-4`
+      - `sceneExecutionState.status = COMPLETED`
+      - `handoffSnapshot.fromSceneId = scene-4`
+      - `handoffSnapshot.toSceneId = scene-5`
+    - 执行后 `chapter 31 + scene-5` 已返回 `previousSceneHandoff`
+    - 再次请求 `chapter 31 + scene-4` -> `SCENE_BOUND`
+    - 当前结论：
+      - runtime scene state 真实写回已成立
+      - handoff 承接已成立
+      - `Phase 6.3` 已完成，下一步进入 `Phase 6.4`
+  - `Phase 6.4` 已完成本地开发收口：
+    - 已新增：
+      - `ChapterExecutionReviewService`
+      - `ChapterExecutionReview`
+      - `ChapterTraceSummary`
+    - 已新增 backend 实现：
+      - `RuleBasedChapterExecutionReviewService`
+    - 已新增章节级接口：
+      - `GET /api/story-orchestration/projects/{projectId}/chapters/{chapterId}/chapter-review`
+    - 已完成本地回归：
+      - `RuleBasedChapterExecutionReviewServiceTest`
+      - `StorySessionOrchestrationControllerTest`
+      - `DefaultStorySessionOrchestratorTest`
+    - 当前状态：
+      - `Phase 6.4` 已到可部署联调阶段
+  - `Phase 6.4` 已完成真实联调收口：
+    - `chapter 31` 已稳定返回章节级问题汇总：
+      - `scene_failed`
+      - `scene_pending`
+      - `handoff_missing`
+    - `chapter 32` 的 `chapter-review` 会随 runtime state 与 handoff 动态变化
+    - `chapter 32` 完成 `scene-1 -> scene-5` 连续执行后：
+      - `chapter-review.result = PASS`
+      - `chapterExecutionComplete = true`
+      - `traceSummary.executedSceneCount = 5`
+      - `traceSummary.pendingSceneCount = 0`
+      - `traceSummary.missingHandoffToSceneIds = []`
+    - 当前结论：
+      - `Phase 6.4` 已完成
+      - `Phase 6` 已整体收口
+  - `Phase 7` 已启动：
+    - 已新增详细计划：
+      - `docs/plans/PLAN-REQ-20260411-stateful-story-platform-upgrade-phase7-incremental-state-v1.md`
+  - `Phase 7.1` 已完成本地开发收口：
+    - 已新增：
+      - `StoryEventStore`
+      - `StorySnapshotStore`
+      - `StoryStateProperties`
+      - `ResilientStoryStateStore`
+      - `StoryStateController`
+    - 已完成 `execute` 链接入：
+      - `SceneExecutionWriteResult.stateEvent`
+      - `SceneExecutionWriteResult.stateSnapshot`
+    - 已新增接口：
+      - `GET /api/story-state/projects/{projectId}/chapters/{chapterId}/events`
+      - `GET /api/story-state/projects/{projectId}/chapters/{chapterId}/snapshots`
+    - 当前状态：
+      - `Phase 7.1` 已到可部署联调阶段
 - 当前统一构建入口应使用根工程：
   - `mvn -Dmaven.repo.local=/usr/local/project/github/story-weaver/.cache/m2 -DskipTests compile`
 - `Phase 5` 当前已新增：

@@ -7,20 +7,131 @@
 
 ## 当前快照
 
-- Current Phase: `Phase 6` 进行中
-- Current Task: `Phase 6.3` 已完成最小执行写回与 handoff 落库骨架，进入可部署联调阶段
-- Last Completed: 已完成 `Phase 6.1 / 6.2` 第二轮线上联调收口，并完成 `Phase 6.3` 本地可编译可测试收口
+- Current Phase: `Phase 7` 进行中
+- Current Task: `Phase 7.2` 已到可部署联调阶段，等待真实联调
+- Last Completed: 已完成 `Phase 7.1` 线上 event + snapshot 最小状态链验证
 - Next Action:
-  - 部署 `Phase 6.3` 修订版
-  - 联调 `POST /api/story-orchestration/projects/{projectId}/chapters/{chapterId}/execute`
-  - 验证 `scene runtime state` 与 `handoff snapshot` 的真实写回
-  - 在后续新样本中继续补 `CHAPTER_COLD_START` 真实联调
+  - 部署并联调 `Phase 7.2`
+  - 验证 `REVEAL` 状态链的 `patch -> apply -> snapshot`
+  - 验证 `/api/story-state/.../patches`
+  - 验证 `/api/story-state/.../reader-reveal-state`
 - Blockers:
   - 旧主线 `REQ-20260409-generation-reliability-refactor` 已归档，但其代码成果和回归报告仍需作为迁移基线继续参考
   - `MCP` 与 `State Server` 的边界仍未形成独立 server 形态，只完成读模型、查询服务与编排消费层
   - 前端现有页面结构仍是旧工作流，尚未切到新信息架构
   - 当前 `旧日王座` 样本缺少无历史写作记录章节，暂时无法在线上补齐 `CHAPTER_COLD_START` 验证
+  - 线上 Redis 的 RDB 持久化仍报 `/data` 写权限问题
+  - 但 `stop-writes-on-bgsave-error no` 已写入当前挂载的 `redis.conf`，Redis 重启后不再重新阻断业务写入
+  - 当前剩余的是环境持久化质量问题，不再阻塞 `Phase 7.2`
 - Latest Verified:
+  - 已完成 `Phase 7.2` 本地开发收口：
+    - 已新增：
+      - `StoryPatchStore`
+      - `ReaderRevealStateStore`
+    - 已完成：
+      - `REVEAL` patch 最小 apply 链
+      - `execute` 返回：
+        - `statePatch`
+        - `readerRevealState`
+        - `chapterStateSnapshot`
+      - 已新增接口：
+        - `GET /api/story-state/projects/{projectId}/chapters/{chapterId}/patches`
+        - `GET /api/story-state/projects/{projectId}/chapters/{chapterId}/reader-reveal-state`
+    - 已完成本地回归：
+      - `DefaultSceneExecutionWriteServiceTest`
+      - `StoryStateControllerTest`
+      - `ResilientStoryStateStoreTest`
+      - `DefaultStorySessionOrchestratorTest`
+      - `StorySessionOrchestrationControllerTest`
+  - 已完成 `Phase 7.1` 真实联调收口：
+    - 已使用 `旧日王座 / chapter 31 / scene-7` 完成真实执行
+    - `POST /api/story-orchestration/projects/28/chapters/31/execute?sceneId=scene-7` -> `200`
+    - `GET /api/story-state/projects/28/chapters/31/events` -> `200`
+    - `GET /api/story-state/projects/28/chapters/31/snapshots` -> `200`
+    - 已确认 Redis key 写入：
+      - `story:state:chapter-events:28:31`
+      - `story:state:chapter-snapshots:28:31`
+      - `story:state:event:event-28-31-scene-7-...`
+      - `story:state:snapshot:snapshot-28-31-scene-7-...`
+    - 已确认 chapter manifest 可读回：
+      - event manifest
+      - snapshot manifest
+    - 已确认当前真实问题位于运行环境：
+      - Redis `bgsave` 在 `/data` 持续报 `Permission denied`
+      - 默认 `stop-writes-on-bgsave-error=yes` 会阻断业务写入
+      - 本轮已通过运行时 `CONFIG SET stop-writes-on-bgsave-error no` 恢复业务写入
+  - 已完成 `Phase 7.1` 本地开发收口：
+    - 已新增：
+      - `StoryEventStore`
+      - `StorySnapshotStore`
+      - `StoryStateProperties`
+      - `ResilientStoryStateStore`
+      - `StoryStateController`
+    - 已完成 `execute` 链接入：
+      - `SceneExecutionWriteResult` 已包含：
+        - `stateEvent`
+        - `stateSnapshot`
+      - `DefaultSceneExecutionWriteService` 已真实写入：
+        - `StoryEvent`
+        - `StorySnapshot`
+    - 已新增接口：
+      - `GET /api/story-state/projects/{projectId}/chapters/{chapterId}/events`
+      - `GET /api/story-state/projects/{projectId}/chapters/{chapterId}/snapshots`
+    - 已完成本地回归：
+      - `DefaultSceneExecutionWriteServiceTest`
+      - `StoryStateControllerTest`
+      - `ResilientStoryStateStoreTest`
+      - `DefaultStorySessionOrchestratorTest`
+  - 已完成 `Phase 6.4` 真实联调收口：
+    - `GET /api/story-orchestration/projects/28/chapters/31/chapter-review` -> `200`
+    - `chapter 31` 已真实返回：
+      - `scene_failed`
+      - `scene_pending`
+      - `handoff_missing`
+    - `chapter 32` 在未完整执行时：
+      - `chapter-review` 会随 runtime state 与 handoff 动态变化
+    - `chapter 32` 完成 `scene-1 -> scene-5` 连续执行后：
+      - `chapter-review.result = PASS`
+      - `chapterExecutionComplete = true`
+      - `traceSummary.executedSceneCount = 5`
+      - `traceSummary.pendingSceneCount = 0`
+      - `traceSummary.missingHandoffToSceneIds = []`
+    - 复验 `chapter 32 skeleton-preview`：
+      - `sceneCount = 5`
+      - `scene-1 ~ scene-5` 全部为 `COMPLETED`
+    - 当前结论：
+      - `Phase 6.4` 联调通过
+      - `Phase 6` 已整体完成
+  - 已完成 `Phase 6.4` 本地开发收口：
+    - 已新增：
+      - `ChapterExecutionReviewService`
+      - `ChapterExecutionReview`
+      - `ChapterTraceSummary`
+    - 已新增 backend 实现：
+      - `RuleBasedChapterExecutionReviewService`
+    - 已新增章节级接口：
+      - `GET /api/story-orchestration/projects/{projectId}/chapters/{chapterId}/chapter-review`
+    - 已完成本地回归：
+      - `RuleBasedChapterExecutionReviewServiceTest`
+      - `StorySessionOrchestrationControllerTest`
+      - `DefaultStorySessionOrchestratorTest`
+    - 已通过：
+      - `mvn -Dmaven.repo.local=/usr/local/project/github/story-weaver/.cache/m2 -DskipTests compile`
+      - `mvn test -pl backend -am -Dtest=RuleBasedChapterExecutionReviewServiceTest,StorySessionOrchestrationControllerTest,DefaultStorySessionOrchestratorTest -Dsurefire.failIfNoSpecifiedTests=false -Dmaven.repo.local=/usr/local/project/github/story-weaver/.cache/m2`
+  - 已完成 `Phase 6.3` 真实联调收口：
+    - 执行前 `chapter 31 + scene-4` -> `SCENE_FALLBACK_TO_LATEST`
+    - `POST /api/story-orchestration/projects/28/chapters/31/execute?sceneId=scene-4` -> `200`
+    - 已真实写入：
+      - `sceneExecutionState.sceneId = scene-4`
+      - `sceneExecutionState.status = COMPLETED`
+      - `handoffSnapshot.fromSceneId = scene-4`
+      - `handoffSnapshot.toSceneId = scene-5`
+    - 执行后 `chapter 31 + scene-5` 已返回 `previousSceneHandoff`
+    - 再次请求 `chapter 31 + scene-4` -> `SCENE_BOUND`
+    - 当前已确认：
+      - runtime scene state 真实写回
+      - 下一镜头真实消费显式 handoff
+      - 当前镜头执行后从回退语义升级为真实绑定
   - 已完成 `Phase 6.3` 本地开发收口：
     - 已新增：
       - `SceneHandoffSnapshot`

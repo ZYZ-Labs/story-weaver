@@ -238,12 +238,12 @@
 
 当前判断：
 
-- `Phase 6.3` 已到可部署联调阶段
-- 当前实现是“最小执行写回”，不是完整多镜头连续执行
-- 这一步的价值是先让：
+- `Phase 6.3` 已完成真实联调收口
+- 当前已在线上确认：
   - 当前镜头执行结果真实写入 runtime state
   - 下一镜头能读取显式 handoff
-  - 后续 `Phase 6.4` 有章节级联调基础
+  - 当前镜头执行后会从回退语义升级为真实绑定
+- 这一步已经为 `Phase 6.4` 的章节级联调打好了基础
 
 ### `Phase 6.4` 章节级审校与联调收口
 
@@ -265,6 +265,36 @@
   - handoff 写回
   - 章节级审校
 
+当前进展：
+
+- 已启动
+- 已新增最小合同：
+  - `ChapterExecutionReviewService`
+  - `ChapterExecutionReview`
+  - `ChapterTraceSummary`
+- 已新增 backend 实现：
+  - `RuleBasedChapterExecutionReviewService`
+- 已新增章节级接口：
+  - `GET /api/story-orchestration/projects/{projectId}/chapters/{chapterId}/chapter-review`
+- 当前实现策略：
+  - 先复用 `ChapterSkeletonPlanner`
+  - 先复用 `SceneExecutionStateQueryService`
+  - 先复用 `SceneRuntimeStateStore.findHandoffToScene(...)`
+  - 先把章节级 reviewer 做成只读汇总，不提前引入复杂章节写回
+- 已完成本地回归：
+  - `RuleBasedChapterExecutionReviewServiceTest`
+  - `StorySessionOrchestrationControllerTest`
+  - `DefaultStorySessionOrchestratorTest`
+
+当前判断：
+
+- `Phase 6.4` 已完成真实联调收口
+- 当前已在线上确认：
+  - `chapter-review` 可稳定返回章节级汇总
+  - `chapter 31` 可作为问题样本返回 `scene_failed / scene_pending / handoff_missing`
+  - `chapter 32` 可在真实环境里完成 `scene-1 -> scene-5` 执行并达到 `PASS`
+- 这说明 `Phase 6` 已经在真实项目上形成完整收口
+
 ## 建议调用顺序
 
 1. `ChapterSkeletonPlanner`
@@ -279,7 +309,7 @@
 - `Phase 5` 已完成
 - `Phase 6.1` 已完成真实联调收口
 - `Phase 6.2` 已完成真实联调收口
-- 当前第一优先级已切换到 `Phase 6.3` 的镜头级 handoff 写回
+- 当前第一优先级已切换到 `Phase 7` 的增量状态系统
 
 ## 建议代码落点
 
@@ -312,10 +342,10 @@
 
 ## 下一步
 
-1. 部署联调 `POST /api/story-orchestration/projects/{projectId}/chapters/{chapterId}/execute`
-2. 验证 `scene runtime state` 与 `handoff snapshot` 的真实写回
+1. 正式关闭 `Phase 6`
+2. 开始 `Phase 7`
 3. 在后续新样本中继续补齐 `CHAPTER_COLD_START` 真实联调
-4. 为 `Phase 6.4` 准备章节级联调样本
+4. 保留 `chapter 31 / 32` 作为问题样本与通过样本
 
 ## 贡献与署名说明
 

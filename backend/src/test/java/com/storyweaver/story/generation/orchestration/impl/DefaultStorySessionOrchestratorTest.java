@@ -22,8 +22,19 @@ import com.storyweaver.storyunit.context.ProjectBriefView;
 import com.storyweaver.storyunit.context.ReaderKnownStateView;
 import com.storyweaver.storyunit.context.RecentStoryProgressView;
 import com.storyweaver.storyunit.context.StoryUnitSummaryView;
+import com.storyweaver.storyunit.event.StoryEvent;
+import com.storyweaver.storyunit.event.StoryEventType;
+import com.storyweaver.storyunit.facet.reveal.ReaderRevealState;
+import com.storyweaver.storyunit.model.FacetType;
+import com.storyweaver.storyunit.model.StorySourceTrace;
 import com.storyweaver.storyunit.model.StoryUnitRef;
 import com.storyweaver.storyunit.model.StoryUnitType;
+import com.storyweaver.storyunit.patch.PatchOperation;
+import com.storyweaver.storyunit.patch.PatchOperationType;
+import com.storyweaver.storyunit.patch.PatchStatus;
+import com.storyweaver.storyunit.patch.StoryPatch;
+import com.storyweaver.storyunit.snapshot.SnapshotScope;
+import com.storyweaver.storyunit.snapshot.StorySnapshot;
 import com.storyweaver.storyunit.session.DirectorCandidate;
 import com.storyweaver.storyunit.session.DirectorCandidateType;
 import com.storyweaver.storyunit.session.ReviewDecision;
@@ -260,7 +271,59 @@ class DefaultStorySessionOrchestratorTest {
                         "先做开场定向", "完成触发点后停住。", List.of("待揭晓"), List.of(), List.of(),
                         java.util.Map.of("source", "test"), "林沉舟推开门。", "主角完成现实状态定向。"),
                 new SceneHandoffSnapshot(28L, 31L, "scene-1", "scene-2", "林沉舟推开门。", "主角完成现实状态定向。",
-                        List.of("待揭晓"), List.of(), List.of(), java.util.Map.of("source", "test"), "PASS", "规则审校通过。", LocalDateTime.of(2026, 4, 18, 12, 0))
+                        List.of("待揭晓"), List.of(), List.of(), java.util.Map.of("source", "test"), "PASS", "规则审校通过。", LocalDateTime.of(2026, 4, 18, 12, 0)),
+                new StoryEvent(
+                        "event-scene-1",
+                        StoryEventType.SCENE_COMPLETED,
+                        28L,
+                        31L,
+                        "scene-1",
+                        new StoryUnitRef("scene-1", "scene:31:scene-1", StoryUnitType.SCENE_EXECUTION),
+                        "scene scene-1 已完成",
+                        java.util.Map.of("source", "test"),
+                        new StorySourceTrace("test", "test", "unit-test", "DefaultStorySessionOrchestratorTest")
+                ),
+                new StorySnapshot(
+                        "snapshot-scene-1",
+                        SnapshotScope.SCENE,
+                        28L,
+                        31L,
+                        "scene-1",
+                        List.of(
+                                new StoryUnitRef("scene-1", "scene:31:scene-1", StoryUnitType.SCENE_EXECUTION),
+                                new StoryUnitRef("31", "chapter:31", StoryUnitType.CHAPTER)
+                        ),
+                        "scene-1 snapshot",
+                        new StorySourceTrace("test", "test", "unit-test", "DefaultStorySessionOrchestratorTest")
+                ),
+                new StoryPatch(
+                        "patch-scene-1",
+                        new StoryUnitRef("31", "chapter:31", StoryUnitType.CHAPTER),
+                        FacetType.REVEAL,
+                        List.of(new PatchOperation(PatchOperationType.MERGE, "/readerKnown", List.of("待揭晓"))),
+                        "scene-1 的 reveal patch",
+                        PatchStatus.APPLIED,
+                        new StorySourceTrace("test", "test", "unit-test", "DefaultStorySessionOrchestratorTest")
+                ),
+                new ReaderRevealState(
+                        28L,
+                        31L,
+                        List.of("待揭晓"),
+                        List.of("待揭晓"),
+                        List.of("待揭晓"),
+                        List.of(),
+                        "读者已知 1 条，未揭晓 0 条"
+                ),
+                new StorySnapshot(
+                        "snapshot-chapter-state-1",
+                        SnapshotScope.CHAPTER,
+                        28L,
+                        31L,
+                        "scene-1",
+                        List.of(new StoryUnitRef("31", "chapter:31", StoryUnitType.CHAPTER)),
+                        "读者已知 1 条，未揭晓 0 条",
+                        new StorySourceTrace("test", "test", "unit-test", "DefaultStorySessionOrchestratorTest")
+                )
         );
 
         when(contextAssembler.assemble(28L, 31L, "scene-1")).thenReturn(Optional.of(contextPacket));

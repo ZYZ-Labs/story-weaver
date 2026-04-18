@@ -10,9 +10,15 @@ import com.storyweaver.storyunit.context.ProjectBriefView;
 import com.storyweaver.storyunit.context.ReaderKnownStateView;
 import com.storyweaver.storyunit.context.RecentStoryProgressView;
 import com.storyweaver.storyunit.context.StoryUnitSummaryView;
+import com.storyweaver.storyunit.facet.reveal.ReaderRevealState;
 import com.storyweaver.storyunit.model.StoryUnitRef;
 import com.storyweaver.storyunit.model.StoryUnitType;
+import com.storyweaver.storyunit.patch.StoryPatch;
+import com.storyweaver.storyunit.service.ReaderRevealStateStore;
 import com.storyweaver.storyunit.service.SceneRuntimeStateStore;
+import com.storyweaver.storyunit.service.StoryEventStore;
+import com.storyweaver.storyunit.service.StoryPatchStore;
+import com.storyweaver.storyunit.service.StorySnapshotStore;
 import com.storyweaver.storyunit.session.ReviewDecision;
 import com.storyweaver.storyunit.session.ReviewResult;
 import com.storyweaver.storyunit.session.SceneExecutionStatus;
@@ -33,7 +39,17 @@ class DefaultSceneExecutionWriteServiceTest {
     @Test
     void shouldPersistSceneStateAndNextHandoffSnapshot() {
         SceneRuntimeStateStore store = mock(SceneRuntimeStateStore.class);
-        DefaultSceneExecutionWriteService service = new DefaultSceneExecutionWriteService(store);
+        StoryEventStore eventStore = mock(StoryEventStore.class);
+        StorySnapshotStore snapshotStore = mock(StorySnapshotStore.class);
+        StoryPatchStore patchStore = mock(StoryPatchStore.class);
+        ReaderRevealStateStore revealStateStore = mock(ReaderRevealStateStore.class);
+        DefaultSceneExecutionWriteService service = new DefaultSceneExecutionWriteService(
+                store,
+                eventStore,
+                snapshotStore,
+                patchStore,
+                revealStateStore
+        );
 
         StorySessionContextPacket contextPacket = new StorySessionContextPacket(
                 28L,
@@ -80,6 +96,11 @@ class DefaultSceneExecutionWriteServiceTest {
 
         when(store.saveSceneState(any())).thenAnswer(invocation -> invocation.getArgument(0));
         when(store.saveHandoff(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(eventStore.appendEvent(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(snapshotStore.saveSnapshot(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(patchStore.appendPatch(any(), any(), any())).thenAnswer(invocation -> invocation.getArgument(2));
+        when(revealStateStore.findChapterRevealState(28L, 31L)).thenReturn(java.util.Optional.empty());
+        when(revealStateStore.saveChapterRevealState(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
         SceneExecutionWriteResult result = service.write(contextPacket, brief, writerSessionResult, reviewDecision);
 
@@ -87,8 +108,18 @@ class DefaultSceneExecutionWriteServiceTest {
         assertEquals(SceneExecutionStatus.COMPLETED, result.sceneExecutionState().status());
         assertEquals("scene-3", result.handoffSnapshot().toSceneId());
         assertEquals("PASS", result.handoffSnapshot().reviewResult());
+        assertEquals("scene-2", result.stateEvent().sceneId());
+        assertEquals("SCENE_COMPLETED", result.stateEvent().eventType().name());
+        assertEquals("scene-2", result.stateSnapshot().sceneId());
+        assertEquals("REVEAL", result.statePatch().facetType().name());
+        assertEquals("主角决定赴约", result.readerRevealState().readerKnown().getLast());
+        assertEquals("CHAPTER", result.chapterStateSnapshot().scope().name());
         assertTrue(result.sceneExecutionState().handoffLine().contains("林沉舟"));
         verify(store).saveSceneState(any());
         verify(store).saveHandoff(any());
+        verify(eventStore).appendEvent(any());
+        verify(snapshotStore, org.mockito.Mockito.times(2)).saveSnapshot(any());
+        verify(patchStore).appendPatch(any(), any(), any(StoryPatch.class));
+        verify(revealStateStore).saveChapterRevealState(any(ReaderRevealState.class));
     }
 }

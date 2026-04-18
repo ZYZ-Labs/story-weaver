@@ -1,6 +1,7 @@
 package com.storyweaver.controller;
 
 import com.storyweaver.common.web.ApiResponse;
+import com.storyweaver.story.generation.orchestration.ChapterExecutionReviewService;
 import com.storyweaver.story.generation.orchestration.ChapterSkeletonPlanner;
 import com.storyweaver.story.generation.orchestration.SceneExecutionRequest;
 import com.storyweaver.story.generation.orchestration.StorySessionOrchestrator;
@@ -17,12 +18,15 @@ public class StorySessionOrchestrationController {
 
     private final StorySessionOrchestrator storySessionOrchestrator;
     private final ChapterSkeletonPlanner chapterSkeletonPlanner;
+    private final ChapterExecutionReviewService chapterExecutionReviewService;
 
     public StorySessionOrchestrationController(
             StorySessionOrchestrator storySessionOrchestrator,
-            ChapterSkeletonPlanner chapterSkeletonPlanner) {
+            ChapterSkeletonPlanner chapterSkeletonPlanner,
+            ChapterExecutionReviewService chapterExecutionReviewService) {
         this.storySessionOrchestrator = storySessionOrchestrator;
         this.chapterSkeletonPlanner = chapterSkeletonPlanner;
+        this.chapterExecutionReviewService = chapterExecutionReviewService;
     }
 
     @GetMapping("/api/story-orchestration/projects/{projectId}/chapters/{chapterId}/preview")
@@ -64,5 +68,18 @@ public class StorySessionOrchestrationController {
         return chapterSkeletonPlanner.plan(projectId, chapterId)
                 .<ResponseEntity<?>>map(skeleton -> ResponseEntity.ok(ApiResponse.success("获取成功", skeleton)))
                 .orElseGet(() -> ResponseEntity.status(404).body(ApiResponse.error(404, "章节骨架预览不存在")));
+    }
+
+    @GetMapping("/api/story-orchestration/projects/{projectId}/chapters/{chapterId}/chapter-review")
+    public ResponseEntity<?> chapterReview(
+            @PathVariable Long projectId,
+            @PathVariable Long chapterId,
+            @RequestHeader(value = "Authorization", required = false) String authorizationHeader) {
+        if (!AuthHeaderSupport.hasValidBearerToken(authorizationHeader)) {
+            return AuthHeaderSupport.unauthorizedResponse();
+        }
+        return chapterExecutionReviewService.review(projectId, chapterId)
+                .<ResponseEntity<?>>map(review -> ResponseEntity.ok(ApiResponse.success("获取成功", review)))
+                .orElseGet(() -> ResponseEntity.status(404).body(ApiResponse.error(404, "章节级审校结果不存在")));
     }
 }

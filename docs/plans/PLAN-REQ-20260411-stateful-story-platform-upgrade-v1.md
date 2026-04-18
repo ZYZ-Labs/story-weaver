@@ -322,6 +322,19 @@
   - `SceneRuntimeStateStore`
   - `SceneExecutionWriteService`
   - `POST /api/story-orchestration/projects/{projectId}/chapters/{chapterId}/execute`
+- `Phase 6.3` 已完成真实联调：
+  - `execute` 已真实写入当前 scene runtime state
+  - 下一 scene 已可读取 `previousSceneHandoff`
+  - 执行后的当前 scene 已从 `SCENE_FALLBACK_TO_LATEST` 升级为 `SCENE_BOUND`
+- `Phase 6.4` 已启动并已落章节级审校最小闭环：
+  - `ChapterExecutionReviewService`
+  - `ChapterExecutionReview`
+  - `ChapterTraceSummary`
+  - `RuleBasedChapterExecutionReviewService`
+  - `GET /api/story-orchestration/projects/{projectId}/chapters/{chapterId}/chapter-review`
+- `Phase 6.4` 已完成真实联调：
+  - `chapter 31` 已稳定返回章节级问题汇总
+  - `chapter 32` 已完成 `scene-1 -> scene-5` 执行并达到 `chapter-review = PASS`
 - 当前已完成两轮真实联调：
   - `chapter 31 + scene-1 / scene-2` -> `SCENE_BOUND`
   - `chapter 31 + scene-999` -> `SCENE_FALLBACK_TO_LATEST`
@@ -329,14 +342,22 @@
   - `chapter 32 / 34 preview` -> `200`
 - 当前已确认：
   - `Phase 6.1 / 6.2` 主链已收口
-  - `Phase 6.3` 已到可部署联调阶段
-  - `CHAPTER_COLD_START` 仍缺真实样本，不阻塞继续推进
+  - `Phase 6.3` 已完成真实联调收口
+  - `Phase 6.4` 已完成真实联调收口
+  - `Phase 6` 已整体完成
+  - `CHAPTER_COLD_START` 仍缺真实样本，但不再阻塞阶段收口
 - 当前下一步：
-  - 部署联调 `execute`
-  - 验证 scene runtime state / handoff 的真实写回
-  - 继续准备 `Phase 6.4` 的章节级联调
+  - 开始 `Phase 7.1`
+  - 完成 scene execution -> event + snapshot 最小闭环
 
 ### Phase 7. 增量状态系统
+
+当前状态：
+
+- `Phase 7.1` 已完成真实联调收口
+- 当前应进入 `Phase 7.2`
+- 线上报告：
+  - `docs/reports/REPORT-20260418-phase7-state-system-live-validation-round1.md`
 
 目标：
 
@@ -357,6 +378,22 @@
 退出条件：
 
 - 关键状态变化可通过 event + patch 方式写回与回放。
+
+当前状态：
+
+- 已启动
+- 详细计划：
+  - `docs/plans/PLAN-REQ-20260411-stateful-story-platform-upgrade-phase7-incremental-state-v1.md`
+- `Phase 7.1` 已启动并已落：
+  - `StoryEventStore`
+  - `StorySnapshotStore`
+  - `StoryStateProperties`
+  - `ResilientStoryStateStore`
+  - `StoryStateController`
+  - `execute` 写回 `stateEvent + stateSnapshot`
+- 当前新增接口：
+  - `GET /api/story-state/projects/{projectId}/chapters/{chapterId}/events`
+  - `GET /api/story-state/projects/{projectId}/chapters/{chapterId}/snapshots`
 
 ### Phase 8. 前端信息架构重构
 
