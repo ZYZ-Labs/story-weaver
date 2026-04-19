@@ -8,11 +8,11 @@
 ## 当前快照
 
 - Current Phase: `Phase 8` 进行中
-- Current Task: `Phase 8.2` 章节工作区重构已完成本地开发，待部署联调
+- Current Task: `Phase 8.2` 章节工作区镜头编辑/删除与直出初稿已完成本地开发，待部署联调
 - Last Completed: 已完成 `Phase 7` 状态系统阶段收口
 - Next Action:
   - 部署 `Phase 8.2` 前端改动
-  - 联调 `Chapter Workspace`
+  - 联调 `Chapter Workspace` 的镜头编辑/删除与直出初稿
   - 再推进 `Phase 8.3` 对象页 `Summary First` 重构
 - Blockers:
   - 旧主线 `REQ-20260409-generation-reliability-refactor` 已归档，但其代码成果和回归报告仍需作为迁移基线继续参考
@@ -69,6 +69,27 @@
       - 当前镜头执行
       - 章节状态与揭晓
       - 章节 trace 与审校
+  - 已完成 `Phase 8.2` 第二轮本地收口：
+    - 已补章节工作区镜头操作能力：
+      - 当前镜头编辑
+      - `PLANNED` 镜头删除
+      - 根据当前镜头直接生成初稿或继续生成
+      - 草稿接受写回正文
+      - 草稿拒绝
+    - 已补后端章节骨架 override 能力：
+      - `PUT /api/story-orchestration/projects/{projectId}/chapters/{chapterId}/skeleton-scenes/{sceneId}`
+      - `DELETE /api/story-orchestration/projects/{projectId}/chapters/{chapterId}/skeleton-scenes/{sceneId}`
+    - 当前章节工作区主路径已具备：
+      - 看镜头
+      - 改镜头
+      - 删可删镜头
+      - 直接从镜头出草稿
+      - 决定是否写回正文
+    - 已完成本地校验：
+      - `mvn -Dmaven.repo.local=/usr/local/project/github/story-weaver/.cache/m2 -DskipTests compile`
+      - `mvn test -pl backend -am -Dtest=StorySessionOrchestrationControllerTest,RuleBasedChapterSkeletonPlannerTest,DefaultStorySessionOrchestratorTest -Dsurefire.failIfNoSpecifiedTests=false -Dmaven.repo.local=/usr/local/project/github/story-weaver/.cache/m2`
+      - `npm run type-check`
+      - `npm run build`
     - 已完成本地校验：
       - `npm run type-check`
       - `npm run build`

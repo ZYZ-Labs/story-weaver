@@ -1,23 +1,28 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, reactive, ref, watch } from 'vue'
 
 import ChapterAnchorPanel from '@/components/ChapterAnchorPanel.vue'
 import EmptyState from '@/components/EmptyState.vue'
 import GenerationReadinessCard from '@/components/GenerationReadinessCard.vue'
+import MarkdownContent from '@/components/MarkdownContent.vue'
 import MarkdownEditor from '@/components/MarkdownEditor.vue'
 import PageContainer from '@/components/PageContainer.vue'
 import StatCard from '@/components/StatCard.vue'
+import { acceptWriting, generateWriting, rejectWriting } from '@/api/ai-writing'
 import { getChapterAnchors, getChapterGenerationReadiness } from '@/api/story-generation'
 import {
+  deleteChapterSkeletonScene,
   executeStorySession,
   getChapterExecutionReview,
   getChapterSkeletonPreview,
   getStorySessionPreview,
+  updateChapterSkeletonScene,
 } from '@/api/story-orchestration'
 import { getReaderKnownState } from '@/api/story-context'
 import { getChapterState, getReaderRevealState } from '@/api/story-state'
 import { useProjectWorkspace } from '@/composables/useProjectWorkspace'
 import type {
+  AIWritingRecord,
   ChapterAnchorBundle,
   ChapterExecutionReviewView,
   ChapterIncrementalStateView,
@@ -43,12 +48,20 @@ const loading = ref(false)
 const sceneLoading = ref(false)
 const saveLoading = ref(false)
 const executeLoading = ref(false)
+const sceneMutationLoading = ref(false)
+const draftLoading = ref(false)
 const sceneId = ref('scene-1')
 const editorContent = ref('')
 const saveMessage = ref('')
 const saveError = ref('')
 const executionMessage = ref('')
 const executionError = ref('')
+const sceneMutationMessage = ref('')
+const sceneMutationError = ref('')
+const draftMessage = ref('')
+const draftError = ref('')
+const sceneDraftRecord = ref<AIWritingRecord | null>(null)
+const sceneEditorVisible = ref(false)
 
 const readiness = ref<GenerationReadiness | null>(null)
 const anchors = ref<ChapterAnchorBundle | null>(null)
@@ -60,11 +73,23 @@ const chapterState = ref<ChapterIncrementalStateView | null>(null)
 const readerRevealState = ref<ReaderRevealStateView | null>(null)
 const readerKnownState = ref<ReaderKnownStateView | null>(null)
 
+const sceneEditorForm = reactive({
+  goal: '',
+  readerRevealText: '',
+  mustUseAnchorsText: '',
+  stopCondition: '',
+  targetWords: 900 as number | null,
+})
+
 const sceneOptions = computed(() =>
   (skeleton.value?.scenes || []).map((scene) => ({
     title: `${scene.sceneId} · ${scene.goal || scene.status}`,
     value: scene.sceneId,
   })),
+)
+
+const currentScene = computed(
+  () => skeleton.value?.scenes?.find((scene) => scene.sceneId === sceneId.value) || null,
 )
 
 const stats = computed(() => [
@@ -106,6 +131,27 @@ function resolveSceneId() {
 
 function updateSceneId(value: unknown) {
   sceneId.value = String(value || 'scene-1')
+}
+
+function openSceneEditor() {
+  if (!currentScene.value) {
+    return
+  }
+  sceneEditorForm.goal = currentScene.value.goal || ''
+  sceneEditorForm.readerRevealText = (currentScene.value.readerReveal || []).join('\n')
+  sceneEditorForm.mustUseAnchorsText = (currentScene.value.mustUseAnchors || []).join('\n')
+  sceneEditorForm.stopCondition = currentScene.value.stopCondition || ''
+  sceneEditorForm.targetWords = currentScene.value.targetWords ?? 900
+  sceneMutationError.value = ''
+  sceneMutationMessage.value = ''
+  sceneEditorVisible.value = true
+}
+
+function parseMultilineList(value: string) {
+  return value
+    .split('\n')
+    .map((item) => item.trim())
+    .filter(Boolean)
 }
 
 async function loadScenePreview(projectId: number, chapterId: number, targetSceneId: string) {
@@ -193,6 +239,124 @@ async function executeCurrentScene() {
     executionError.value = error instanceof Error ? error.message : '执行镜头失败'
   } finally {
     executeLoading.value = false
+  }
+}
+
+async function saveSceneOverride() {
+  if (!currentProjectId.value || !activeChapterId.value || !currentScene.value) {
+    return
+  }
+  sceneMutationLoading.value = true
+  sceneMutationError.value = ''
+  sceneMutationMessage.value = ''
+  try {
+    await updateChapterSkeletonScene(currentProjectId.value, activeChapterId.value, currentScene.value.sceneId, {
+      goal: sceneEditorForm.goal,
+      readerReveal: parseMultilineList(sceneEditorForm.readerRevealText),
+      mustUseAnchors: parseMultilineList(sceneEditorForm.mustUseAnchorsText),
+      stopCondition: sceneEditorForm.stopCondition,
+      targetWords: sceneEditorForm.targetWords,
+    })
+    sceneEditorVisible.value = false
+    sceneMutationMessage.value = `已更新 ${currentScene.value.sceneId} 的骨架。`
+    await loadWorkspace(currentProjectId.value, activeChapterId.value)
+  } catch (error) {
+    sceneMutationError.value = error instanceof Error ? error.message : '更新镜头失败'
+  } finally {
+    sceneMutationLoading.value = false
+  }
+}
+
+async function deleteCurrentScene() {
+  if (!currentProjectId.value || !activeChapterId.value || !currentScene.value) {
+    return
+  }
+  if (!window.confirm(`确认删除 ${currentScene.value.sceneId} 吗？`)) {
+    return
+  }
+  sceneMutationLoading.value = true
+  sceneMutationError.value = ''
+  sceneMutationMessage.value = ''
+  try {
+    await deleteChapterSkeletonScene(currentProjectId.value, activeChapterId.value, currentScene.value.sceneId)
+    sceneMutationMessage.value = `已删除 ${currentScene.value.sceneId}。`
+    await loadWorkspace(currentProjectId.value, activeChapterId.value)
+  } catch (error) {
+    sceneMutationError.value = error instanceof Error ? error.message : '删除镜头失败'
+  } finally {
+    sceneMutationLoading.value = false
+  }
+}
+
+async function generateSceneDraft() {
+  if (!activeChapterId.value || !sessionPreview.value) {
+    return
+  }
+  draftLoading.value = true
+  draftError.value = ''
+  draftMessage.value = ''
+  sceneDraftRecord.value = null
+  try {
+    const brief = sessionPreview.value.writerExecutionBrief
+    const continuityNotes = sessionPreview.value.contextPacket?.sceneBindingContext?.reason
+    const instructionSections = [
+      `请严格围绕当前镜头生成小说正文，不要越过镜头停点。`,
+      `【镜头ID】${sceneId.value}`,
+      `【镜头目标】${brief.goal || '未定义'}`,
+      `【向读者揭晓】${(brief.readerReveal || []).join('；') || '未定义'}`,
+      `【必须使用锚点】${(brief.mustUseAnchors || []).join('；') || '未定义'}`,
+      `【收束点】${brief.stopCondition || '未定义'}`,
+      continuityNotes ? `【承接说明】${continuityNotes}` : '',
+    ].filter(Boolean)
+
+    sceneDraftRecord.value = await generateWriting({
+      chapterId: activeChapterId.value,
+      currentContent: editorContent.value,
+      userInstruction: instructionSections.join('\n'),
+      writingType: editorContent.value.trim() ? 'continue' : 'draft',
+      maxTokens: brief.targetWords || 900,
+      entryPoint: 'phase8.chapter-workspace.scene-draft',
+    })
+    draftMessage.value = `已生成 ${sceneId.value} 的${editorContent.value.trim() ? '续写草稿' : '初稿'}。`
+  } catch (error) {
+    draftError.value = error instanceof Error ? error.message : '生成镜头草稿失败'
+  } finally {
+    draftLoading.value = false
+  }
+}
+
+async function acceptSceneDraft() {
+  if (!sceneDraftRecord.value || !currentProjectId.value || !activeChapterId.value) {
+    return
+  }
+  draftLoading.value = true
+  draftError.value = ''
+  try {
+    await acceptWriting(sceneDraftRecord.value.id)
+    draftMessage.value = `已接受 ${sceneId.value} 的草稿并写回章节正文。`
+    await loadWorkspace(currentProjectId.value, activeChapterId.value)
+    sceneDraftRecord.value = null
+  } catch (error) {
+    draftError.value = error instanceof Error ? error.message : '接受草稿失败'
+  } finally {
+    draftLoading.value = false
+  }
+}
+
+async function rejectSceneDraft() {
+  if (!sceneDraftRecord.value) {
+    return
+  }
+  draftLoading.value = true
+  draftError.value = ''
+  try {
+    await rejectWriting(sceneDraftRecord.value.id)
+    draftMessage.value = `已拒绝 ${sceneId.value} 的草稿。`
+    sceneDraftRecord.value = null
+  } catch (error) {
+    draftError.value = error instanceof Error ? error.message : '拒绝草稿失败'
+  } finally {
+    draftLoading.value = false
   }
 }
 
@@ -363,9 +527,37 @@ watch(sceneId, async (value) => {
         </v-card>
 
         <v-card class="soft-panel">
-          <v-card-title>章节骨架与镜头</v-card-title>
+          <v-card-title class="d-flex justify-space-between align-center ga-3">
+            <span>章节骨架与镜头</span>
+            <div class="d-flex ga-2 flex-wrap">
+              <v-btn
+                variant="outlined"
+                prepend-icon="mdi-pencil-outline"
+                :disabled="!currentScene"
+                @click="openSceneEditor"
+              >
+                编辑当前镜头
+              </v-btn>
+              <v-btn
+                color="error"
+                variant="tonal"
+                prepend-icon="mdi-delete-outline"
+                :disabled="!currentScene"
+                :loading="sceneMutationLoading"
+                @click="deleteCurrentScene"
+              >
+                删除当前镜头
+              </v-btn>
+            </div>
+          </v-card-title>
           <v-card-text>
             <v-progress-linear v-if="loading" indeterminate color="primary" class="mb-4" />
+            <v-alert v-if="sceneMutationMessage" type="success" variant="tonal" class="mb-4">
+              {{ sceneMutationMessage }}
+            </v-alert>
+            <v-alert v-if="sceneMutationError" type="error" variant="tonal" class="mb-4">
+              {{ sceneMutationError }}
+            </v-alert>
             <div v-if="skeleton?.scenes?.length" class="scene-list">
               <button
                 v-for="scene in skeleton.scenes"
@@ -405,7 +597,18 @@ watch(sceneId, async (value) => {
         <ChapterAnchorPanel :anchors="anchors" :loading="loading" title="当前章节锚点" />
 
         <v-card class="soft-panel">
-          <v-card-title>当前镜头执行</v-card-title>
+          <v-card-title class="d-flex justify-space-between align-center ga-3">
+            <span>当前镜头执行</span>
+            <v-btn
+              color="secondary"
+              prepend-icon="mdi-auto-fix"
+              :loading="draftLoading"
+              :disabled="!sessionPreview"
+              @click="generateSceneDraft"
+            >
+              {{ editorContent.trim() ? '根据当前镜头继续生成' : '根据当前镜头生成初稿' }}
+            </v-btn>
+          </v-card-title>
           <v-card-text>
             <v-progress-linear v-if="sceneLoading" indeterminate color="primary" class="mb-4" />
 
@@ -426,6 +629,12 @@ watch(sceneId, async (value) => {
             </v-alert>
             <v-alert v-if="executionError" type="error" variant="tonal" class="mt-4">
               {{ executionError }}
+            </v-alert>
+            <v-alert v-if="draftMessage" type="success" variant="tonal" class="mt-4">
+              {{ draftMessage }}
+            </v-alert>
+            <v-alert v-if="draftError" type="error" variant="tonal" class="mt-4">
+              {{ draftError }}
             </v-alert>
 
             <v-divider class="my-4" />
@@ -450,6 +659,37 @@ watch(sceneId, async (value) => {
             <div class="text-caption text-medium-emphasis mt-3">
               Handoff：{{ lastExecution?.writeResult?.handoffSnapshot?.toSceneId || '待执行后生成' }}
             </div>
+
+            <template v-if="sceneDraftRecord">
+              <v-divider class="my-4" />
+              <div class="d-flex justify-space-between align-center ga-3">
+                <div class="text-subtitle-2 font-weight-medium">当前镜头草稿</div>
+                <div class="d-flex ga-2 flex-wrap">
+                  <v-btn
+                    color="primary"
+                    variant="tonal"
+                    prepend-icon="mdi-check"
+                    :loading="draftLoading"
+                    @click="acceptSceneDraft"
+                  >
+                    接受写回正文
+                  </v-btn>
+                  <v-btn
+                    color="error"
+                    variant="outlined"
+                    prepend-icon="mdi-close"
+                    :loading="draftLoading"
+                    @click="rejectSceneDraft"
+                  >
+                    拒绝草稿
+                  </v-btn>
+                </div>
+              </div>
+              <div class="text-caption text-medium-emphasis mt-2">
+                {{ sceneDraftRecord.writingType }} · {{ sceneDraftRecord.selectedModel || '默认模型' }}
+              </div>
+              <MarkdownContent class="mt-4" :content="sceneDraftRecord.generatedContent || ''" />
+            </template>
           </v-card-text>
         </v-card>
 
@@ -540,6 +780,64 @@ watch(sceneId, async (value) => {
       </div>
     </div>
   </PageContainer>
+
+  <v-dialog v-model="sceneEditorVisible" max-width="760">
+    <v-card>
+      <v-card-title>编辑当前镜头</v-card-title>
+      <v-card-text>
+        <div class="text-body-2 text-medium-emphasis mb-4">
+          当前镜头：<span class="scene-token">{{ currentScene?.sceneId || sceneId }}</span>
+        </div>
+        <v-textarea
+          v-model="sceneEditorForm.goal"
+          label="镜头目标"
+          variant="outlined"
+          rows="3"
+          auto-grow
+        />
+        <v-textarea
+          v-model="sceneEditorForm.readerRevealText"
+          label="向读者揭晓"
+          variant="outlined"
+          rows="3"
+          auto-grow
+          hint="一行一条"
+          persistent-hint
+          class="mt-4"
+        />
+        <v-textarea
+          v-model="sceneEditorForm.mustUseAnchorsText"
+          label="必须使用锚点"
+          variant="outlined"
+          rows="3"
+          auto-grow
+          hint="一行一条"
+          persistent-hint
+          class="mt-4"
+        />
+        <v-textarea
+          v-model="sceneEditorForm.stopCondition"
+          label="镜头停点"
+          variant="outlined"
+          rows="2"
+          auto-grow
+          class="mt-4"
+        />
+        <v-text-field
+          v-model.number="sceneEditorForm.targetWords"
+          label="目标字数"
+          type="number"
+          variant="outlined"
+          class="mt-4"
+        />
+      </v-card-text>
+      <v-card-actions>
+        <v-spacer />
+        <v-btn variant="text" @click="sceneEditorVisible = false">取消</v-btn>
+        <v-btn color="primary" :loading="sceneMutationLoading" @click="saveSceneOverride">保存镜头</v-btn>
+      </v-card-actions>
+    </v-card>
+  </v-dialog>
 </template>
 
 <style scoped>

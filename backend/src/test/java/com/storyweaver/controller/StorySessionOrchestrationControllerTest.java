@@ -1,6 +1,7 @@
 package com.storyweaver.controller;
 
 import com.storyweaver.exception.GlobalExceptionHandler;
+import com.storyweaver.story.generation.orchestration.ChapterSkeletonMutationService;
 import com.storyweaver.story.generation.orchestration.ChapterExecutionReview;
 import com.storyweaver.story.generation.orchestration.ChapterExecutionReviewService;
 import com.storyweaver.story.generation.orchestration.ChapterSkeleton;
@@ -50,6 +51,7 @@ import com.storyweaver.storyunit.snapshot.SnapshotScope;
 import com.storyweaver.storyunit.snapshot.StorySnapshot;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
@@ -59,8 +61,10 @@ import java.util.Optional;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.eq;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -70,16 +74,19 @@ class StorySessionOrchestrationControllerTest {
     private StorySessionOrchestrator storySessionOrchestrator;
     private ChapterSkeletonPlanner chapterSkeletonPlanner;
     private ChapterExecutionReviewService chapterExecutionReviewService;
+    private ChapterSkeletonMutationService chapterSkeletonMutationService;
 
     @BeforeEach
     void setUp() {
         storySessionOrchestrator = mock(StorySessionOrchestrator.class);
         chapterSkeletonPlanner = mock(ChapterSkeletonPlanner.class);
         chapterExecutionReviewService = mock(ChapterExecutionReviewService.class);
+        chapterSkeletonMutationService = mock(ChapterSkeletonMutationService.class);
         mockMvc = MockMvcBuilders.standaloneSetup(new StorySessionOrchestrationController(
                         storySessionOrchestrator,
                         chapterSkeletonPlanner,
-                        chapterExecutionReviewService))
+                        chapterExecutionReviewService,
+                        chapterSkeletonMutationService))
                 .setControllerAdvice(new GlobalExceptionHandler())
                 .build();
     }
@@ -231,6 +238,68 @@ class StorySessionOrchestrationControllerTest {
                 .andExpect(jsonPath("$.data.result").value("REVISE"))
                 .andExpect(jsonPath("$.data.traceSummary.pendingSceneCount").value(1))
                 .andExpect(jsonPath("$.data.traceSummary.pendingSceneIds[0]").value("scene-4"));
+    }
+
+    @Test
+    void shouldUpdateSkeletonSceneWhenAvailable() throws Exception {
+        ChapterSkeleton skeleton = new ChapterSkeleton(
+                28L,
+                31L,
+                "skeleton_31_v1",
+                3,
+                "停在收口前。",
+                List.of(
+                        new SceneSkeletonItem("scene-1", 1, SceneExecutionStatus.PLANNED, "新的 goal", List.of("揭晓 A"), List.of("anchor=A"), "新的停点", 950, "manual-override")
+                ),
+                List.of("已对 scene-1 应用手动骨架修改。")
+        );
+        when(chapterSkeletonMutationService.updateScene(eq(28L), eq(31L), eq(new com.storyweaver.story.generation.orchestration.SceneSkeletonMutationCommand(
+                "scene-1",
+                "新的 goal",
+                List.of("揭晓 A"),
+                List.of("anchor=A"),
+                "新的停点",
+                950
+        )))).thenReturn(Optional.of(skeleton));
+
+        mockMvc.perform(put("/api/story-orchestration/projects/28/chapters/31/skeleton-scenes/scene-1")
+                        .header("Authorization", "Bearer test-token")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "goal": "新的 goal",
+                                  "readerReveal": ["揭晓 A"],
+                                  "mustUseAnchors": ["anchor=A"],
+                                  "stopCondition": "新的停点",
+                                  "targetWords": 950
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.scenes[0].goal").value("新的 goal"))
+                .andExpect(jsonPath("$.data.scenes[0].source").value("manual-override"));
+    }
+
+    @Test
+    void shouldDeleteSkeletonSceneWhenAvailable() throws Exception {
+        ChapterSkeleton skeleton = new ChapterSkeleton(
+                28L,
+                31L,
+                "skeleton_31_v1",
+                2,
+                "停在收口前。",
+                List.of(
+                        new SceneSkeletonItem("scene-1", 1, SceneExecutionStatus.PLANNED, "开场", List.of(), List.of(), "停在开场后。", 900, "manual-override"),
+                        new SceneSkeletonItem("scene-3", 3, SceneExecutionStatus.PLANNED, "收口", List.of(), List.of(), "停在收口前。", 1000, "manual-override")
+                ),
+                List.of("已删除 scene-2。")
+        );
+        when(chapterSkeletonMutationService.deleteScene(28L, 31L, "scene-2")).thenReturn(Optional.of(skeleton));
+
+        mockMvc.perform(delete("/api/story-orchestration/projects/28/chapters/31/skeleton-scenes/scene-2")
+                        .header("Authorization", "Bearer test-token"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.sceneCount").value(2))
+                .andExpect(jsonPath("$.data.scenes[1].sceneId").value("scene-3"));
     }
 
     private StorySessionPreview samplePreview() {

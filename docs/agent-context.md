@@ -170,6 +170,19 @@
       - 章节状态与揭晓
       - 章节 trace 与审校
   - 当前下一步是部署联调 `Chapter Workspace`
+  - `Phase 8.2` 已继续推进到镜头级可操作闭环：
+    - 当前镜头可编辑
+    - `PLANNED` 镜头可删除
+    - 可直接基于当前镜头生成初稿
+    - 草稿可直接接受写回正文或拒绝
+  - 后端已补章节骨架 override 能力：
+    - `PUT /api/story-orchestration/projects/{projectId}/chapters/{chapterId}/skeleton-scenes/{sceneId}`
+    - `DELETE /api/story-orchestration/projects/{projectId}/chapters/{chapterId}/skeleton-scenes/{sceneId}`
+  - 当前下一步是部署联调：
+    - 镜头编辑
+    - 镜头删除
+    - 根据镜头直出初稿
+    - 草稿接受/拒绝回写
   - 若联调通过，再进入：
     - `Phase 8.3` 对象页 `Summary First` 重构
 - 最新修正：

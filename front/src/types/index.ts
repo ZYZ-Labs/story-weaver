@@ -732,6 +732,14 @@ export interface StorySessionExecutionView {
   trace: SessionExecutionTraceView
 }
 
+export interface ChapterSkeletonSceneUpdateRequest {
+  goal?: string
+  readerReveal?: string[]
+  mustUseAnchors?: string[]
+  stopCondition?: string
+  targetWords?: number | null
+}
+
 export interface ReaderRevealStateView {
   projectId: number
   chapterId: number

@@ -1,6 +1,7 @@
 package com.storyweaver.story.generation.orchestration.impl;
 
 import com.storyweaver.story.generation.orchestration.DirectorSessionService;
+import com.storyweaver.story.generation.orchestration.ChapterSkeletonStore;
 import com.storyweaver.story.generation.orchestration.SceneBindingContext;
 import com.storyweaver.story.generation.orchestration.SceneBindingMode;
 import com.storyweaver.story.generation.orchestration.SelectorSessionService;
@@ -36,6 +37,7 @@ class RuleBasedChapterSkeletonPlannerTest {
         StorySessionContextAssembler contextAssembler = mock(StorySessionContextAssembler.class);
         DirectorSessionService directorSessionService = mock(DirectorSessionService.class);
         SelectorSessionService selectorSessionService = mock(SelectorSessionService.class);
+        ChapterSkeletonStore chapterSkeletonStore = mock(ChapterSkeletonStore.class);
 
         StorySessionContextPacket contextPacket = new StorySessionContextPacket(
                 28L,
@@ -62,11 +64,13 @@ class RuleBasedChapterSkeletonPlannerTest {
         when(directorSessionService.proposeCandidates(contextPacket)).thenReturn(candidates);
         when(selectorSessionService.selectCandidate(contextPacket, candidates))
                 .thenReturn(new SelectionDecision("opening-31", "当前是第一镜头，优先开场。", List.of(), List.of()));
+        when(chapterSkeletonStore.find(28L, 31L)).thenReturn(Optional.empty());
 
         RuleBasedChapterSkeletonPlanner planner = new RuleBasedChapterSkeletonPlanner(
                 contextAssembler,
                 directorSessionService,
-                selectorSessionService
+                selectorSessionService,
+                chapterSkeletonStore
         );
 
         var skeleton = planner.plan(28L, 31L).orElseThrow();
@@ -84,6 +88,7 @@ class RuleBasedChapterSkeletonPlannerTest {
         StorySessionContextAssembler contextAssembler = mock(StorySessionContextAssembler.class);
         DirectorSessionService directorSessionService = mock(DirectorSessionService.class);
         SelectorSessionService selectorSessionService = mock(SelectorSessionService.class);
+        ChapterSkeletonStore chapterSkeletonStore = mock(ChapterSkeletonStore.class);
 
         SceneExecutionState existingScene = new SceneExecutionState(
                 28L,
@@ -125,11 +130,13 @@ class RuleBasedChapterSkeletonPlannerTest {
         when(directorSessionService.proposeCandidates(contextPacket)).thenReturn(candidates);
         when(selectorSessionService.selectCandidate(contextPacket, candidates))
                 .thenReturn(new SelectionDecision("mainline-31", "当前应优先承接上一镜头。", List.of(), List.of()));
+        when(chapterSkeletonStore.find(28L, 31L)).thenReturn(Optional.empty());
 
         RuleBasedChapterSkeletonPlanner planner = new RuleBasedChapterSkeletonPlanner(
                 contextAssembler,
                 directorSessionService,
-                selectorSessionService
+                selectorSessionService,
+                chapterSkeletonStore
         );
 
         var skeleton = planner.plan(28L, 31L).orElseThrow();

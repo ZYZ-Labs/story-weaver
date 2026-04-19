@@ -1,6 +1,7 @@
 package com.storyweaver.story.generation.orchestration.impl;
 
 import com.storyweaver.story.generation.orchestration.ChapterSkeleton;
+import com.storyweaver.story.generation.orchestration.ChapterSkeletonStore;
 import com.storyweaver.story.generation.orchestration.ChapterSkeletonPlanner;
 import com.storyweaver.story.generation.orchestration.DirectorSessionService;
 import com.storyweaver.story.generation.orchestration.SceneSkeletonItem;
@@ -14,9 +15,11 @@ import com.storyweaver.storyunit.session.SelectionDecision;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Optional;
+import java.util.Map;
 import java.util.Set;
 
 @Service
@@ -28,14 +31,17 @@ public class RuleBasedChapterSkeletonPlanner implements ChapterSkeletonPlanner {
     private final StorySessionContextAssembler storySessionContextAssembler;
     private final DirectorSessionService directorSessionService;
     private final SelectorSessionService selectorSessionService;
+    private final ChapterSkeletonStore chapterSkeletonStore;
 
     public RuleBasedChapterSkeletonPlanner(
             StorySessionContextAssembler storySessionContextAssembler,
             DirectorSessionService directorSessionService,
-            SelectorSessionService selectorSessionService) {
+            SelectorSessionService selectorSessionService,
+            ChapterSkeletonStore chapterSkeletonStore) {
         this.storySessionContextAssembler = storySessionContextAssembler;
         this.directorSessionService = directorSessionService;
         this.selectorSessionService = selectorSessionService;
+        this.chapterSkeletonStore = chapterSkeletonStore;
     }
 
     @Override
@@ -51,6 +57,109 @@ public class RuleBasedChapterSkeletonPlanner implements ChapterSkeletonPlanner {
                 ? new SelectionDecision("", "", List.of(), List.of())
                 : selectorSessionService.selectCandidate(context, candidates);
 
+        Optional<ChapterSkeleton> storedSkeleton = chapterSkeletonStore.find(projectId, chapterId);
+        if (storedSkeleton.isPresent()) {
+            ChapterSkeleton mergedSkeleton = mergeStoredSkeleton(context, storedSkeleton.get());
+            return Optional.of(new ChapterSkeleton(
+                    projectId,
+                    chapterId,
+                    mergedSkeleton.skeletonId(),
+                    mergedSkeleton.scenes().size(),
+                    mergedSkeleton.globalStopCondition(),
+                    mergedSkeleton.scenes(),
+                    appendPlanningNote(mergedSkeleton.planningNotes(), "当前章节骨架已应用手动覆盖层。")
+            ));
+        }
+
+        List<SceneSkeletonItem> scenes = buildBaseScenes(context, candidates, selectionDecision);
+        List<String> planningNotes = buildPlanningNotes(context, selectionDecision, candidates, scenes);
+        String globalStopCondition = scenes.isEmpty()
+                ? fallbackStopCondition(context)
+                : firstNonBlank(scenes.get(scenes.size() - 1).stopCondition(), fallbackStopCondition(context));
+
+        return Optional.of(new ChapterSkeleton(
+                projectId,
+                chapterId,
+                "skeleton_" + chapterId + "_v1",
+                scenes.size(),
+                globalStopCondition,
+                scenes,
+                planningNotes
+        ));
+    }
+
+    private ChapterSkeleton mergeStoredSkeleton(StorySessionContextPacket context, ChapterSkeleton storedSkeleton) {
+        Map<String, SceneExecutionState> stateBySceneId = new LinkedHashMap<>();
+        context.existingSceneStates().forEach(state -> stateBySceneId.put(state.sceneId(), state));
+
+        List<SceneSkeletonItem> mergedScenes = new ArrayList<>();
+        for (SceneSkeletonItem scene : storedSkeleton.scenes()) {
+            SceneExecutionState state = stateBySceneId.remove(scene.sceneId());
+            mergedScenes.add(mergeScene(scene, state, context));
+        }
+
+        for (SceneExecutionState state : stateBySceneId.values()) {
+            mergedScenes.add(new SceneSkeletonItem(
+                    state.sceneId(),
+                    state.sceneIndex(),
+                    state.status(),
+                    firstNonBlank(state.goal(), state.outcomeSummary()),
+                    state.readerRevealDelta(),
+                    baseAnchors(context),
+                    state.stopCondition(),
+                    null,
+                    "existing-scene-state"
+            ));
+        }
+
+        List<SceneSkeletonItem> orderedScenes = mergedScenes.stream()
+                .sorted(java.util.Comparator.comparingInt(SceneSkeletonItem::sceneIndex).thenComparing(SceneSkeletonItem::sceneId))
+                .toList();
+        String globalStopCondition = orderedScenes.isEmpty()
+                ? fallbackStopCondition(context)
+                : firstNonBlank(storedSkeleton.globalStopCondition(), orderedScenes.get(orderedScenes.size() - 1).stopCondition(), fallbackStopCondition(context));
+        return new ChapterSkeleton(
+                storedSkeleton.projectId(),
+                storedSkeleton.chapterId(),
+                storedSkeleton.skeletonId(),
+                orderedScenes.size(),
+                globalStopCondition,
+                orderedScenes,
+                storedSkeleton.planningNotes()
+        );
+    }
+
+    private SceneSkeletonItem mergeScene(SceneSkeletonItem scene, SceneExecutionState state, StorySessionContextPacket context) {
+        if (state == null) {
+            return new SceneSkeletonItem(
+                    scene.sceneId(),
+                    scene.sceneIndex(),
+                    scene.status(),
+                    scene.goal(),
+                    scene.readerReveal(),
+                    scene.mustUseAnchors().isEmpty() ? baseAnchors(context) : scene.mustUseAnchors(),
+                    firstNonBlank(scene.stopCondition(), fallbackStopCondition(context)),
+                    scene.targetWords(),
+                    scene.source()
+            );
+        }
+        return new SceneSkeletonItem(
+                scene.sceneId(),
+                scene.sceneIndex(),
+                state.status(),
+                firstNonBlank(scene.goal(), state.goal(), state.outcomeSummary()),
+                scene.readerReveal().isEmpty() ? state.readerRevealDelta() : scene.readerReveal(),
+                scene.mustUseAnchors().isEmpty() ? baseAnchors(context) : scene.mustUseAnchors(),
+                firstNonBlank(scene.stopCondition(), state.stopCondition(), fallbackStopCondition(context)),
+                scene.targetWords(),
+                scene.source()
+        );
+    }
+
+    private List<SceneSkeletonItem> buildBaseScenes(
+            StorySessionContextPacket context,
+            List<DirectorCandidate> candidates,
+            SelectionDecision selectionDecision) {
         List<SceneSkeletonItem> scenes = new ArrayList<>();
         for (SceneExecutionState state : context.existingSceneStates()) {
             scenes.add(new SceneSkeletonItem(
@@ -84,21 +193,7 @@ public class RuleBasedChapterSkeletonPlanner implements ChapterSkeletonPlanner {
                     candidate == null ? "fallback-planner" : "director-candidate"
             ));
         }
-
-        List<String> planningNotes = buildPlanningNotes(context, selectionDecision, candidates, scenes);
-        String globalStopCondition = scenes.isEmpty()
-                ? fallbackStopCondition(context)
-                : firstNonBlank(scenes.get(scenes.size() - 1).stopCondition(), fallbackStopCondition(context));
-
-        return Optional.of(new ChapterSkeleton(
-                projectId,
-                chapterId,
-                "skeleton_" + chapterId + "_v1",
-                scenes.size(),
-                globalStopCondition,
-                scenes,
-                planningNotes
-        ));
+        return scenes;
     }
 
     private int resolveTargetSceneCount(int existingSceneCount, int candidateCount) {
@@ -161,6 +256,12 @@ public class RuleBasedChapterSkeletonPlanner implements ChapterSkeletonPlanner {
         }
         notes.add("当前章节骨架规划为 " + scenes.size() + " 个镜头。");
         return List.copyOf(notes);
+    }
+
+    private List<String> appendPlanningNote(List<String> notes, String note) {
+        List<String> result = new ArrayList<>(notes == null ? List.of() : notes);
+        result.add(note);
+        return List.copyOf(result);
     }
 
     private List<String> baseAnchors(StorySessionContextPacket context) {

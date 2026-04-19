@@ -1,5 +1,6 @@
 import http from './http'
 import type {
+  ChapterSkeletonSceneUpdateRequest,
   ChapterExecutionReviewView,
   ChapterSkeletonView,
   StorySessionExecutionView,
@@ -27,5 +28,23 @@ export function getChapterExecutionReview(projectId: number, chapterId: number) 
 export function executeStorySession(projectId: number, chapterId: number, sceneId = 'scene-1') {
   return http.post<never, StorySessionExecutionView>(
     `/story-orchestration/projects/${projectId}/chapters/${chapterId}/execute?sceneId=${encodeURIComponent(sceneId)}`,
+  )
+}
+
+export function updateChapterSkeletonScene(
+  projectId: number,
+  chapterId: number,
+  sceneId: string,
+  payload: ChapterSkeletonSceneUpdateRequest,
+) {
+  return http.put<never, ChapterSkeletonView>(
+    `/story-orchestration/projects/${projectId}/chapters/${chapterId}/skeleton-scenes/${encodeURIComponent(sceneId)}`,
+    payload,
+  )
+}
+
+export function deleteChapterSkeletonScene(projectId: number, chapterId: number, sceneId: string) {
+  return http.delete<never, ChapterSkeletonView>(
+    `/story-orchestration/projects/${projectId}/chapters/${chapterId}/skeleton-scenes/${encodeURIComponent(sceneId)}`,
   )
 }

@@ -27,6 +27,8 @@ public class StoryStateProperties {
 
     private String chapterStateKeyPrefix = "story:state:chapter-state:";
 
+    private String chapterSkeletonKeyPrefix = "story:state:chapter-skeleton:";
+
     public boolean isRedisStoreEnabled() {
         return redisStoreEnabled;
     }
@@ -105,5 +107,13 @@ public class StoryStateProperties {
 
     public void setChapterStateKeyPrefix(String chapterStateKeyPrefix) {
         this.chapterStateKeyPrefix = chapterStateKeyPrefix;
+    }
+
+    public String getChapterSkeletonKeyPrefix() {
+        return chapterSkeletonKeyPrefix;
+    }
+
+    public void setChapterSkeletonKeyPrefix(String chapterSkeletonKeyPrefix) {
+        this.chapterSkeletonKeyPrefix = chapterSkeletonKeyPrefix;
     }
 }
