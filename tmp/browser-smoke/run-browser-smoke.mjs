@@ -6,10 +6,10 @@ import { join } from 'node:path';
 const extensionDir = join(process.cwd(), 'tmp/browser-smoke/extension');
 const baseUrl = 'https://home.silvericekey.fun:41202';
 const scenarios = [
-  { id: 'characters-create', path: '/characters' },
-  { id: 'world-settings-create', path: '/world-settings' },
-  { id: 'chapters-create', path: '/chapters' },
-  { id: 'chapters-edit', path: '/chapters' },
+  { id: 'workbench-main', path: '/workbench' },
+  { id: 'state-center-main', path: '/state-center' },
+  { id: 'generation-center-main', path: '/generation-center' },
+  { id: 'chapters-secondary-entry', path: '/chapters' },
 ];
 
 function extractReport(dom) {

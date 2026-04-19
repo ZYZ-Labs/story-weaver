@@ -2,6 +2,7 @@ package com.storyweaver.controller;
 
 import com.storyweaver.exception.GlobalExceptionHandler;
 import com.storyweaver.storyunit.facet.reveal.ReaderRevealState;
+import com.storyweaver.storyunit.facet.state.ChapterIncrementalState;
 import com.storyweaver.storyunit.event.StoryEvent;
 import com.storyweaver.storyunit.event.StoryEventType;
 import com.storyweaver.storyunit.model.StorySourceTrace;
@@ -11,6 +12,7 @@ import com.storyweaver.storyunit.patch.PatchOperation;
 import com.storyweaver.storyunit.patch.PatchOperationType;
 import com.storyweaver.storyunit.patch.PatchStatus;
 import com.storyweaver.storyunit.patch.StoryPatch;
+import com.storyweaver.storyunit.service.ChapterIncrementalStateStore;
 import com.storyweaver.storyunit.service.ReaderRevealStateStore;
 import com.storyweaver.storyunit.service.StoryEventStore;
 import com.storyweaver.storyunit.service.StoryPatchStore;
@@ -39,6 +41,7 @@ class StoryStateControllerTest {
     private StorySnapshotStore storySnapshotStore;
     private StoryPatchStore storyPatchStore;
     private ReaderRevealStateStore readerRevealStateStore;
+    private ChapterIncrementalStateStore chapterIncrementalStateStore;
 
     @BeforeEach
     void setUp() {
@@ -46,11 +49,13 @@ class StoryStateControllerTest {
         storySnapshotStore = mock(StorySnapshotStore.class);
         storyPatchStore = mock(StoryPatchStore.class);
         readerRevealStateStore = mock(ReaderRevealStateStore.class);
+        chapterIncrementalStateStore = mock(ChapterIncrementalStateStore.class);
         mockMvc = MockMvcBuilders.standaloneSetup(new StoryStateController(
                         storyEventStore,
                         storySnapshotStore,
                         storyPatchStore,
-                        readerRevealStateStore
+                        readerRevealStateStore,
+                        chapterIncrementalStateStore
                 ))
                 .setControllerAdvice(new GlobalExceptionHandler())
                 .build();
@@ -152,5 +157,30 @@ class StoryStateControllerTest {
                 .andExpect(jsonPath("$.code").value(200))
                 .andExpect(jsonPath("$.data.readerKnown[0]").value("主角决定赴约"))
                 .andExpect(jsonPath("$.data.unrevealed[0]").value("战队邀约背后的真实目的"));
+    }
+
+    @Test
+    void shouldReturnChapterState() throws Exception {
+        when(chapterIncrementalStateStore.findChapterState(28L, 31L)).thenReturn(Optional.of(
+                new ChapterIncrementalState(
+                        28L,
+                        31L,
+                        List.of("scene:scene-2:pending"),
+                        List.of("scene:scene-1:pending"),
+                        List.of("办公室"),
+                        java.util.Map.of("林沉舟", "紧张"),
+                        java.util.Map.of("林沉舟", "谨慎"),
+                        java.util.Map.of("林沉舟", List.of("观察中")),
+                        "scene-1 已写回章节状态"
+                )
+        ));
+
+        mockMvc.perform(get("/api/story-state/projects/28/chapters/31/chapter-state")
+                        .header("Authorization", "Bearer test-token"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(200))
+                .andExpect(jsonPath("$.data.openLoops[0]").value("scene:scene-2:pending"))
+                .andExpect(jsonPath("$.data.activeLocations[0]").value("办公室"))
+                .andExpect(jsonPath("$.data.characterEmotions.林沉舟").value("紧张"));
     }
 }

@@ -47,3 +47,4 @@ story:
     patch-key-prefix: ${STORY_STATE_SYSTEM_PATCH_KEY_PREFIX:story:state:patch:}
     chapter-patch-manifest-key-prefix: ${STORY_STATE_SYSTEM_CHAPTER_PATCH_MANIFEST_KEY_PREFIX:story:state:chapter-patches:}
     chapter-reveal-state-key-prefix: ${STORY_STATE_SYSTEM_CHAPTER_REVEAL_STATE_KEY_PREFIX:story:state:chapter-reveal:}
+    chapter-state-key-prefix: ${STORY_STATE_SYSTEM_CHAPTER_STATE_KEY_PREFIX:story:state:chapter-state:}

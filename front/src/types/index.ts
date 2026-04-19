@@ -518,6 +518,203 @@ export interface MenuItem {
   adminOnly?: boolean
 }
 
+export interface MenuSection {
+  key: string
+  title: string
+  subtitle?: string
+  items: MenuItem[]
+}
+
+export interface ProjectBriefView {
+  projectId: number
+  projectTitle: string
+  logline: string
+  summary: string
+}
+
+export interface RecentStoryProgressItemView {
+  itemType: string
+  refId?: number | null
+  title: string
+  summary: string
+  status: string
+  createTime?: string
+}
+
+export interface RecentStoryProgressView {
+  projectId: number
+  items: RecentStoryProgressItemView[]
+}
+
+export interface ReaderKnownStateView {
+  projectId: number
+  chapterId: number
+  knownFacts: string[]
+  unrevealedFacts: string[]
+}
+
+export interface CharacterRuntimeStateView {
+  projectId: number
+  characterId: number
+  characterName: string
+  currentLocation: string
+  emotionalState: string
+  attitudeSummary: string
+  inventoryNames: string[]
+  skillNames: string[]
+  stateTags: string[]
+}
+
+export interface SceneSkeletonItemView {
+  sceneId: string
+  sceneIndex: number
+  status: string
+  goal: string
+  readerReveal: string[]
+  mustUseAnchors: string[]
+  stopCondition: string
+  targetWords?: number | null
+  source: string
+}
+
+export interface ChapterSkeletonView {
+  projectId: number
+  chapterId: number
+  skeletonId: string
+  sceneCount: number
+  globalStopCondition: string
+  scenes: SceneSkeletonItemView[]
+  planningNotes: string[]
+}
+
+export interface ReviewIssueView {
+  code?: string
+  message?: string
+  severity?: string
+  field?: string
+}
+
+export interface ChapterTraceSummaryView {
+  projectId: number
+  chapterId: number
+  skeletonId: string
+  skeletonSceneCount: number
+  executedSceneCount: number
+  completedSceneCount: number
+  reviewingSceneCount: number
+  failedSceneCount: number
+  pendingSceneCount: number
+  latestSceneId: string
+  executedSceneIds: string[]
+  pendingSceneIds: string[]
+  missingHandoffToSceneIds: string[]
+}
+
+export interface ChapterExecutionReviewView {
+  projectId: number
+  chapterId: number
+  result: string
+  summary: string
+  issues: ReviewIssueView[]
+  chapterExecutionComplete: boolean
+  traceSummary: ChapterTraceSummaryView
+}
+
+export interface SessionExecutionTraceItemView {
+  sessionRole: string
+  status: string
+  attempt?: number
+  retryable?: boolean
+  message?: string
+  details?: Record<string, unknown>
+}
+
+export interface SessionExecutionTraceView {
+  requestId?: string
+  sceneId?: string
+  items: SessionExecutionTraceItemView[]
+}
+
+export interface DirectorCandidateView {
+  id: string
+  type: string
+  goal: string
+  readerReveal: string[]
+  mustUseAnchors: string[]
+  forbiddenMoves: string[]
+  stopCondition: string
+  targetWords?: number | null
+  reason: string
+}
+
+export interface SelectionDecisionView {
+  candidateId?: string
+  whyChosen?: string
+  risks?: string[]
+}
+
+export interface WriterExecutionBriefView {
+  goal?: string
+  readerReveal?: string[]
+  mustUseAnchors?: string[]
+  stopCondition?: string
+  targetWords?: number | null
+}
+
+export interface StorySessionContextPacketView {
+  projectId: number
+  chapterId: number
+  sceneId: string
+  projectBrief?: ProjectBriefView | null
+  readerKnownState?: ReaderKnownStateView | null
+  recentStoryProgress?: RecentStoryProgressView | null
+  sceneBindingContext?: {
+    mode?: string
+    requestedSceneId?: string
+    resolvedSceneId?: string
+    latestCompletedSceneId?: string
+    reason?: string
+  } | null
+}
+
+export interface StorySessionPreviewView {
+  contextPacket: StorySessionContextPacketView
+  candidates: DirectorCandidateView[]
+  selectionDecision: SelectionDecisionView
+  writerExecutionBrief: WriterExecutionBriefView
+  writerSessionResult?: {
+    summary?: string
+    stopConditionSatisfied?: boolean
+  } | null
+  reviewDecision?: {
+    result?: string
+    summary?: string
+  } | null
+  trace: SessionExecutionTraceView
+}
+
+export interface ReaderRevealStateView {
+  projectId: number
+  chapterId: number
+  systemKnown: string[]
+  authorKnown: string[]
+  readerKnown: string[]
+  unrevealed: string[]
+  summary: string
+}
+
+export interface ChapterIncrementalStateView {
+  projectId: number
+  chapterId: number
+  openLoops: string[]
+  resolvedLoops: string[]
+  activeLocations: string[]
+  characterEmotions: Record<string, string>
+  characterAttitudes: Record<string, string>
+  characterStateTags: Record<string, string[]>
+  summary: string
+}
+
 export interface Plot {
   id: number
   projectId: number

@@ -4,7 +4,7 @@
 - Plan Version: v1
 - Status: In Progress
 - Created At: 2026-04-11 Asia/Shanghai
-- Updated At: 2026-04-18 Asia/Shanghai
+- Updated At: 2026-04-19 Asia/Shanghai
 
 ## 计划定位
 
@@ -354,10 +354,12 @@
 
 当前状态：
 
-- `Phase 7.1` 已完成真实联调收口
-- 当前应进入 `Phase 7.2`
+- `Phase 7` 已完成
 - 线上报告：
   - `docs/reports/REPORT-20260418-phase7-state-system-live-validation-round1.md`
+  - `docs/reports/REPORT-20260418-phase7-state-system-live-validation-round2.md`
+  - `docs/reports/REPORT-20260418-phase7-state-system-live-validation-round3.md`
+  - `docs/reports/REPORT-20260418-phase7-state-system-live-validation-round4.md`
 
 目标：
 
@@ -381,7 +383,7 @@
 
 当前状态：
 
-- 已启动
+- 已完成
 - 详细计划：
   - `docs/plans/PLAN-REQ-20260411-stateful-story-platform-upgrade-phase7-incremental-state-v1.md`
 - `Phase 7.1` 已启动并已落：
@@ -394,6 +396,21 @@
 - 当前新增接口：
   - `GET /api/story-state/projects/{projectId}/chapters/{chapterId}/events`
   - `GET /api/story-state/projects/{projectId}/chapters/{chapterId}/snapshots`
+  - `GET /api/story-state/projects/{projectId}/chapters/{chapterId}/patches`
+  - `GET /api/story-state/projects/{projectId}/chapters/{chapterId}/reader-reveal-state`
+  - `GET /api/story-state/projects/{projectId}/chapters/{chapterId}/chapter-state`
+- `Phase 7.2` 已完成真实联调收口：
+  - `patch -> apply -> snapshot`
+  - `reader-known-state` 已稳定优先消费 reveal 状态存储
+- `Phase 7.3` 已完成真实联调收口：
+  - `chapterStatePatch(STATE)` 已真实写回
+  - `chapterIncrementalState` 已真实持久化并可回读
+  - Redis 已稳定持有：
+    - `story:state:chapter-state:*`
+    - `story:state:chapter-patches:*`
+- 当前结论：
+  - `Phase 7` 已形成最小 event / snapshot / patch / chapter-state 读写闭环
+  - 下一步进入 `Phase 8`
 
 ### Phase 8. 前端信息架构重构
 
@@ -413,6 +430,32 @@
 
 - 普通作者默认只看到摘要和当前创作动作。
 - 专家模式可展开结构与调试层。
+
+当前状态：
+
+- 已启动
+- 详细计划：
+  - `docs/plans/PLAN-REQ-20260411-stateful-story-platform-upgrade-phase8-frontend-information-architecture-v1.md`
+- `Phase 8.1` 已完成本地开发：
+  - 顶层入口已切到 `/workbench`
+  - 已新增：
+    - `状态台`
+    - `生成台`
+  - 顶层导航已重组为：
+    - `创作台`
+    - `故事台`
+    - `状态台`
+    - `生成台`
+    - `系统台`
+  - 旧对象页仍保留，但已降级为分组二级入口
+- `Phase 8.1` 已完成第一轮部署与数据联调：
+  - 新静态资源已在线生效
+  - `创作台 / 状态台 / 生成台` 依赖后端接口已返回 `200`
+  - 当前剩余问题已明确为浏览器烟测认证注入链路
+- 当前下一步：
+  - 修正浏览器烟测认证注入链路
+  - 完成 `Phase 8.1` 最终浏览器级验收
+  - 进入 `Phase 8.2`
 
 ### Phase 9. 迁移、兼容与回填
 

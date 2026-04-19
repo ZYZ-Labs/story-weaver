@@ -2,7 +2,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
-import { mainMenu } from '@/router/menu'
+import { mainMenuSections } from '@/router/menu'
 import { useAuthStore } from '@/stores/auth'
 import { useProjectStore } from '@/stores/project'
 
@@ -14,12 +14,40 @@ const projectStore = useProjectStore()
 
 const currentUserName = computed(() => authStore.user?.nickname || authStore.user?.username || '创作者')
 const currentUserRoleLabel = computed(() => (authStore.isAdmin ? '管理员' : '创作者'))
-const visibleMenu = computed(() => mainMenu.filter((item) => !item.adminOnly || authStore.isAdmin))
+const visibleMenuSections = computed(() =>
+  mainMenuSections
+    .map((section) => ({
+      ...section,
+      items: section.items.filter((item) => !item.adminOnly || authStore.isAdmin),
+    }))
+    .filter((section) => section.items.length > 0),
+)
+const activeMenuTitle = computed(() => {
+  for (const section of visibleMenuSections.value) {
+    const matched = section.items.find((item) => routeMatches(item.to))
+    if (matched) {
+      return matched.title
+    }
+  }
+  return typeof route.meta.title === 'string' ? route.meta.title : '织文者'
+})
+const activeSectionTitle = computed(() => {
+  for (const section of visibleMenuSections.value) {
+    if (section.items.some((item) => routeMatches(item.to))) {
+      return section.title
+    }
+  }
+  return '创作台'
+})
 
 async function ensureProjects() {
   if (!projectStore.projects.length && authStore.isAuthenticated) {
     await projectStore.fetchProjects().catch(() => undefined)
   }
+}
+
+function routeMatches(target: string) {
+  return route.path === target || route.path.startsWith(`${target}/`)
 }
 
 function logout() {
@@ -34,16 +62,16 @@ onMounted(() => {
 
 <template>
   <v-layout class="min-h-screen">
-    <v-navigation-drawer v-model="drawer" width="296" class="border-e" elevation="0">
-      <div class="pa-5">
-        <div class="text-overline text-secondary">长篇创作工作台</div>
+    <v-navigation-drawer v-model="drawer" width="312" class="border-e app-drawer" elevation="0">
+      <div class="pa-5 pb-4">
+        <div class="text-overline text-secondary">Stateful Story Platform</div>
         <div class="text-h5 font-weight-bold mt-1">织文者</div>
         <div class="text-body-2 text-medium-emphasis mt-2">
-          把项目、设定、因果和 AI 写作收拢到一个可持续演进的工作台。
+          主入口先服务当前创作动作，再下沉到故事结构、状态与生成细节。
         </div>
       </div>
 
-      <div class="px-3 pb-3">
+      <div class="px-3 pb-2">
         <v-card class="soft-panel">
           <v-card-text>
             <div class="text-caption text-medium-emphasis">当前项目</div>
@@ -61,24 +89,39 @@ onMounted(() => {
         </v-card>
       </div>
 
-      <v-list nav class="px-2">
-        <v-list-item
-          v-for="item in visibleMenu"
-          :key="item.to"
-          :prepend-icon="item.icon"
-          :title="item.title"
-          :subtitle="item.subtitle"
-          :active="route.path === item.to"
-          rounded="xl"
-          :to="item.to"
-        />
-      </v-list>
+      <div class="px-2 pb-4">
+        <div
+          v-for="section in visibleMenuSections"
+          :key="section.key"
+          class="menu-section"
+        >
+          <div class="menu-section-heading">{{ section.title }}</div>
+          <div v-if="section.subtitle" class="menu-section-subtitle">
+            {{ section.subtitle }}
+          </div>
+          <v-list nav class="px-0 pt-1">
+            <v-list-item
+              v-for="item in section.items"
+              :key="item.to"
+              :prepend-icon="item.icon"
+              :title="item.title"
+              :subtitle="item.subtitle"
+              :active="routeMatches(item.to)"
+              rounded="xl"
+              :to="item.to"
+            />
+          </v-list>
+        </div>
+      </div>
     </v-navigation-drawer>
 
     <v-main>
       <v-app-bar elevation="0" color="transparent">
         <v-app-bar-nav-icon @click="drawer = !drawer" />
-        <div class="text-h6 font-weight-bold">{{ route.meta.title }}</div>
+        <div>
+          <div class="text-caption text-medium-emphasis">{{ activeSectionTitle }}</div>
+          <div class="text-h6 font-weight-bold">{{ activeMenuTitle }}</div>
+        </div>
         <v-spacer />
         <v-chip color="secondary" variant="tonal" prepend-icon="mdi-account-circle-outline">
           {{ currentUserName }} · {{ currentUserRoleLabel }}

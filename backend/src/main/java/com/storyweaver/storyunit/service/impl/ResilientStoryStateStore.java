@@ -4,7 +4,9 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.storyweaver.config.StoryStateProperties;
+import com.storyweaver.storyunit.facet.state.ChapterIncrementalState;
 import com.storyweaver.storyunit.facet.reveal.ReaderRevealState;
+import com.storyweaver.storyunit.service.ChapterIncrementalStateStore;
 import com.storyweaver.storyunit.event.StoryEvent;
 import com.storyweaver.storyunit.patch.StoryPatch;
 import com.storyweaver.storyunit.service.ReaderRevealStateStore;
@@ -28,7 +30,7 @@ import java.util.Map;
 import java.util.Optional;
 
 @Service
-public class ResilientStoryStateStore implements StoryEventStore, StorySnapshotStore, StoryPatchStore, ReaderRevealStateStore {
+public class ResilientStoryStateStore implements StoryEventStore, StorySnapshotStore, StoryPatchStore, ReaderRevealStateStore, ChapterIncrementalStateStore {
 
     private static final Logger log = LoggerFactory.getLogger(ResilientStoryStateStore.class);
 
@@ -252,6 +254,49 @@ public class ResilientStoryStateStore implements StoryEventStore, StorySnapshotS
         return fallbackStore.findChapterRevealState(projectId, chapterId);
     }
 
+    @Override
+    public ChapterIncrementalState saveChapterState(ChapterIncrementalState state) {
+        fallbackStore.saveChapterState(state);
+        if (!isRedisStoreEnabled()) {
+            return state;
+        }
+        try {
+            stringRedisTemplate.opsForValue().set(
+                    buildChapterStateKey(state.projectId(), state.chapterId()),
+                    objectMapper.writeValueAsString(state),
+                    Duration.ofMinutes(Math.max(1L, properties.getTtlMinutes()))
+            );
+        } catch (JsonProcessingException ex) {
+            log.warn("Failed to serialize chapter state for chapter {}/{}", state.projectId(), state.chapterId(), ex);
+        } catch (RedisConnectionFailureException ex) {
+            log.warn("Redis unavailable when saving chapter state for chapter {}/{}", state.projectId(), state.chapterId());
+        } catch (RuntimeException ex) {
+            log.warn("Failed to save chapter state for chapter {}/{}", state.projectId(), state.chapterId(), ex);
+        }
+        return state;
+    }
+
+    @Override
+    public Optional<ChapterIncrementalState> findChapterState(Long projectId, Long chapterId) {
+        if (isRedisStoreEnabled()) {
+            try {
+                String payload = stringRedisTemplate.opsForValue().get(buildChapterStateKey(projectId, chapterId));
+                if (StringUtils.hasText(payload)) {
+                    ChapterIncrementalState state = objectMapper.readValue(payload, ChapterIncrementalState.class);
+                    fallbackStore.saveChapterState(state);
+                    return Optional.of(state);
+                }
+            } catch (JsonProcessingException ex) {
+                log.warn("Failed to deserialize chapter state for chapter {}/{}", projectId, chapterId, ex);
+            } catch (RedisConnectionFailureException ex) {
+                log.warn("Redis unavailable when reading chapter state for chapter {}/{}", projectId, chapterId);
+            } catch (RuntimeException ex) {
+                log.warn("Failed to read chapter state for chapter {}/{}", projectId, chapterId, ex);
+            }
+        }
+        return fallbackStore.findChapterState(projectId, chapterId);
+    }
+
     private boolean isRedisStoreEnabled() {
         return properties.isRedisStoreEnabled() && stringRedisTemplate != null;
     }
@@ -284,6 +329,10 @@ public class ResilientStoryStateStore implements StoryEventStore, StorySnapshotS
         return properties.getChapterRevealStateKeyPrefix() + projectId + ":" + chapterId;
     }
 
+    private String buildChapterStateKey(Long projectId, Long chapterId) {
+        return properties.getChapterStateKeyPrefix() + projectId + ":" + chapterId;
+    }
+
     private void writeManifest(String manifestKey, String id) throws JsonProcessingException {
         List<String> current = readManifest(manifestKey);
         if (!current.contains(id)) {
@@ -310,7 +359,7 @@ public class ResilientStoryStateStore implements StoryEventStore, StorySnapshotS
                 .toList();
     }
 
-    private static final class InMemoryStoryStateStore implements StoryEventStore, StorySnapshotStore, StoryPatchStore, ReaderRevealStateStore {
+    private static final class InMemoryStoryStateStore implements StoryEventStore, StorySnapshotStore, StoryPatchStore, ReaderRevealStateStore, ChapterIncrementalStateStore {
 
         private final Map<String, StoryEvent> eventMap = new LinkedHashMap<>();
         private final Map<String, List<String>> chapterEventIndex = new LinkedHashMap<>();
@@ -319,6 +368,7 @@ public class ResilientStoryStateStore implements StoryEventStore, StorySnapshotS
         private final Map<String, StoryPatch> patchMap = new LinkedHashMap<>();
         private final Map<String, List<String>> chapterPatchIndex = new LinkedHashMap<>();
         private final Map<String, ReaderRevealState> chapterRevealStateMap = new LinkedHashMap<>();
+        private final Map<String, ChapterIncrementalState> chapterStateMap = new LinkedHashMap<>();
 
         @Override
         public StoryEvent appendEvent(StoryEvent event) {
@@ -386,6 +436,17 @@ public class ResilientStoryStateStore implements StoryEventStore, StorySnapshotS
         @Override
         public Optional<ReaderRevealState> findChapterRevealState(Long projectId, Long chapterId) {
             return Optional.ofNullable(chapterRevealStateMap.get(chapterKey(projectId, chapterId)));
+        }
+
+        @Override
+        public ChapterIncrementalState saveChapterState(ChapterIncrementalState state) {
+            chapterStateMap.put(chapterKey(state.projectId(), state.chapterId()), state);
+            return state;
+        }
+
+        @Override
+        public Optional<ChapterIncrementalState> findChapterState(Long projectId, Long chapterId) {
+            return Optional.ofNullable(chapterStateMap.get(chapterKey(projectId, chapterId)));
         }
 
         private String chapterKey(Long projectId, Long chapterId) {

@@ -101,6 +101,52 @@
 
 - 这些状态至少有一类完成真实写回与真实读取
 
+当前实现进度：
+
+- 已完成本地开发收口：
+  - 已新增：
+    - `ChapterIncrementalState`
+    - `ChapterIncrementalStateStore`
+  - `execute` 当前已同时产出：
+    - `statePatch`：继续保留 `REVEAL`
+    - `chapterStatePatch`：新增 `STATE`
+    - `chapterIncrementalState`
+    - `chapterStateSnapshot`
+  - 已新增接口：
+    - `GET /api/story-state/projects/{projectId}/chapters/{chapterId}/chapter-state`
+  - 已完成本地回归：
+    - `DefaultSceneExecutionWriteServiceTest`
+    - `StoryStateControllerTest`
+    - `ResilientStoryStateStoreTest`
+    - `DefaultStorySessionOrchestratorTest`
+    - `StorySessionOrchestrationControllerTest`
+- 当前状态：
+  - 已到可部署联调阶段
+  - 下一步应做真实联调，验证：
+    - `execute` 后是否真实产出 `chapterStatePatch`
+    - `chapter-state` 是否能真实读回：
+      - `openLoops`
+      - `activeLocations`
+      - `characterEmotions`
+      - `characterAttitudes`
+      - `characterStateTags`
+    - `reader-known-state` 是否继续稳定优先消费 reveal 状态存储
+
+联调结果：
+
+- 已完成真实联调收口：
+  - `POST /api/story-orchestration/projects/28/chapters/31/execute?sceneId=scene-9` -> `200`
+  - `GET /api/story-state/projects/28/chapters/31/chapter-state` -> `200`
+  - `GET /api/story-state/projects/28/chapters/31/patches` -> `200`
+  - `GET /api/story-context/projects/28/chapters/31/reader-known-state` -> `200`
+- 已确认：
+  - `chapterStatePatch(STATE)` 已真实写回
+  - `chapterIncrementalState` 已真实持久化并可回读
+  - Redis 中已出现：
+    - `story:state:chapter-state:28:31`
+    - `story:state:chapter-patches:28:31`
+  - 首次空值/旧值现象属于并发请求竞态，不是实现缺陷
+
 ### `Phase 7.4` 联调收口
 
 目标：
@@ -126,18 +172,33 @@
   - `/api/story-state/.../events`
   - `/api/story-state/.../snapshots`
     已可在线上读回
-- 当前第一优先级已切换到 `Phase 7.2`
+- 当前第一优先级已切换到 `Phase 7.3`
 - 当前阶段备注：
   - Redis 运行环境仍存在 `bgsave` 的 `/data` 权限问题
   - 已将 `stop-writes-on-bgsave-error no` 写入当前挂载的 `redis.conf`
   - Redis 重启后不再因为 `bgsave` 失败阻断业务写入
   - `/data` 的 RDB 权限问题仍存在，但已从业务 blocker 降级为环境告警
-  - `Phase 7.2` 当前已到可部署联调阶段：
+  - `Phase 7.2` 已完成真实联调收口：
     - `StoryPatchStore`
     - `ReaderRevealStateStore`
     - `patch -> apply -> snapshot`
     - `/api/story-state/.../patches`
     - `/api/story-state/.../reader-reveal-state`
+    - `/api/story-context/.../reader-known-state` 已开始优先消费状态存储
+  - `Phase 7.3` 已完成本地开发收口并到可部署联调阶段：
+    - 已新增章节级状态聚合：
+      - `ChapterIncrementalState`
+      - `ChapterIncrementalStateStore`
+    - 已新增：
+      - `chapterStatePatch`
+      - `chapterIncrementalState`
+      - `GET /api/story-state/projects/{projectId}/chapters/{chapterId}/chapter-state`
+    - 已完成本地回归：
+      - `DefaultSceneExecutionWriteServiceTest`
+      - `StoryStateControllerTest`
+      - `ResilientStoryStateStoreTest`
+      - `DefaultStorySessionOrchestratorTest`
+      - `StorySessionOrchestrationControllerTest`
 
 ## 建议代码落点
 
@@ -175,10 +236,17 @@
 
 ## 下一步
 
-1. 开始 `Phase 7.2`
-2. 冻结 state patch 的最小边界
-3. 让至少一类状态变化形成：
-   - `patch -> apply -> snapshot`
+1. 开始 `Phase 7.4`
+2. 收口 `Phase 7.1 ~ 7.3` 的状态链：
+   - `event`
+   - `snapshot`
+   - `patch`
+   - `chapter state`
+3. 持续扩展高优先级状态族：
+   - Open Loops
+   - Reader Reveal State 增量细化
+   - 人物态度 / 情绪标签
+   - 地点状态
 4. 单独跟进 Redis 运行环境的持久化权限修复
 
 ## 贡献与署名说明

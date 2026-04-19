@@ -1,6 +1,6 @@
 # Agent Context
 
-- Last Updated: 2026-04-18 Asia/Shanghai
+- Last Updated: 2026-04-19 Asia/Shanghai
 - Current Primary Req: REQ-20260411-stateful-story-platform-upgrade
 
 ## Active Requirements
@@ -29,6 +29,11 @@
   - 前端信息架构
   - 文档治理制度
 - `REQ-20260409-generation-reliability-refactor` 已归档，但其 report 仍保留为当前代码稳定性与线上样本基线。
+- 已完成 `helix-runtime` 外部接入专项评估：
+  - 结论不是“直接并入”，而是“作为外部 Runtime 适配接入”
+  - 对应文档：
+    - `docs/reports/REPORT-20260419-helix-runtime-integration-feasibility-v1.md`
+    - `docs/architecture/ARCH-20260419-helix-runtime-adapter-refactor-v1.md`
 - `Phase 4` 已完成，当前已进入 `Phase 5` 多 session 编排联调前阶段。
 - 第一份详细实施计划已创建：
   - `docs/plans/PLAN-REQ-20260411-stateful-story-platform-upgrade-phase1-foundation-v1.md`
@@ -144,9 +149,18 @@
     - 普通模式步骤收口为“说想法 -> AI 整理 -> 看变化 -> 确认写回”
     - 普通模式不再强制先选结构意图
 - 当前下一步应进入：
-  - 开始 `Phase 7.2`
-  - 冻结最小 state patch 边界
-  - 推进 `patch -> apply -> snapshot` 的第一类真实状态链
+  - 当前已进入 `Phase 8.1`
+  - 顶层导航、主入口与三张新台页已完成本地开发：
+    - `创作台`
+    - `状态台`
+    - `生成台`
+  - 当前已完成第一轮部署与数据联调：
+    - 新静态资源已确认上线
+    - 三张新台页依赖后端接口均已返回 `200`
+  - 当前下一步是修正浏览器烟测认证注入链路，而不是回退前端实现
+  - 若联调通过，再进入：
+    - `Phase 8.2` 章节工作区重构
+    - `Phase 8.3` 对象页 `Summary First` 重构
 - 最新修正：
   - 已确认线上 `POST /api/summary-workflow/chat-turns` 已恢复 `HTTP 200`
   - 已确认普通模式返回结果可继续进入 `proposal / preview`
@@ -239,7 +253,71 @@
         - `REVEAL` patch 最小 apply 链
         - `/api/story-state/.../patches`
         - `/api/story-state/.../reader-reveal-state`
+  - `Phase 7.2` 已完成真实联调收口：
+    - `POST /api/story-orchestration/projects/28/chapters/31/execute?sceneId=scene-8` -> `200`
+    - 已真实产出：
+      - `StoryPatch`
+      - `ReaderRevealState`
+      - `Chapter State Snapshot`
+    - `GET /api/story-state/projects/28/chapters/31/patches` -> `200`
+    - `GET /api/story-state/projects/28/chapters/31/reader-reveal-state` -> `200`
+    - `GET /api/story-context/projects/28/chapters/31/reader-known-state` -> `200`
+    - 当前结论：
+      - `Phase 7.2` 已收口
+      - 下一步进入 `Phase 7.3`
       - `docs/test-data/TESTDATA-20260418-old-throne-phase6-regression-samples-v1.md`
+  - `Phase 7.3` 已完成本地开发收口并到可部署联调阶段：
+    - 已新增：
+      - `ChapterIncrementalState`
+      - `ChapterIncrementalStateStore`
+    - `execute` 已新增返回：
+      - `chapterStatePatch`
+      - `chapterIncrementalState`
+    - 已新增：
+      - `GET /api/story-state/projects/{projectId}/chapters/{chapterId}/chapter-state`
+    - 当前章节级状态已覆盖：
+      - `openLoops`
+      - `resolvedLoops`
+      - `activeLocations`
+      - `characterEmotions`
+      - `characterAttitudes`
+      - `characterStateTags`
+    - 已完成本地回归：
+      - `DefaultSceneExecutionWriteServiceTest`
+      - `StoryStateControllerTest`
+      - `ResilientStoryStateStoreTest`
+      - `DefaultStorySessionOrchestratorTest`
+      - `StorySessionOrchestrationControllerTest`
+  - `Phase 7.3` 已完成真实联调收口：
+    - `POST /api/story-orchestration/projects/28/chapters/31/execute?sceneId=scene-9` -> `200`
+    - `GET /api/story-state/projects/28/chapters/31/chapter-state` -> `200`
+    - `GET /api/story-state/projects/28/chapters/31/patches` -> `200`
+    - `GET /api/story-context/projects/28/chapters/31/reader-known-state` -> `200`
+    - 已确认：
+      - `chapterStatePatch(STATE)` 已真实写回
+      - `chapterIncrementalState` 已真实持久化并可回读
+      - Redis 已存在：
+        - `story:state:chapter-state:28:31`
+        - `story:state:chapter-patches:28:31`
+      - 首次空值/旧值现象属于并发请求竞态，不是状态链缺陷
+  - `Phase 7.4` 已完成阶段收口：
+    - 已确认 `Phase 7.1 ~ 7.3` 已形成最小状态闭环：
+      - `event`
+      - `snapshot`
+      - `patch(REVEAL)`
+      - `reader reveal state`
+      - `patch(STATE)`
+      - `chapter state`
+    - 已确认进入 `Phase 8` 的后端协议基线已具备：
+      - `summary-workflow`
+      - `story-context`
+      - `story-orchestration`
+      - `story-state`
+  - `Phase 8` 已启动：
+    - 详细计划：
+      - `docs/plans/PLAN-REQ-20260411-stateful-story-platform-upgrade-phase8-frontend-information-architecture-v1.md`
+    - 当前第一优先级：
+      - `Phase 8.1` 顶层导航与入口收口
   - `Phase 6.3` 已完成真实联调收口：
     - 执行前 `chapter 31 + scene-4` -> `SCENE_FALLBACK_TO_LATEST`
     - `POST /api/story-orchestration/projects/28/chapters/31/execute?sceneId=scene-4` -> `200`

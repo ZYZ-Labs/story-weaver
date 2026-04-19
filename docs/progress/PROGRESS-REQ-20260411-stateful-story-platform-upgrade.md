@@ -3,18 +3,17 @@
 - Req ID: REQ-20260411-stateful-story-platform-upgrade
 - Status: In Progress
 - Created At: 2026-04-11 Asia/Shanghai
-- Updated At: 2026-04-18 Asia/Shanghai
+- Updated At: 2026-04-19 Asia/Shanghai
 
 ## 当前快照
 
-- Current Phase: `Phase 7` 进行中
-- Current Task: `Phase 7.2` 已到可部署联调阶段，等待真实联调
-- Last Completed: 已完成 `Phase 7.1` 线上 event + snapshot 最小状态链验证
+- Current Phase: `Phase 8` 进行中
+- Current Task: `Phase 8.1` 顶层导航与入口收口已完成部署与数据联调，待修浏览器烟测认证注入链路
+- Last Completed: 已完成 `Phase 7` 状态系统阶段收口
 - Next Action:
-  - 部署并联调 `Phase 7.2`
-  - 验证 `REVEAL` 状态链的 `patch -> apply -> snapshot`
-  - 验证 `/api/story-state/.../patches`
-  - 验证 `/api/story-state/.../reader-reveal-state`
+  - 修正 `tmp/browser-smoke` 的认证注入方式
+  - 完成 `Phase 8.1` 浏览器级最终验收
+  - 进入 `Phase 8.2` 章节工作区重构
 - Blockers:
   - 旧主线 `REQ-20260409-generation-reliability-refactor` 已归档，但其代码成果和回归报告仍需作为迁移基线继续参考
   - `MCP` 与 `State Server` 的边界仍未形成独立 server 形态，只完成读模型、查询服务与编排消费层
@@ -24,6 +23,124 @@
   - 但 `stop-writes-on-bgsave-error no` 已写入当前挂载的 `redis.conf`，Redis 重启后不再重新阻断业务写入
   - 当前剩余的是环境持久化质量问题，不再阻塞 `Phase 7.2`
 - Latest Verified:
+  - 已完成 `helix-runtime` 接入可行性专项评估：
+    - 已确认 `helix-runtime` 当前定位更接近：
+      - 通用 `AI Session Runtime`
+      - Provider Router
+      - MCP Gateway
+    - 已确认其当前不适合作为 `story-weaver` 内核直接并入
+    - 已确认推荐路线为：
+      - 作为外部 Runtime 适配接入
+      - `story-weaver` 继续保持故事域真源
+    - 已形成文档：
+      - `docs/reports/REPORT-20260419-helix-runtime-integration-feasibility-v1.md`
+      - `docs/architecture/ARCH-20260419-helix-runtime-adapter-refactor-v1.md`
+  - 已完成 `Phase 8.1` 第一轮部署与数据联调：
+    - 已确认线上静态资源包含：
+      - `/workbench`
+      - `/state-center`
+      - `/generation-center`
+      - `创作台 / 故事台 / 状态台 / 生成台 / 系统台`
+    - 已确认创作台依赖数据在线可用：
+      - `GET /api/story-context/projects/28/brief` -> `200`
+    - 已确认状态台依赖数据在线可用：
+      - `GET /api/story-state/projects/28/chapters/31/chapter-state` -> `200`
+      - `GET /api/story-state/projects/28/chapters/31/reader-reveal-state` -> `200`
+      - `GET /api/story-context/projects/28/chapters/31/reader-known-state` -> `200`
+    - 已确认生成台依赖数据在线可用：
+      - `GET /api/story-orchestration/projects/28/chapters/31/preview` -> `200`
+      - `GET /api/story-orchestration/projects/28/chapters/31/chapter-review` -> `200`
+    - 已确认当前未收口项是浏览器烟测认证注入链路，而不是页面实现失败
+    - 报告：
+      - `docs/reports/REPORT-20260419-phase8-frontend-ia-live-validation-round1.md`
+  - 已完成 `Phase 8.1` 本地开发收口：
+    - 已新增页面：
+      - `front/src/views/workbench/WorkbenchView.vue`
+      - `front/src/views/state/StateCenterView.vue`
+      - `front/src/views/generation/GenerationCenterView.vue`
+    - 已新增 API：
+      - `front/src/api/story-context.ts`
+      - `front/src/api/story-orchestration.ts`
+      - `front/src/api/story-state.ts`
+    - 已新增项目工作区组合逻辑：
+      - `front/src/composables/useProjectWorkspace.ts`
+    - 已完成顶层路由与导航重构：
+      - 根入口改为 `/workbench`
+      - 侧边导航改为：
+        - `创作台`
+        - `故事台`
+        - `状态台`
+        - `生成台`
+        - `系统台`
+      - 旧对象页保留，但已降级为分组二级入口
+    - 已完成本地校验：
+      - `npm run type-check`
+      - `npm run build`
+  - 已完成 `Phase 7.4` 阶段收口：
+    - 已确认 `Phase 7.1 ~ 7.3` 已形成最小读写闭环：
+      - `event`
+      - `snapshot`
+      - `patch(REVEAL)`
+      - `reader reveal state`
+      - `patch(STATE)`
+      - `chapter state`
+    - 已确认进入 `Phase 8` 的后端基线已具备：
+      - `summary-workflow`
+      - `story-context`
+      - `story-orchestration`
+      - `story-state`
+    - 已形成阶段收口报告：
+      - `docs/reports/REPORT-20260418-phase7-state-system-live-validation-round4.md`
+  - 已完成 `Phase 7.3` 本地开发收口：
+    - 已新增：
+      - `ChapterIncrementalState`
+      - `ChapterIncrementalStateStore`
+    - 已完成 `execute` 扩展：
+      - 保留 `statePatch(REVEAL)`
+      - 新增 `chapterStatePatch(STATE)`
+      - 新增 `chapterIncrementalState`
+      - 新增 `chapterStateSnapshot`
+    - 已新增接口：
+      - `GET /api/story-state/projects/{projectId}/chapters/{chapterId}/chapter-state`
+    - 章节级状态当前已覆盖：
+      - `openLoops`
+      - `resolvedLoops`
+      - `activeLocations`
+      - `characterEmotions`
+      - `characterAttitudes`
+      - `characterStateTags`
+    - 已完成本地回归：
+      - `DefaultSceneExecutionWriteServiceTest`
+      - `StoryStateControllerTest`
+      - `ResilientStoryStateStoreTest`
+      - `DefaultStorySessionOrchestratorTest`
+      - `StorySessionOrchestrationControllerTest`
+    - 已通过：
+      - `mvn -Dmaven.repo.local=/usr/local/project/github/story-weaver/.cache/m2 -DskipTests compile`
+      - `mvn test -pl backend -am -Dtest=DefaultSceneExecutionWriteServiceTest,StoryStateControllerTest,ResilientStoryStateStoreTest,DefaultStorySessionOrchestratorTest,StorySessionOrchestrationControllerTest -Dsurefire.failIfNoSpecifiedTests=false -Dmaven.repo.local=/usr/local/project/github/story-weaver/.cache/m2`
+  - 已完成 `Phase 7.3` 真实联调收口：
+    - `POST /api/story-orchestration/projects/28/chapters/31/execute?sceneId=scene-9` -> `200`
+    - `writeResult` 已真实返回：
+      - `chapterStatePatch`
+      - `chapterIncrementalState`
+      - `chapterStateSnapshot`
+    - `GET /api/story-state/projects/28/chapters/31/chapter-state` -> `200`
+      - 已返回：
+        - `openLoops`
+        - `resolvedLoops`
+        - `activeLocations`
+        - `characterEmotions`
+        - `characterAttitudes`
+        - `characterStateTags`
+    - `GET /api/story-state/projects/28/chapters/31/patches` -> `200`
+      - 已返回：
+        - `REVEAL` patch
+        - `STATE` patch
+    - 已确认 Redis 存在：
+      - `story:state:chapter-state:28:31`
+      - `story:state:chapter-patches:28:31`
+    - 已确认 `reader-known-state` 继续稳定优先消费 reveal 状态存储
+    - 已确认初次空值/旧值现象属于并发请求竞态，不是状态链缺陷
   - 已完成 `Phase 7.2` 本地开发收口：
     - 已新增：
       - `StoryPatchStore`
@@ -43,6 +160,22 @@
       - `ResilientStoryStateStoreTest`
       - `DefaultStorySessionOrchestratorTest`
       - `StorySessionOrchestrationControllerTest`
+  - 已完成 `Phase 7.2` 真实联调收口：
+    - `POST /api/story-orchestration/projects/28/chapters/31/execute?sceneId=scene-8` -> `200`
+    - `writeResult` 已真实返回：
+      - `statePatch`
+      - `readerRevealState`
+      - `chapterStateSnapshot`
+    - `GET /api/story-state/projects/28/chapters/31/patches` -> `200`
+      - 已返回 `patch-28-31-scene-8-...`
+    - `GET /api/story-state/projects/28/chapters/31/reader-reveal-state` -> `200`
+      - 已返回 chapter reveal state
+    - `GET /api/story-context/projects/28/chapters/31/reader-known-state` -> `200`
+      - `knownFacts` 已开始优先返回状态存储中的 `readerKnown`
+    - 已确认 Redis 中存在：
+      - `story:state:chapter-patches:28:31`
+      - `story:state:chapter-reveal:28:31`
+    - 已确认首次并发读取的旧值现象属于请求竞态，不是状态链缺陷
   - 已完成 `Phase 7.1` 真实联调收口：
     - 已使用 `旧日王座 / chapter 31 / scene-7` 完成真实执行
     - `POST /api/story-orchestration/projects/28/chapters/31/execute?sceneId=scene-7` -> `200`

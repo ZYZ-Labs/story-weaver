@@ -1,6 +1,7 @@
 package com.storyweaver.controller;
 
 import com.storyweaver.common.web.ApiResponse;
+import com.storyweaver.storyunit.service.ChapterIncrementalStateStore;
 import com.storyweaver.storyunit.service.ReaderRevealStateStore;
 import com.storyweaver.storyunit.service.StoryEventStore;
 import com.storyweaver.storyunit.service.StoryPatchStore;
@@ -18,16 +19,19 @@ public class StoryStateController {
     private final StorySnapshotStore storySnapshotStore;
     private final StoryPatchStore storyPatchStore;
     private final ReaderRevealStateStore readerRevealStateStore;
+    private final ChapterIncrementalStateStore chapterIncrementalStateStore;
 
     public StoryStateController(
             StoryEventStore storyEventStore,
             StorySnapshotStore storySnapshotStore,
             StoryPatchStore storyPatchStore,
-            ReaderRevealStateStore readerRevealStateStore) {
+            ReaderRevealStateStore readerRevealStateStore,
+            ChapterIncrementalStateStore chapterIncrementalStateStore) {
         this.storyEventStore = storyEventStore;
         this.storySnapshotStore = storySnapshotStore;
         this.storyPatchStore = storyPatchStore;
         this.readerRevealStateStore = readerRevealStateStore;
+        this.chapterIncrementalStateStore = chapterIncrementalStateStore;
     }
 
     @GetMapping("/api/story-state/projects/{projectId}/chapters/{chapterId}/events")
@@ -74,6 +78,20 @@ public class StoryStateController {
         return ResponseEntity.ok(ApiResponse.success(
                 "获取成功",
                 readerRevealStateStore.findChapterRevealState(projectId, chapterId).orElse(null)
+        ));
+    }
+
+    @GetMapping("/api/story-state/projects/{projectId}/chapters/{chapterId}/chapter-state")
+    public ResponseEntity<?> chapterState(
+            @PathVariable Long projectId,
+            @PathVariable Long chapterId,
+            @RequestHeader(value = "Authorization", required = false) String authorizationHeader) {
+        if (!AuthHeaderSupport.hasValidBearerToken(authorizationHeader)) {
+            return AuthHeaderSupport.unauthorizedResponse();
+        }
+        return ResponseEntity.ok(ApiResponse.success(
+                "获取成功",
+                chapterIncrementalStateStore.findChapterState(projectId, chapterId).orElse(null)
         ));
     }
 }

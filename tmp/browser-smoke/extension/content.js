@@ -100,118 +100,62 @@
     throw new Error(`等待超时: ${label}`);
   }
 
-  function setTextareaValue(value) {
-    const textareas = Array.from(document.querySelectorAll('textarea')).filter((node) => node.offsetParent !== null);
-    const textarea = textareas.length >= 2 ? textareas[textareas.length - 2] : textareas[0];
-    if (!textarea) {
-      throw new Error('未找到输入框 textarea');
-    }
-    textarea.focus();
-    textarea.value = value;
-    textarea.dispatchEvent(new Event('input', { bubbles: true }));
-    textarea.dispatchEvent(new Event('change', { bubbles: true }));
-    return textarea;
-  }
-
   async function clickByText(text, timeoutMs) {
     const node = await waitFor(() => findEnabledClickableByText(text), timeoutMs, `按钮 ${text}`);
     node.click();
     return node;
   }
 
-  function summaryDraftReady() {
-    const editors = Array.from(document.querySelectorAll('textarea')).filter((node) => node.offsetParent !== null);
-    const editor = editors[editors.length - 1];
-    if (!editor) {
-      return false;
-    }
-    return normalizedText(editor.value).length > 20;
-  }
-
-  function assistantMessageCount() {
-    return Array.from(document.querySelectorAll('.summary-chat-message__role'))
-      .map((node) => normalizedText(node.textContent))
-      .filter((text) => text === 'AI 助手').length;
-  }
-
   function currentBodyText() {
     return normalizedText(document.body.innerText || document.body.textContent || '');
   }
 
-  async function runCreateScenario(label, promptText) {
-    await waitFor(() => findTextNode(label), 15000, `页面标题 ${label}`);
-    pushCheck('page-loaded', true, label);
-    pushCheck(
-      'top-level-ordinary-mode-lite',
-      Boolean(findClickableExactText('切到专家模式')) && !Boolean(findClickableExactText('专家模式')),
-      '页面顶层默认应降级为普通模式提示，而不是直接展示模式分段切换器',
-    );
-
-    await clickByText(`说想法新增${label.replace('管理', '')}`, 15000);
-    await waitFor(() => findTextNode('对话采集'), 10000, '对话采集');
-    await waitFor(() => findTextNode('摘要草稿'), 10000, '摘要草稿');
-    pushCheck('dialog-opened', true, '摘要工作流已打开');
-
-    const bodyText = currentBodyText();
-    pushCheck('ordinary-mode-system-terms-hidden', !bodyText.includes('REFINE') && !bodyText.includes('UPDATE') && !bodyText.includes('ENRICH'), '普通模式不应直接暴露结构意图英文枚举');
-
-    const assistantCountBefore = assistantMessageCount();
-    setTextareaValue(promptText);
-    await clickByText('让 AI 继续整理', 5000);
-    await waitFor(
-      () => assistantMessageCount() > assistantCountBefore || summaryDraftReady(),
-      25000,
-      'AI 首轮回应',
-    );
-    pushCheck('chat-responded', true, '普通模式已返回追问或摘要草稿');
-
-    await clickByText('看看整理结果', 10000);
-    await waitFor(() => findTextNode('变化预览'), 15000, '变化预览');
-    pushCheck('preview-opened', true, '已看到变化预览');
+  async function runWorkbenchScenario() {
+    await waitFor(() => findTextNode('创作台'), 15000, '创作台');
+    await waitFor(() => findTextNode('当前项目简报'), 15000, '当前项目简报');
+    await waitFor(() => findTextNode('下一步动作'), 15000, '下一步动作');
+    await waitFor(() => findTextNode('章节骨架预览'), 15000, '章节骨架预览');
+    await waitFor(() => findTextNode('章节执行状态'), 15000, '章节执行状态');
+    pushCheck('page-loaded', true, '创作台已加载');
+    pushCheck('cta-visible', Boolean(findClickableByText('说想法新增章节')), '创作台应暴露说想法新增章节');
+    pushCheck('nav-groups-visible', currentBodyText().includes('故事台') && currentBodyText().includes('状态台') && currentBodyText().includes('生成台'), '新导航分组应可见');
   }
 
-  async function runChapterEditScenario() {
+  async function runStateCenterScenario() {
+    await waitFor(() => findTextNode('状态台'), 15000, '状态台');
+    await waitFor(() => findTextNode('章节状态'), 15000, '章节状态');
+    await waitFor(() => findTextNode('读者揭晓与 POV 状态'), 15000, '读者揭晓与 POV 状态');
+    pushCheck('page-loaded', true, '状态台已加载');
+    pushCheck('state-metrics-visible', currentBodyText().includes('未解环') && currentBodyText().includes('读者已知'), '状态台指标应可见');
+  }
+
+  async function runGenerationCenterScenario() {
+    await waitFor(() => findTextNode('生成台'), 15000, '生成台');
+    await waitFor(() => findTextNode('多 Session 编排预览'), 15000, '多 Session 编排预览');
+    await waitFor(() => findTextNode('写手 Brief 与章节审校'), 15000, '写手 Brief 与章节审校');
+    pushCheck('page-loaded', true, '生成台已加载');
+    pushCheck('generation-metrics-visible', currentBodyText().includes('候选数') && currentBodyText().includes('骨架镜头'), '生成台指标应可见');
+  }
+
+  async function runChaptersSecondaryEntryScenario() {
     await waitFor(() => findTextNode('章节管理'), 15000, '章节管理');
-    pushCheck('page-loaded', true, '章节管理');
-    pushCheck(
-      'top-level-ordinary-mode-lite',
-      Boolean(findClickableExactText('切到专家模式')) && !Boolean(findClickableExactText('专家模式')),
-      '页面顶层默认应降级为普通模式提示，而不是直接展示模式分段切换器',
-    );
-
-    await waitFor(() => findClickableByText('摘要优先编辑') || findClickableByText('摘要优先'), 15000, '摘要优先入口');
-    const entry = findClickableByText('摘要优先编辑') || findClickableByText('摘要优先');
-    entry.click();
-    await waitFor(() => findTextNode('对话采集'), 10000, '对话采集');
-    pushCheck('dialog-opened', true, '章节摘要编辑弹层已打开');
-
-    const assistantCountBefore = assistantMessageCount();
-    setTextareaValue('我想让这章摘要更明确一点，先让读者看到林沉舟现在的现实状态，再把邀请函作为触发点抛出来，最后停在他决定赴约。');
-    await clickByText('让 AI 继续整理', 5000);
-    await waitFor(
-      () => assistantMessageCount() > assistantCountBefore || summaryDraftReady(),
-      25000,
-      '章节摘要对话结果',
-    );
-    pushCheck('chat-responded', true, '章节普通模式已返回草稿');
-
-    await clickByText('看看整理结果', 10000);
-    await waitFor(() => findTextNode('变化预览'), 15000, '变化预览');
-    pushCheck('preview-opened', true, '章节编辑可进入预览');
+    pushCheck('page-loaded', true, '章节页仍可访问');
+    pushCheck('secondary-entry', currentBodyText().includes('故事台') || Boolean(findTextNode('故事台')), '章节页应作为故事台二级入口存在');
+    pushCheck('summary-first-entry', Boolean(findClickableByText('说想法新增章节') || findClickableByText('摘要新增章节')), '章节页仍应保留摘要优先新增入口');
   }
 
   async function runScenario() {
     try {
       await waitFor(() => document.body, 5000, 'document.body');
       await sleep(2500);
-      if (scenario === 'characters-create') {
-        await runCreateScenario('人物管理', '我想要一个很油滑的经纪人，表面圆滑，其实特别会算计，和主角以前有合作。');
-      } else if (scenario === 'world-settings-create') {
-        await runCreateScenario('世界观管理', '这个世界里，职业资格不是考试决定的，而是靠一种叫回声签约的仪式。签约成功后会得到能力，失败后会留下记忆缺口。');
-      } else if (scenario === 'chapters-create') {
-        await runCreateScenario('章节管理', '我想写一章主角和这个经纪人重新见面的戏。先写主角本来不想理他，经纪人又装得很热情，最后停在经纪人抛出一个让主角动摇的条件。');
-      } else if (scenario === 'chapters-edit') {
-        await runChapterEditScenario();
+      if (scenario === 'workbench-main') {
+        await runWorkbenchScenario();
+      } else if (scenario === 'state-center-main') {
+        await runStateCenterScenario();
+      } else if (scenario === 'generation-center-main') {
+        await runGenerationCenterScenario();
+      } else if (scenario === 'chapters-secondary-entry') {
+        await runChaptersSecondaryEntryScenario();
       } else {
         throw new Error(`未知场景: ${scenario}`);
       }

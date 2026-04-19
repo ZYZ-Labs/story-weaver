@@ -2,6 +2,7 @@ package com.storyweaver.storyunit.service.impl;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.storyweaver.storyunit.facet.reveal.ReaderRevealState;
+import com.storyweaver.storyunit.facet.state.ChapterIncrementalState;
 import com.storyweaver.config.StoryStateProperties;
 import com.storyweaver.storyunit.event.StoryEvent;
 import com.storyweaver.storyunit.event.StoryEventType;
@@ -76,6 +77,17 @@ class ResilientStoryStateStoreTest {
                 List.of("更大的阴谋"),
                 "读者已知 1 条，未揭晓 1 条"
         ));
+        store.saveChapterState(new ChapterIncrementalState(
+                28L,
+                31L,
+                List.of("scene:scene-2:pending"),
+                List.of("scene:scene-1:pending"),
+                List.of("办公室"),
+                java.util.Map.of("林沉舟", "紧张"),
+                java.util.Map.of("林沉舟", "谨慎"),
+                java.util.Map.of("林沉舟", List.of("观察中")),
+                "scene-1 已写回章节状态"
+        ));
 
         assertEquals(1, store.listChapterEvents(28L, 31L).size());
         assertEquals("event-1", store.listChapterEvents(28L, 31L).getFirst().eventId());
@@ -84,6 +96,7 @@ class ResilientStoryStateStoreTest {
         assertEquals(1, store.listChapterPatches(28L, 31L).size());
         assertEquals("patch-1", store.listChapterPatches(28L, 31L).getFirst().patchId());
         assertEquals("主角决定赴约", store.findChapterRevealState(28L, 31L).orElseThrow().readerKnown().getFirst());
+        assertEquals("scene:scene-2:pending", store.findChapterState(28L, 31L).orElseThrow().openLoops().getFirst());
     }
 
     private static class NullStringRedisTemplateProvider implements ObjectProvider<org.springframework.data.redis.core.StringRedisTemplate> {

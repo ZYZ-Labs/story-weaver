@@ -4,6 +4,7 @@ import com.storyweaver.storyunit.session.SceneExecutionState;
 import com.storyweaver.storyunit.session.SceneHandoffSnapshot;
 import com.storyweaver.storyunit.event.StoryEvent;
 import com.storyweaver.storyunit.facet.reveal.ReaderRevealState;
+import com.storyweaver.storyunit.facet.state.ChapterIncrementalState;
 import com.storyweaver.storyunit.patch.StoryPatch;
 import com.storyweaver.storyunit.snapshot.StorySnapshot;
 
@@ -16,6 +17,8 @@ public record SceneExecutionWriteResult(
         StorySnapshot stateSnapshot,
         StoryPatch statePatch,
         ReaderRevealState readerRevealState,
+        StoryPatch chapterStatePatch,
+        ChapterIncrementalState chapterIncrementalState,
         StorySnapshot chapterStateSnapshot) {
 
     public SceneExecutionWriteResult {
@@ -25,6 +28,8 @@ public record SceneExecutionWriteResult(
         stateSnapshot = Objects.requireNonNull(stateSnapshot, "stateSnapshot must not be null");
         statePatch = Objects.requireNonNull(statePatch, "statePatch must not be null");
         readerRevealState = Objects.requireNonNull(readerRevealState, "readerRevealState must not be null");
+        chapterStatePatch = Objects.requireNonNull(chapterStatePatch, "chapterStatePatch must not be null");
+        chapterIncrementalState = Objects.requireNonNull(chapterIncrementalState, "chapterIncrementalState must not be null");
         chapterStateSnapshot = Objects.requireNonNull(chapterStateSnapshot, "chapterStateSnapshot must not be null");
     }
 }

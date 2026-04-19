@@ -25,6 +25,7 @@ import com.storyweaver.storyunit.context.ReaderKnownStateView;
 import com.storyweaver.storyunit.context.RecentStoryProgressView;
 import com.storyweaver.storyunit.context.StoryUnitSummaryView;
 import com.storyweaver.storyunit.facet.reveal.ReaderRevealState;
+import com.storyweaver.storyunit.facet.state.ChapterIncrementalState;
 import com.storyweaver.storyunit.model.FacetType;
 import com.storyweaver.storyunit.model.StoryUnitRef;
 import com.storyweaver.storyunit.model.StoryUnitType;
@@ -137,6 +138,26 @@ class StorySessionOrchestrationControllerTest {
                         new ReaderRevealState(
                                 28L, 31L, List.of("待揭晓"), List.of("待揭晓"), List.of("待揭晓"), List.of(), "读者已知 1 条，未揭晓 0 条"
                         ),
+                        new StoryPatch(
+                                "patch-chapter-state-1",
+                                new StoryUnitRef("31", "chapter:31", StoryUnitType.CHAPTER),
+                                FacetType.STATE,
+                                List.of(new PatchOperation(PatchOperationType.MERGE, "/openLoops", List.of("scene:scene-2:pending"))),
+                                "scene-1 的 chapter state patch",
+                                PatchStatus.APPLIED,
+                                new StorySourceTrace("test", "test", "SceneExecutionWriteService", "scene-1")
+                        ),
+                        new ChapterIncrementalState(
+                                28L,
+                                31L,
+                                List.of("scene:scene-2:pending"),
+                                List.of("scene:scene-1:pending"),
+                                List.of("办公室"),
+                                java.util.Map.of("林沉舟", "紧张"),
+                                java.util.Map.of("林沉舟", "谨慎"),
+                                java.util.Map.of("林沉舟", List.of("观察中")),
+                                "scene-1 已写回章节状态"
+                        ),
                         new StorySnapshot("snapshot-chapter-state-1", SnapshotScope.CHAPTER, 28L, 31L, "scene-1",
                                 List.of(new StoryUnitRef("31", "chapter:31", StoryUnitType.CHAPTER)),
                                 "读者已知 1 条，未揭晓 0 条", new StorySourceTrace("test", "test", "SceneExecutionWriteService", "scene-1"))
@@ -159,6 +180,8 @@ class StorySessionOrchestrationControllerTest {
                 .andExpect(jsonPath("$.data.writeResult.stateSnapshot.snapshotId").value("snapshot-1"))
                 .andExpect(jsonPath("$.data.writeResult.statePatch.patchId").value("patch-1"))
                 .andExpect(jsonPath("$.data.writeResult.readerRevealState.readerKnown[0]").value("待揭晓"))
+                .andExpect(jsonPath("$.data.writeResult.chapterStatePatch.patchId").value("patch-chapter-state-1"))
+                .andExpect(jsonPath("$.data.writeResult.chapterIncrementalState.openLoops[0]").value("scene:scene-2:pending"))
                 .andExpect(jsonPath("$.data.writeResult.chapterStateSnapshot.snapshotId").value("snapshot-chapter-state-1"))
                 .andExpect(jsonPath("$.data.trace.items[2].stepKey").value("scene-writeback"));
     }

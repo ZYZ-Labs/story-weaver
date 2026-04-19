@@ -6,14 +6,17 @@ import com.storyweaver.story.generation.orchestration.SceneBindingMode;
 import com.storyweaver.story.generation.orchestration.StorySessionContextPacket;
 import com.storyweaver.story.generation.orchestration.WriterSessionResult;
 import com.storyweaver.storyunit.context.ChapterAnchorBundleView;
+import com.storyweaver.storyunit.context.CharacterRuntimeStateView;
 import com.storyweaver.storyunit.context.ProjectBriefView;
 import com.storyweaver.storyunit.context.ReaderKnownStateView;
 import com.storyweaver.storyunit.context.RecentStoryProgressView;
 import com.storyweaver.storyunit.context.StoryUnitSummaryView;
 import com.storyweaver.storyunit.facet.reveal.ReaderRevealState;
+import com.storyweaver.storyunit.facet.state.ChapterIncrementalState;
 import com.storyweaver.storyunit.model.StoryUnitRef;
 import com.storyweaver.storyunit.model.StoryUnitType;
 import com.storyweaver.storyunit.patch.StoryPatch;
+import com.storyweaver.storyunit.service.ChapterIncrementalStateStore;
 import com.storyweaver.storyunit.service.ReaderRevealStateStore;
 import com.storyweaver.storyunit.service.SceneRuntimeStateStore;
 import com.storyweaver.storyunit.service.StoryEventStore;
@@ -43,12 +46,14 @@ class DefaultSceneExecutionWriteServiceTest {
         StorySnapshotStore snapshotStore = mock(StorySnapshotStore.class);
         StoryPatchStore patchStore = mock(StoryPatchStore.class);
         ReaderRevealStateStore revealStateStore = mock(ReaderRevealStateStore.class);
+        ChapterIncrementalStateStore chapterIncrementalStateStore = mock(ChapterIncrementalStateStore.class);
         DefaultSceneExecutionWriteService service = new DefaultSceneExecutionWriteService(
                 store,
                 eventStore,
                 snapshotStore,
                 patchStore,
-                revealStateStore
+                revealStateStore,
+                chapterIncrementalStateStore
         );
 
         StorySessionContextPacket contextPacket = new StorySessionContextPacket(
@@ -61,7 +66,17 @@ class DefaultSceneExecutionWriteServiceTest {
                 new ChapterAnchorBundleView(28L, 31L, "退役者的邀请函", 9L, "第一卷", 15L, "林沉舟", List.of("林沉舟"), List.of("剧情"), List.of("剧情"), "章节摘要"),
                 new ReaderKnownStateView(28L, 31L, List.of("邀请函来自旧战队"), List.of()),
                 new RecentStoryProgressView(28L, List.of()),
-                List.of(),
+                List.of(new CharacterRuntimeStateView(
+                        28L,
+                        15L,
+                        "林沉舟",
+                        "办公室",
+                        "紧张",
+                        "谨慎",
+                        List.of(),
+                        List.of(),
+                        List.of("观察中")
+                )),
                 null,
                 List.of()
         );
@@ -101,6 +116,8 @@ class DefaultSceneExecutionWriteServiceTest {
         when(patchStore.appendPatch(any(), any(), any())).thenAnswer(invocation -> invocation.getArgument(2));
         when(revealStateStore.findChapterRevealState(28L, 31L)).thenReturn(java.util.Optional.empty());
         when(revealStateStore.saveChapterRevealState(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(chapterIncrementalStateStore.findChapterState(28L, 31L)).thenReturn(java.util.Optional.empty());
+        when(chapterIncrementalStateStore.saveChapterState(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
         SceneExecutionWriteResult result = service.write(contextPacket, brief, writerSessionResult, reviewDecision);
 
@@ -112,14 +129,20 @@ class DefaultSceneExecutionWriteServiceTest {
         assertEquals("SCENE_COMPLETED", result.stateEvent().eventType().name());
         assertEquals("scene-2", result.stateSnapshot().sceneId());
         assertEquals("REVEAL", result.statePatch().facetType().name());
+        assertEquals("STATE", result.chapterStatePatch().facetType().name());
         assertEquals("主角决定赴约", result.readerRevealState().readerKnown().getLast());
+        assertEquals("scene:scene-3:pending", result.chapterIncrementalState().openLoops().getFirst());
+        assertEquals("scene:scene-2:pending", result.chapterIncrementalState().resolvedLoops().getFirst());
+        assertEquals("办公室", result.chapterIncrementalState().activeLocations().getFirst());
+        assertEquals("紧张", result.chapterIncrementalState().characterEmotions().get("林沉舟"));
         assertEquals("CHAPTER", result.chapterStateSnapshot().scope().name());
         assertTrue(result.sceneExecutionState().handoffLine().contains("林沉舟"));
         verify(store).saveSceneState(any());
         verify(store).saveHandoff(any());
         verify(eventStore).appendEvent(any());
         verify(snapshotStore, org.mockito.Mockito.times(2)).saveSnapshot(any());
-        verify(patchStore).appendPatch(any(), any(), any(StoryPatch.class));
+        verify(patchStore, org.mockito.Mockito.times(2)).appendPatch(any(), any(), any(StoryPatch.class));
         verify(revealStateStore).saveChapterRevealState(any(ReaderRevealState.class));
+        verify(chapterIncrementalStateStore).saveChapterState(any(ChapterIncrementalState.class));
     }
 }

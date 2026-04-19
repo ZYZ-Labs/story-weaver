@@ -8,6 +8,7 @@ import com.storyweaver.storyunit.context.ReaderKnownStateView;
 import com.storyweaver.storyunit.event.StoryEvent;
 import com.storyweaver.storyunit.event.StoryEventType;
 import com.storyweaver.storyunit.facet.reveal.ReaderRevealState;
+import com.storyweaver.storyunit.facet.state.ChapterIncrementalState;
 import com.storyweaver.storyunit.model.FacetType;
 import com.storyweaver.storyunit.model.StorySourceTrace;
 import com.storyweaver.storyunit.model.StoryUnitRef;
@@ -16,6 +17,7 @@ import com.storyweaver.storyunit.patch.PatchOperation;
 import com.storyweaver.storyunit.patch.PatchOperationType;
 import com.storyweaver.storyunit.patch.PatchStatus;
 import com.storyweaver.storyunit.patch.StoryPatch;
+import com.storyweaver.storyunit.service.ChapterIncrementalStateStore;
 import com.storyweaver.storyunit.service.ReaderRevealStateStore;
 import com.storyweaver.storyunit.service.StoryEventStore;
 import com.storyweaver.storyunit.service.StoryPatchStore;
@@ -51,18 +53,21 @@ public class DefaultSceneExecutionWriteService implements SceneExecutionWriteSer
     private final StorySnapshotStore storySnapshotStore;
     private final StoryPatchStore storyPatchStore;
     private final ReaderRevealStateStore readerRevealStateStore;
+    private final ChapterIncrementalStateStore chapterIncrementalStateStore;
 
     public DefaultSceneExecutionWriteService(
             SceneRuntimeStateStore sceneRuntimeStateStore,
             StoryEventStore storyEventStore,
             StorySnapshotStore storySnapshotStore,
             StoryPatchStore storyPatchStore,
-            ReaderRevealStateStore readerRevealStateStore) {
+            ReaderRevealStateStore readerRevealStateStore,
+            ChapterIncrementalStateStore chapterIncrementalStateStore) {
         this.sceneRuntimeStateStore = sceneRuntimeStateStore;
         this.storyEventStore = storyEventStore;
         this.storySnapshotStore = storySnapshotStore;
         this.storyPatchStore = storyPatchStore;
         this.readerRevealStateStore = readerRevealStateStore;
+        this.chapterIncrementalStateStore = chapterIncrementalStateStore;
     }
 
     @Override
@@ -106,10 +111,19 @@ public class DefaultSceneExecutionWriteService implements SceneExecutionWriteSer
         ReaderRevealState readerRevealState = readerRevealStateStore.saveChapterRevealState(
                 applyRevealStatePatch(contextPacket, sceneExecutionState, storyPatch)
         );
+        StoryPatch chapterStatePatch = storyPatchStore.appendPatch(
+                contextPacket.projectId(),
+                contextPacket.chapterId(),
+                buildChapterStatePatch(contextPacket, sceneExecutionState, handoffSnapshot)
+        );
+        ChapterIncrementalState chapterIncrementalState = chapterIncrementalStateStore.saveChapterState(
+                applyChapterStatePatch(contextPacket, sceneExecutionState, handoffSnapshot, chapterStatePatch)
+        );
         StorySnapshot chapterStateSnapshot = storySnapshotStore.saveSnapshot(buildChapterStateSnapshot(
                 contextPacket,
                 sceneExecutionState,
-                readerRevealState
+                readerRevealState,
+                chapterIncrementalState
         ));
         return new SceneExecutionWriteResult(
                 sceneExecutionState,
@@ -118,6 +132,8 @@ public class DefaultSceneExecutionWriteService implements SceneExecutionWriteSer
                 storySnapshot,
                 storyPatch,
                 readerRevealState,
+                chapterStatePatch,
+                chapterIncrementalState,
                 chapterStateSnapshot
         );
     }
@@ -283,7 +299,8 @@ public class DefaultSceneExecutionWriteService implements SceneExecutionWriteSer
     private StorySnapshot buildChapterStateSnapshot(
             StorySessionContextPacket contextPacket,
             SceneExecutionState sceneExecutionState,
-            ReaderRevealState readerRevealState) {
+            ReaderRevealState readerRevealState,
+            ChapterIncrementalState chapterIncrementalState) {
         return new StorySnapshot(
                 buildChapterStateSnapshotId(contextPacket, sceneExecutionState.sceneId()),
                 SnapshotScope.CHAPTER,
@@ -291,8 +308,83 @@ public class DefaultSceneExecutionWriteService implements SceneExecutionWriteSer
                 contextPacket.chapterId(),
                 sceneExecutionState.sceneId(),
                 List.of(chapterUnitRef(contextPacket.chapterId())),
-                readerRevealState.summary(),
+                buildChapterStateSnapshotSummary(readerRevealState, chapterIncrementalState),
                 sourceTrace(sceneExecutionState.sceneId())
+        );
+    }
+
+    private StoryPatch buildChapterStatePatch(
+            StorySessionContextPacket contextPacket,
+            SceneExecutionState sceneExecutionState,
+            SceneHandoffSnapshot handoffSnapshot) {
+        String currentSceneLoop = scenePendingLoop(sceneExecutionState.sceneId());
+        String nextSceneLoop = scenePendingLoop(handoffSnapshot.toSceneId());
+        List<String> activeLocations = sanitizeDistinct(contextPacket.characterRuntimeStates().stream()
+                .map(com.storyweaver.storyunit.context.CharacterRuntimeStateView::currentLocation)
+                .toList());
+        Map<String, String> emotions = sanitizeStringMap(contextPacket.characterRuntimeStates().stream()
+                .filter(character -> StringUtils.hasText(character.emotionalState()))
+                .collect(LinkedHashMap::new, (map, character) -> map.put(character.characterName(), character.emotionalState()), Map::putAll));
+        Map<String, String> attitudes = sanitizeStringMap(contextPacket.characterRuntimeStates().stream()
+                .filter(character -> StringUtils.hasText(character.attitudeSummary()))
+                .collect(LinkedHashMap::new, (map, character) -> map.put(character.characterName(), character.attitudeSummary()), Map::putAll));
+        Map<String, List<String>> stateTags = sanitizeTagMap(contextPacket.characterRuntimeStates().stream()
+                .filter(character -> !character.stateTags().isEmpty())
+                .collect(LinkedHashMap::new, (map, character) -> map.put(character.characterName(), character.stateTags()), Map::putAll));
+        List<PatchOperation> operations = new ArrayList<>();
+        operations.add(new PatchOperation(PatchOperationType.MERGE, "/resolvedLoops", List.of(currentSceneLoop)));
+        if (sceneExecutionState.status() != SceneExecutionStatus.FAILED) {
+            operations.add(new PatchOperation(PatchOperationType.MERGE, "/openLoops", List.of(nextSceneLoop)));
+        }
+        operations.add(new PatchOperation(PatchOperationType.REPLACE, "/activeLocations", activeLocations));
+        operations.add(new PatchOperation(PatchOperationType.REPLACE, "/characterEmotions", emotions));
+        operations.add(new PatchOperation(PatchOperationType.REPLACE, "/characterAttitudes", attitudes));
+        operations.add(new PatchOperation(PatchOperationType.REPLACE, "/characterStateTags", stateTags));
+        return new StoryPatch(
+                buildChapterStatePatchId(contextPacket, sceneExecutionState.sceneId()),
+                chapterUnitRef(contextPacket.chapterId()),
+                FacetType.STATE,
+                List.copyOf(operations),
+                "scene " + sceneExecutionState.sceneId() + " 写回章节状态：openLoops="
+                        + (sceneExecutionState.status() == SceneExecutionStatus.FAILED ? 0 : 1)
+                        + "，locations=" + activeLocations.size(),
+                PatchStatus.APPLIED,
+                sourceTrace(sceneExecutionState.sceneId())
+        );
+    }
+
+    private ChapterIncrementalState applyChapterStatePatch(
+            StorySessionContextPacket contextPacket,
+            SceneExecutionState sceneExecutionState,
+            SceneHandoffSnapshot handoffSnapshot,
+            StoryPatch storyPatch) {
+        ChapterIncrementalState current = chapterIncrementalStateStore.findChapterState(contextPacket.projectId(), contextPacket.chapterId())
+                .orElseGet(() -> baseChapterIncrementalState(contextPacket));
+        List<String> openLoops = sanitizeDistinct(mergeDistinct(
+                current.openLoops(),
+                extractStringList(storyPatch, "/openLoops")
+        ));
+        List<String> resolvedLoops = sanitizeDistinct(mergeDistinct(
+                current.resolvedLoops(),
+                extractStringList(storyPatch, "/resolvedLoops")
+        ));
+        openLoops = openLoops.stream()
+                .filter(loop -> !resolvedLoops.contains(loop))
+                .toList();
+        Map<String, String> emotions = firstNonEmptyStringMap(extractStringMap(storyPatch, "/characterEmotions"), current.characterEmotions());
+        Map<String, String> attitudes = firstNonEmptyStringMap(extractStringMap(storyPatch, "/characterAttitudes"), current.characterAttitudes());
+        Map<String, List<String>> stateTags = firstNonEmptyTagMap(extractTagMap(storyPatch, "/characterStateTags"), current.characterStateTags());
+        List<String> activeLocations = firstNonEmptyList(extractStringList(storyPatch, "/activeLocations"), current.activeLocations());
+        return new ChapterIncrementalState(
+                contextPacket.projectId(),
+                contextPacket.chapterId(),
+                openLoops,
+                resolvedLoops,
+                activeLocations,
+                emotions,
+                attitudes,
+                stateTags,
+                buildChapterStateSummary(sceneExecutionState, handoffSnapshot, openLoops, activeLocations)
         );
     }
 
@@ -331,6 +423,150 @@ public class DefaultSceneExecutionWriteService implements SceneExecutionWriteSer
         merged.addAll(current == null ? List.of() : current);
         merged.addAll(delta == null ? List.of() : delta);
         return sanitizeDistinct(merged);
+    }
+
+    private List<String> extractStringList(StoryPatch patch, String path) {
+        return patch.operations().stream()
+                .filter(operation -> path.equals(operation.path()))
+                .map(PatchOperation::value)
+                .filter(Collection.class::isInstance)
+                .map(Collection.class::cast)
+                .flatMap(Collection::stream)
+                .filter(String.class::isInstance)
+                .map(String.class::cast)
+                .toList();
+    }
+
+    private Map<String, String> extractStringMap(StoryPatch patch, String path) {
+        Map<String, String> extracted = new LinkedHashMap<>();
+        patch.operations().stream()
+                .filter(operation -> path.equals(operation.path()))
+                .map(PatchOperation::value)
+                .filter(Map.class::isInstance)
+                .map(Map.class::cast)
+                .forEach(map -> map.forEach((key, value) -> {
+                    if (!(key instanceof String keyString) || !(value instanceof String valueString)) {
+                        return;
+                    }
+                    extracted.put(keyString.trim(), valueString.trim());
+                }));
+        return sanitizeStringMap(extracted);
+    }
+
+    private Map<String, List<String>> extractTagMap(StoryPatch patch, String path) {
+        Map<String, List<String>> extracted = new LinkedHashMap<>();
+        patch.operations().stream()
+                .filter(operation -> path.equals(operation.path()))
+                .map(PatchOperation::value)
+                .filter(Map.class::isInstance)
+                .map(Map.class::cast)
+                .forEach(map -> map.forEach((key, value) -> {
+                    if (!(key instanceof String keyString) || !(value instanceof Collection<?> collection)) {
+                        return;
+                    }
+                    List<String> tags = collection.stream()
+                            .filter(String.class::isInstance)
+                            .map(String.class::cast)
+                            .toList();
+                    if (!tags.isEmpty()) {
+                        extracted.put(keyString.trim(), sanitizeDistinct(tags));
+                    }
+                }));
+        return sanitizeTagMap(extracted);
+    }
+
+    private ChapterIncrementalState baseChapterIncrementalState(StorySessionContextPacket contextPacket) {
+        List<String> activeLocations = sanitizeDistinct(contextPacket.characterRuntimeStates().stream()
+                .map(com.storyweaver.storyunit.context.CharacterRuntimeStateView::currentLocation)
+                .toList());
+        Map<String, String> emotions = sanitizeStringMap(contextPacket.characterRuntimeStates().stream()
+                .filter(character -> StringUtils.hasText(character.emotionalState()))
+                .collect(LinkedHashMap::new, (map, character) -> map.put(character.characterName(), character.emotionalState()), Map::putAll));
+        Map<String, String> attitudes = sanitizeStringMap(contextPacket.characterRuntimeStates().stream()
+                .filter(character -> StringUtils.hasText(character.attitudeSummary()))
+                .collect(LinkedHashMap::new, (map, character) -> map.put(character.characterName(), character.attitudeSummary()), Map::putAll));
+        Map<String, List<String>> tags = sanitizeTagMap(contextPacket.characterRuntimeStates().stream()
+                .filter(character -> !character.stateTags().isEmpty())
+                .collect(LinkedHashMap::new, (map, character) -> map.put(character.characterName(), character.stateTags()), Map::putAll));
+        return new ChapterIncrementalState(
+                contextPacket.projectId(),
+                contextPacket.chapterId(),
+                List.of(),
+                List.of(),
+                activeLocations,
+                emotions,
+                attitudes,
+                tags,
+                "章节状态基线已建立。"
+        );
+    }
+
+    private String buildChapterStateSnapshotSummary(ReaderRevealState readerRevealState, ChapterIncrementalState chapterIncrementalState) {
+        return readerRevealState.summary()
+                + " / 开放回路 " + chapterIncrementalState.openLoops().size() + " 条"
+                + " / 活动地点 " + chapterIncrementalState.activeLocations().size() + " 个";
+    }
+
+    private String buildChapterStateSummary(
+            SceneExecutionState sceneExecutionState,
+            SceneHandoffSnapshot handoffSnapshot,
+            List<String> openLoops,
+            List<String> activeLocations) {
+        return "scene " + sceneExecutionState.sceneId()
+                + " 已写回章节状态，下一镜头 "
+                + handoffSnapshot.toSceneId()
+                + " 待执行，开放回路 "
+                + openLoops.size()
+                + " 条，活动地点 "
+                + activeLocations.size()
+                + " 个";
+    }
+
+    private List<String> firstNonEmptyList(List<String> preferred, List<String> fallback) {
+        return preferred == null || preferred.isEmpty() ? sanitizeDistinct(fallback) : sanitizeDistinct(preferred);
+    }
+
+    private Map<String, String> firstNonEmptyStringMap(Map<String, String> preferred, Map<String, String> fallback) {
+        return preferred == null || preferred.isEmpty() ? sanitizeStringMap(fallback) : sanitizeStringMap(preferred);
+    }
+
+    private Map<String, List<String>> firstNonEmptyTagMap(Map<String, List<String>> preferred, Map<String, List<String>> fallback) {
+        return preferred == null || preferred.isEmpty() ? sanitizeTagMap(fallback) : sanitizeTagMap(preferred);
+    }
+
+    private Map<String, String> sanitizeStringMap(Map<String, String> values) {
+        if (values == null || values.isEmpty()) {
+            return Map.of();
+        }
+        Map<String, String> sanitized = new LinkedHashMap<>();
+        values.forEach((key, value) -> {
+            if (!StringUtils.hasText(key) || !StringUtils.hasText(value)) {
+                return;
+            }
+            sanitized.put(key.trim(), value.trim());
+        });
+        return Map.copyOf(sanitized);
+    }
+
+    private Map<String, List<String>> sanitizeTagMap(Map<String, List<String>> values) {
+        if (values == null || values.isEmpty()) {
+            return Map.of();
+        }
+        Map<String, List<String>> sanitized = new LinkedHashMap<>();
+        values.forEach((key, tags) -> {
+            if (!StringUtils.hasText(key)) {
+                return;
+            }
+            List<String> normalizedTags = sanitizeDistinct(tags);
+            if (!normalizedTags.isEmpty()) {
+                sanitized.put(key.trim(), normalizedTags);
+            }
+        });
+        return Map.copyOf(sanitized);
+    }
+
+    private String scenePendingLoop(String sceneId) {
+        return "scene:" + sceneId + ":pending";
     }
 
     private List<String> sanitizeDistinct(List<String> values) {
@@ -428,6 +664,10 @@ public class DefaultSceneExecutionWriteService implements SceneExecutionWriteSer
 
     private String buildPatchId(StorySessionContextPacket contextPacket, String sceneId) {
         return "patch-" + contextPacket.projectId() + "-" + contextPacket.chapterId() + "-" + sceneId + "-" + UUID.randomUUID();
+    }
+
+    private String buildChapterStatePatchId(StorySessionContextPacket contextPacket, String sceneId) {
+        return "patch-chapter-state-" + contextPacket.projectId() + "-" + contextPacket.chapterId() + "-" + sceneId + "-" + UUID.randomUUID();
     }
 
     private String buildChapterStateSnapshotId(StorySessionContextPacket contextPacket, String sceneId) {

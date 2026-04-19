@@ -25,6 +25,7 @@ import com.storyweaver.storyunit.context.StoryUnitSummaryView;
 import com.storyweaver.storyunit.event.StoryEvent;
 import com.storyweaver.storyunit.event.StoryEventType;
 import com.storyweaver.storyunit.facet.reveal.ReaderRevealState;
+import com.storyweaver.storyunit.facet.state.ChapterIncrementalState;
 import com.storyweaver.storyunit.model.FacetType;
 import com.storyweaver.storyunit.model.StorySourceTrace;
 import com.storyweaver.storyunit.model.StoryUnitRef;
@@ -313,6 +314,26 @@ class DefaultStorySessionOrchestratorTest {
                         List.of("待揭晓"),
                         List.of(),
                         "读者已知 1 条，未揭晓 0 条"
+                ),
+                new StoryPatch(
+                        "patch-chapter-state-1",
+                        new StoryUnitRef("31", "chapter:31", StoryUnitType.CHAPTER),
+                        FacetType.STATE,
+                        List.of(new PatchOperation(PatchOperationType.MERGE, "/openLoops", List.of("scene:scene-2:pending"))),
+                        "scene-1 的 chapter state patch",
+                        PatchStatus.APPLIED,
+                        new StorySourceTrace("test", "test", "unit-test", "DefaultStorySessionOrchestratorTest")
+                ),
+                new ChapterIncrementalState(
+                        28L,
+                        31L,
+                        List.of("scene:scene-2:pending"),
+                        List.of("scene:scene-1:pending"),
+                        List.of("办公室"),
+                        java.util.Map.of("林沉舟", "紧张"),
+                        java.util.Map.of("林沉舟", "谨慎"),
+                        java.util.Map.of("林沉舟", List.of("观察中")),
+                        "scene-1 已写回章节状态"
                 ),
                 new StorySnapshot(
                         "snapshot-chapter-state-1",

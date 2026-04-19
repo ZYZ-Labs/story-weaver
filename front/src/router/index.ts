@@ -15,18 +15,34 @@ const router = createRouter({
       path: '/',
       component: () => import('@/layouts/MainLayout.vue'),
       children: [
-        { path: '', redirect: '/dashboard' },
+        { path: '', redirect: '/workbench' },
+        {
+          path: 'workbench',
+          name: 'workbench',
+          component: () => import('@/views/workbench/WorkbenchView.vue'),
+          meta: { title: '创作台' },
+        },
         {
           path: 'dashboard',
-          name: 'dashboard',
-          component: () => import('@/views/dashboard/DashboardView.vue'),
-          meta: { title: '总览' },
+          redirect: '/workbench',
+        },
+        {
+          path: 'state-center',
+          name: 'state-center',
+          component: () => import('@/views/state/StateCenterView.vue'),
+          meta: { title: '状态台' },
+        },
+        {
+          path: 'generation-center',
+          name: 'generation-center',
+          component: () => import('@/views/generation/GenerationCenterView.vue'),
+          meta: { title: '生成台' },
         },
         {
           path: 'projects',
           name: 'projects',
           component: () => import('@/views/project/ProjectListView.vue'),
-          meta: { title: '项目管理' },
+          meta: { title: '项目总览' },
         },
         {
           path: 'projects/:id',
@@ -125,11 +141,11 @@ router.beforeEach((to) => {
   }
 
   if (to.meta.requiresAdmin && !authStore.isAdmin) {
-    return { name: 'dashboard' }
+    return { name: 'workbench' }
   }
 
   if (to.name === 'login' && authStore.isAuthenticated) {
-    return { name: 'dashboard' }
+    return { name: 'workbench' }
   }
 
   if (typeof to.meta.title === 'string') {
