@@ -6,6 +6,7 @@ import com.storyweaver.story.generation.orchestration.ChapterSkeletonPlanner;
 import com.storyweaver.story.generation.orchestration.ChapterSkeletonStore;
 import com.storyweaver.story.generation.orchestration.SceneSkeletonItem;
 import com.storyweaver.story.generation.orchestration.SceneSkeletonMutationCommand;
+import com.storyweaver.storyunit.service.SceneRuntimeStateStore;
 import com.storyweaver.storyunit.session.SceneExecutionStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
@@ -19,12 +20,15 @@ public class DefaultChapterSkeletonMutationService implements ChapterSkeletonMut
 
     private final ChapterSkeletonPlanner chapterSkeletonPlanner;
     private final ChapterSkeletonStore chapterSkeletonStore;
+    private final SceneRuntimeStateStore sceneRuntimeStateStore;
 
     public DefaultChapterSkeletonMutationService(
             ChapterSkeletonPlanner chapterSkeletonPlanner,
-            ChapterSkeletonStore chapterSkeletonStore) {
+            ChapterSkeletonStore chapterSkeletonStore,
+            SceneRuntimeStateStore sceneRuntimeStateStore) {
         this.chapterSkeletonPlanner = chapterSkeletonPlanner;
         this.chapterSkeletonStore = chapterSkeletonStore;
+        this.sceneRuntimeStateStore = sceneRuntimeStateStore;
     }
 
     @Override
@@ -45,7 +49,7 @@ public class DefaultChapterSkeletonMutationService implements ChapterSkeletonMut
                 continue;
             }
             if (scene.status() == SceneExecutionStatus.COMPLETED) {
-                throw new IllegalStateException("已完成镜头不允许直接修改骨架字段");
+                throw new IllegalStateException("已完成镜头不允许直接修改骨架字段；如需重做，请先删除镜头后重新规划。");
             }
             scenes.add(new SceneSkeletonItem(
                     scene.sceneId(),
@@ -95,14 +99,13 @@ public class DefaultChapterSkeletonMutationService implements ChapterSkeletonMut
                 scenes.add(scene);
                 continue;
             }
-            if (scene.status() != SceneExecutionStatus.PLANNED) {
-                throw new IllegalStateException("只有未执行镜头允许删除");
-            }
             deleted = true;
         }
         if (!deleted) {
             return Optional.empty();
         }
+        sceneRuntimeStateStore.deleteSceneState(projectId, chapterId, sceneId);
+        sceneRuntimeStateStore.deleteHandoffsReferencingScene(projectId, chapterId, sceneId);
         ChapterSkeleton next = new ChapterSkeleton(
                 chapterSkeleton.projectId(),
                 chapterSkeleton.chapterId(),
@@ -110,7 +113,7 @@ public class DefaultChapterSkeletonMutationService implements ChapterSkeletonMut
                 scenes.size(),
                 resolveGlobalStopCondition(chapterSkeleton, scenes),
                 scenes,
-                appendPlanningNote(chapterSkeleton.planningNotes(), "已删除 " + sceneId + "。")
+                appendPlanningNote(chapterSkeleton.planningNotes(), "已删除 " + sceneId + "，并清理其 runtime/handoff 状态。")
         );
         return Optional.of(chapterSkeletonStore.save(next));
     }

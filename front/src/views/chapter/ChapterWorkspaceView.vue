@@ -92,6 +92,8 @@ const currentScene = computed(
   () => skeleton.value?.scenes?.find((scene) => scene.sceneId === sceneId.value) || null,
 )
 
+const currentSceneCompleted = computed(() => currentScene.value?.status === 'COMPLETED')
+
 const stats = computed(() => [
   {
     title: '正文长度',
@@ -224,13 +226,16 @@ async function executeCurrentScene() {
   if (!currentProjectId.value || !activeChapterId.value) {
     return
   }
+  if (!window.confirm(`确认仅推进 ${sceneId.value} 的镜头状态吗？这会写入 runtime/handoff，但不会自动生成正文。`)) {
+    return
+  }
   executeLoading.value = true
   executionMessage.value = ''
   executionError.value = ''
   try {
     const execution = await executeStorySession(currentProjectId.value, activeChapterId.value, sceneId.value)
     lastExecution.value = execution
-    executionMessage.value = `已执行 ${execution.writeResult.sceneExecutionState.sceneId}，下一镜头 ${execution.writeResult.handoffSnapshot.toSceneId || '待定'}。`
+    executionMessage.value = `已仅推进 ${execution.writeResult.sceneExecutionState.sceneId} 的镜头状态，下一镜头 ${execution.writeResult.handoffSnapshot.toSceneId || '待定'}。`
     await loadWorkspace(currentProjectId.value, activeChapterId.value)
     if (execution.writeResult.handoffSnapshot.toSceneId) {
       sceneId.value = execution.writeResult.handoffSnapshot.toSceneId
@@ -271,7 +276,10 @@ async function deleteCurrentScene() {
   if (!currentProjectId.value || !activeChapterId.value || !currentScene.value) {
     return
   }
-  if (!window.confirm(`确认删除 ${currentScene.value.sceneId} 吗？`)) {
+  const warning = currentSceneCompleted.value
+    ? `确认删除 ${currentScene.value.sceneId} 吗？该镜头已执行，删除会清理其 runtime/handoff 状态，但不会自动回滚已经写入正文的内容。`
+    : `确认删除 ${currentScene.value.sceneId} 吗？`
+  if (!window.confirm(warning)) {
     return
   }
   sceneMutationLoading.value = true
@@ -332,8 +340,24 @@ async function acceptSceneDraft() {
   draftLoading.value = true
   draftError.value = ''
   try {
+    const acceptedSceneId = sceneId.value
     await acceptWriting(sceneDraftRecord.value.id)
-    draftMessage.value = `已接受 ${sceneId.value} 的草稿并写回章节正文。`
+    let executionTip = ''
+    try {
+      const execution = await executeStorySession(currentProjectId.value, activeChapterId.value, acceptedSceneId)
+      lastExecution.value = execution
+      executionTip = execution.writeResult.handoffSnapshot.toSceneId
+        ? ` 已推进到 ${execution.writeResult.handoffSnapshot.toSceneId}。`
+        : ''
+      if (execution.writeResult.handoffSnapshot.toSceneId) {
+        sceneId.value = execution.writeResult.handoffSnapshot.toSceneId
+      }
+    } catch (executionErrorValue) {
+      executionError.value = executionErrorValue instanceof Error
+        ? `正文已写回，但镜头状态推进失败：${executionErrorValue.message}`
+        : '正文已写回，但镜头状态推进失败'
+    }
+    draftMessage.value = `已接受 ${acceptedSceneId} 的草稿并写回章节正文。${executionTip}`.trim()
     await loadWorkspace(currentProjectId.value, activeChapterId.value)
     sceneDraftRecord.value = null
   } catch (error) {
@@ -427,10 +451,10 @@ watch(sceneId, async (value) => {
           color="primary"
           prepend-icon="mdi-play-circle-outline"
           :loading="executeLoading"
-          :disabled="!activeChapterId"
+          :disabled="!activeChapterId || !currentScene"
           @click="executeCurrentScene"
         >
-          执行当前镜头
+          仅推进镜头状态
         </v-btn>
         <v-btn variant="outlined" prepend-icon="mdi-feather" to="/writing">
           旧写作中心
@@ -623,6 +647,9 @@ watch(sceneId, async (value) => {
                 {{ sessionPreview?.contextPacket?.sceneBindingContext?.resolvedSceneId || '未解析' }}
               </span>
             </div>
+            <div class="text-caption text-medium-emphasis mt-3">
+              普通主路径：先根据当前镜头生成草稿，接受草稿后再自动推进镜头状态与 handoff。上方按钮只用于手动推进状态，不会生成正文。
+            </div>
 
             <v-alert v-if="executionMessage" type="success" variant="tonal" class="mt-4">
               {{ executionMessage }}
@@ -672,7 +699,7 @@ watch(sceneId, async (value) => {
                     :loading="draftLoading"
                     @click="acceptSceneDraft"
                   >
-                    接受写回正文
+                  接受写回正文
                   </v-btn>
                   <v-btn
                     color="error"
@@ -687,6 +714,9 @@ watch(sceneId, async (value) => {
               </div>
               <div class="text-caption text-medium-emphasis mt-2">
                 {{ sceneDraftRecord.writingType }} · {{ sceneDraftRecord.selectedModel || '默认模型' }}
+              </div>
+              <div class="text-caption text-medium-emphasis mt-2">
+                接受草稿后会自动完成当前镜头并切到下一镜头；拒绝草稿不会推进镜头状态。
               </div>
               <MarkdownContent class="mt-4" :content="sceneDraftRecord.generatedContent || ''" />
             </template>

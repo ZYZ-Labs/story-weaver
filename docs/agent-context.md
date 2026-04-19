@@ -172,9 +172,13 @@
   - 当前下一步是部署联调 `Chapter Workspace`
   - `Phase 8.2` 已继续推进到镜头级可操作闭环：
     - 当前镜头可编辑
-    - `PLANNED` 镜头可删除
+    - 任意镜头可删除
     - 可直接基于当前镜头生成初稿
     - 草稿可直接接受写回正文或拒绝
+  - `Phase 8.2` 已继续推进到执行语义重构：
+    - 普通主路径改为“生成草稿 -> 接受草稿 -> 自动推进 scene 完成与 handoff”
+    - `执行当前镜头` 已降级为专家动作，仅推进 runtime/handoff
+    - 删除已执行镜头时会同步清理 runtime/handoff，但不会自动回滚正文
   - 后端已补章节骨架 override 能力：
     - `PUT /api/story-orchestration/projects/{projectId}/chapters/{chapterId}/skeleton-scenes/{sceneId}`
     - `DELETE /api/story-orchestration/projects/{projectId}/chapters/{chapterId}/skeleton-scenes/{sceneId}`
@@ -183,6 +187,7 @@
     - 镜头删除
     - 根据镜头直出初稿
     - 草稿接受/拒绝回写
+    - 接受草稿后自动推进 scene 完成与 handoff
   - 若联调通过，再进入：
     - `Phase 8.3` 对象页 `Summary First` 重构
 - 最新修正：

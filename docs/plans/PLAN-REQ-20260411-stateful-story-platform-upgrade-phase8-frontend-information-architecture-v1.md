@@ -155,21 +155,27 @@
     - 章节 trace 与审校
   - 已补齐章节工作区镜头操作闭环：
     - 当前镜头可编辑
-    - `PLANNED` 镜头可删除
+    - 任意镜头可删除
     - 可直接基于当前镜头生成初稿或继续生成
     - 生成草稿后可直接接受写回正文或拒绝
+    - 接受草稿后自动推进当前镜头完成并切换到下一镜头
+    - `执行当前镜头` 已降级为仅推进 runtime/handoff 的专家动作
   - 后端已补齐章节骨架 override 能力：
     - `PUT /api/story-orchestration/projects/{projectId}/chapters/{chapterId}/skeleton-scenes/{sceneId}`
     - `DELETE /api/story-orchestration/projects/{projectId}/chapters/{chapterId}/skeleton-scenes/{sceneId}`
+  - 后端已补齐已执行镜头删除清理：
+    - 删除镜头时同步清理其 `scene runtime state`
+    - 删除镜头时同步清理其 `handoff` 关系
   - 已通过：
     - `mvn -Dmaven.repo.local=/usr/local/project/github/story-weaver/.cache/m2 -DskipTests compile`
-    - `mvn test -pl backend -am -Dtest=StorySessionOrchestrationControllerTest,RuleBasedChapterSkeletonPlannerTest,DefaultStorySessionOrchestratorTest -Dsurefire.failIfNoSpecifiedTests=false -Dmaven.repo.local=/usr/local/project/github/story-weaver/.cache/m2`
+    - `mvn test -pl backend -am -Dtest=StorySessionOrchestrationControllerTest,RuleBasedChapterSkeletonPlannerTest,DefaultStorySessionOrchestratorTest,DefaultChapterSkeletonMutationServiceTest -Dsurefire.failIfNoSpecifiedTests=false -Dmaven.repo.local=/usr/local/project/github/story-weaver/.cache/m2`
     - `npm run type-check`
     - `npm run build`
 - 当前下一步是部署并联调 `Phase 8.2` 的 `Chapter Workspace`：
   - 验证镜头编辑/删除
   - 验证根据镜头直接生成初稿
   - 验证草稿接受/拒绝回写
+  - 验证接受草稿后自动推进 scene 完成与 handoff
 
 ## 建议代码落点
 
