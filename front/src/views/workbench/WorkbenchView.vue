@@ -201,8 +201,8 @@ watch(
       <v-card class="soft-panel">
         <v-card-title>下一步动作</v-card-title>
         <v-card-text class="action-stack">
-          <v-btn block color="primary" prepend-icon="mdi-feather" to="/writing">
-            打开写作中心
+          <v-btn block color="primary" prepend-icon="mdi-file-document-edit-outline" to="/chapter-workspace">
+            打开章节工作区
           </v-btn>
           <v-btn block variant="outlined" prepend-icon="mdi-file-tree-outline" to="/chapters">
             进入章节列表

@@ -693,6 +693,45 @@ export interface StorySessionPreviewView {
   trace: SessionExecutionTraceView
 }
 
+export interface SceneExecutionStateView {
+  sceneId: string
+  sceneIndex?: number
+  status: string
+  chosenCandidateId?: string
+  goal?: string
+  stopCondition?: string
+  handoffLine?: string
+  outcomeSummary?: string
+}
+
+export interface SceneHandoffSnapshotView {
+  fromSceneId: string
+  toSceneId?: string
+  handoffLine?: string
+  outcomeSummary?: string
+  reviewResult?: string
+  reviewSummary?: string
+}
+
+export interface StoryPatchView {
+  patchId: string
+  facetType: string
+  summary: string
+  status: string
+}
+
+export interface StorySessionExecutionView {
+  preview: StorySessionPreviewView
+  writeResult: {
+    sceneExecutionState: SceneExecutionStateView
+    handoffSnapshot: SceneHandoffSnapshotView
+    statePatch?: StoryPatchView | null
+    chapterStatePatch?: StoryPatchView | null
+    chapterIncrementalState?: ChapterIncrementalStateView | null
+  }
+  trace: SessionExecutionTraceView
+}
+
 export interface ReaderRevealStateView {
   projectId: number
   chapterId: number

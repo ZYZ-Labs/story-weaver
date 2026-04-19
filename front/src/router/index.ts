@@ -23,6 +23,12 @@ const router = createRouter({
           meta: { title: '创作台' },
         },
         {
+          path: 'chapter-workspace',
+          name: 'chapter-workspace',
+          component: () => import('@/views/chapter/ChapterWorkspaceView.vue'),
+          meta: { title: '章节工作区' },
+        },
+        {
           path: 'dashboard',
           redirect: '/workbench',
         },

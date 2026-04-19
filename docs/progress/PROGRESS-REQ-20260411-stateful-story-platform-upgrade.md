@@ -8,12 +8,12 @@
 ## 当前快照
 
 - Current Phase: `Phase 8` 进行中
-- Current Task: `Phase 8.1` 顶层导航与入口收口已完成部署与数据联调，待修浏览器烟测认证注入链路
+- Current Task: `Phase 8.2` 章节工作区重构已完成本地开发，待部署联调
 - Last Completed: 已完成 `Phase 7` 状态系统阶段收口
 - Next Action:
-  - 修正 `tmp/browser-smoke` 的认证注入方式
-  - 完成 `Phase 8.1` 浏览器级最终验收
-  - 进入 `Phase 8.2` 章节工作区重构
+  - 部署 `Phase 8.2` 前端改动
+  - 联调 `Chapter Workspace`
+  - 再推进 `Phase 8.3` 对象页 `Summary First` 重构
 - Blockers:
   - 旧主线 `REQ-20260409-generation-reliability-refactor` 已归档，但其代码成果和回归报告仍需作为迁移基线继续参考
   - `MCP` 与 `State Server` 的边界仍未形成独立 server 形态，只完成读模型、查询服务与编排消费层
@@ -53,6 +53,25 @@
     - 已确认当前未收口项是浏览器烟测认证注入链路，而不是页面实现失败
     - 报告：
       - `docs/reports/REPORT-20260419-phase8-frontend-ia-live-validation-round1.md`
+  - 已完成 `Phase 8.1` 人工页面验收与收口修复：
+    - `创作台 / 状态台 / 生成台 / 旧对象页二级入口` 已人工验证通过
+    - `生成台` 顶部 `sceneId` 输入框压缩问题已修复
+  - 已完成 `Phase 8.2` 本地开发收口：
+    - 已新增：
+      - `front/src/views/chapter/ChapterWorkspaceView.vue`
+    - 已完成入口改造：
+      - `创作台` 主按钮改为 `章节工作区`
+      - `章节管理` 行操作新增 `工作区`
+      - 章节预览卡新增 `打开工作区`
+    - 章节工作区已统一接入：
+      - 正文编辑
+      - 章节骨架
+      - 当前镜头执行
+      - 章节状态与揭晓
+      - 章节 trace 与审校
+    - 已完成本地校验：
+      - `npm run type-check`
+      - `npm run build`
   - 已完成 `Phase 8.1` 本地开发收口：
     - 已新增页面：
       - `front/src/views/workbench/WorkbenchView.vue`

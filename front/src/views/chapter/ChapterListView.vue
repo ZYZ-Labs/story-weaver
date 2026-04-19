@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { useRouter } from 'vue-router'
 
 import AIDirectorDecisionCard from '@/components/AIDirectorDecisionCard.vue'
 import AIProcessLogPanel from '@/components/AIProcessLogPanel.vue'
@@ -44,6 +45,7 @@ const plotStore = usePlotStore()
 const writingStore = useWritingStore()
 const settingsStore = useSettingsStore()
 const providerStore = useProviderStore()
+const router = useRouter()
 
 const dialog = ref(false)
 const deletingId = ref<number | null>(null)
@@ -140,7 +142,7 @@ const tableHeaders = [
   { title: '标题', key: 'title' },
   { title: '状态', key: 'chapterStatus', width: 112 },
   { title: '字数', key: 'wordCount', width: 100 },
-  { title: '操作', key: 'actions', sortable: false, width: 188 },
+  { title: '操作', key: 'actions', sortable: false, width: 220 },
 ]
 
 const toneOptions = ['紧张压迫', '轻松日常', '神秘悬疑', '高压推进', '克制伤感', '史诗宏大']
@@ -362,12 +364,15 @@ function openEditForm(chapter: Chapter) {
   dialog.value = true
 }
 
-function openEdit(chapter: Chapter) {
-  openSummaryWorkflow(chapter)
-}
-
 function selectChapter(chapter: Chapter) {
   chapterStore.currentChapter = chapter
+}
+
+function openWorkspace(chapter?: Chapter | null) {
+  if (chapter) {
+    selectChapter(chapter)
+  }
+  router.push({ name: 'chapter-workspace' })
 }
 
 function openSummaryWorkflow(chapter?: Chapter | null) {
@@ -685,14 +690,21 @@ async function confirmDelete() {
               <v-btn
                 size="small"
                 color="primary"
-                prepend-icon="mdi-text-box-edit-outline"
+                prepend-icon="mdi-file-document-edit-outline"
                 variant="flat"
+                @click.stop="openWorkspace(item)"
+              >
+                工作区
+              </v-btn>
+              <v-btn
+                size="small"
+                color="secondary"
+                prepend-icon="mdi-text-box-edit-outline"
+                variant="tonal"
                 @click.stop="openSummaryWorkflow(item)"
               >
                 摘要优先
               </v-btn>
-              <v-btn size="small" variant="text" @click.stop="selectChapter(item)">预览</v-btn>
-              <v-btn size="small" variant="text" @click.stop="openEdit(item)">编辑</v-btn>
               <v-btn size="small" color="error" variant="text" @click.stop="requestDelete(item)">删除</v-btn>
             </div>
           </template>
@@ -705,15 +717,26 @@ async function confirmDelete() {
           <v-card-text v-if="currentPreview" class="chapter-preview-body">
             <div class="d-flex justify-space-between align-start ga-3">
               <div class="text-h6">{{ currentPreview.title }}</div>
-              <v-btn
-                color="primary"
-                prepend-icon="mdi-text-box-edit-outline"
-                variant="flat"
-                size="small"
-                @click="openSummaryWorkflow(currentPreview)"
-              >
-                摘要优先编辑
-              </v-btn>
+              <div class="d-flex flex-wrap justify-end ga-2">
+                <v-btn
+                  color="primary"
+                  prepend-icon="mdi-file-document-edit-outline"
+                  variant="flat"
+                  size="small"
+                  @click="openWorkspace(currentPreview)"
+                >
+                  打开工作区
+                </v-btn>
+                <v-btn
+                  color="secondary"
+                  prepend-icon="mdi-text-box-edit-outline"
+                  variant="tonal"
+                  size="small"
+                  @click="openSummaryWorkflow(currentPreview)"
+                >
+                  摘要优先编辑
+                </v-btn>
+              </div>
             </div>
             <div class="text-body-2 text-medium-emphasis mt-2">
               顺序：{{ currentPreview.orderNum || '-' }} | 状态：{{ getChapterStatusLabel(currentPreview.chapterStatus) }} | 字数：{{ getWordCount(currentPreview) }} | 预计阅读：{{ currentPreview.readingTimeMinutes || 0 }} 分钟

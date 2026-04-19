@@ -7,7 +7,7 @@ export const mainMenuSections: MenuSection[] = [
     subtitle: '先做当前动作，再下沉到对象细页',
     items: [
       { title: '创作工作台', icon: 'mdi-view-dashboard-outline', to: '/workbench', subtitle: '聚焦当前项目、当前章节与下一步动作' },
-      { title: '写作中心', icon: 'mdi-feather', to: '/writing', subtitle: '进入正文编写、摘要流与 AI 续写' },
+      { title: '章节工作区', icon: 'mdi-file-document-edit-outline', to: '/chapter-workspace', subtitle: '统一查看正文、骨架、状态、trace 与镜头执行' },
       { title: '项目总览', icon: 'mdi-bookshelf', to: '/projects', subtitle: '查看项目列表、切换当前项目与进入项目详情' },
     ],
   },
@@ -38,6 +38,7 @@ export const mainMenuSections: MenuSection[] = [
     subtitle: '查看骨架、编排、trace 与知识回流',
     items: [
       { title: '生成总览', icon: 'mdi-robot-happy-outline', to: '/generation-center', subtitle: '查看骨架、编排预览、章节审校与 trace' },
+      { title: '旧写作中心', icon: 'mdi-feather', to: '/writing', subtitle: '保留旧正文生成入口，作为迁移期备用页' },
       { title: '知识库', icon: 'mdi-database-search-outline', to: '/rag', subtitle: '管理知识条目与检索结果' },
     ],
   },
