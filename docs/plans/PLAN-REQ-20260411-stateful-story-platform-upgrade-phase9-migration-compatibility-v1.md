@@ -2,9 +2,9 @@
 
 - Req ID: REQ-20260411-stateful-story-platform-upgrade
 - Plan ID: PLAN-REQ-20260411-stateful-story-platform-upgrade-phase9-migration-compatibility-v1
-- Status: Drafting
+- Status: In Progress
 - Created At: 2026-04-20 Asia/Shanghai
-- Updated At: 2026-04-20 Asia/Shanghai
+- Updated At: 2026-04-23 Asia/Shanghai
 
 ## 本轮目标
 
@@ -75,6 +75,7 @@
 
 目标：
 
+- 先提供只读回填分析入口，明确每章旧记录与新状态覆盖缺口
 - 建立回填服务，把旧记录映射到新读模型
 - 优先覆盖：
   - `AIWritingRecord -> SceneExecutionState`
@@ -84,6 +85,9 @@
 
 交付物：
 
+- 回填分析服务与分析接口
+- dry-run 规划服务与规划接口
+- 前端兼容分析面板
 - 回填服务
 - 回填报告
 - 幂等重跑策略
@@ -110,6 +114,17 @@
 
 - 新旧链路在迁移期不会互相踩坏，也不会因为一个入口切换导致另一个入口不可用
 
+当前实现进度：
+
+- 已新增兼容快照接口：
+  - `GET /api/story-state/projects/{projectId}/chapters/{chapterId}/compatibility-snapshot`
+- 已新增 `story.compatibility.*` 配置项，用于冻结：
+  - 页面主入口
+  - `story-context` 双读
+  - `summary-workflow` 双写
+  - 兼容回填执行开关
+- 已在 `状态台` 同步增加“灰度边界与开关”面板，前后端口径已对齐
+
 ### `Phase 9.4` 回填验收与迁移收口
 
 目标：
@@ -123,6 +138,19 @@
 - 迁移结果可验证
 - 问题可重现
 - 回填可重跑
+
+当前实现进度：
+
+- 已新增项目级迁移总览接口：
+  - `GET /api/story-state/projects/{projectId}/backfill-overview`
+- 已在 `状态台` 先行展示项目级总览：
+  - 总章节
+  - 已分析章节
+  - scene/state 回填需求
+  - 可执行回填章节
+- 当前仍保持克制：
+  - 先做项目级只读验收入口
+  - 暂不直接引入批量写入
 
 ## 当前阶段判断
 

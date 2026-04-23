@@ -1,5 +1,13 @@
 import http from './http'
-import type { ChapterIncrementalStateView, ReaderRevealStateView } from '@/types'
+import type {
+  ChapterIncrementalStateView,
+  LegacyChapterBackfillAnalysisView,
+  LegacyBackfillDryRunView,
+  LegacyBackfillExecutionResultView,
+  LegacyProjectBackfillOverviewView,
+  MigrationCompatibilitySnapshotView,
+  ReaderRevealStateView,
+} from '@/types'
 
 export function getChapterState(projectId: number, chapterId: number) {
   return http.get<never, ChapterIncrementalStateView>(
@@ -10,5 +18,35 @@ export function getChapterState(projectId: number, chapterId: number) {
 export function getReaderRevealState(projectId: number, chapterId: number) {
   return http.get<never, ReaderRevealStateView>(
     `/story-state/projects/${projectId}/chapters/${chapterId}/reader-reveal-state`,
+  )
+}
+
+export function getChapterBackfillAnalysis(projectId: number, chapterId: number) {
+  return http.get<never, LegacyChapterBackfillAnalysisView>(
+    `/story-state/projects/${projectId}/chapters/${chapterId}/backfill-analysis`,
+  )
+}
+
+export function getChapterBackfillDryRun(projectId: number, chapterId: number) {
+  return http.get<never, LegacyBackfillDryRunView>(
+    `/story-state/projects/${projectId}/chapters/${chapterId}/backfill-dry-run`,
+  )
+}
+
+export function executeChapterBackfill(projectId: number, chapterId: number) {
+  return http.post<never, LegacyBackfillExecutionResultView>(
+    `/story-state/projects/${projectId}/chapters/${chapterId}/backfill-execute`,
+  )
+}
+
+export function getChapterCompatibilitySnapshot(projectId: number, chapterId: number) {
+  return http.get<never, MigrationCompatibilitySnapshotView>(
+    `/story-state/projects/${projectId}/chapters/${chapterId}/compatibility-snapshot`,
+  )
+}
+
+export function getProjectBackfillOverview(projectId: number) {
+  return http.get<never, LegacyProjectBackfillOverviewView>(
+    `/story-state/projects/${projectId}/backfill-overview`,
   )
 }

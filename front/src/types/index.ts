@@ -925,3 +925,108 @@ export interface SystemConfig {
   createTime?: string
   updateTime?: string
 }
+
+export interface LegacyChapterBackfillAnalysisView {
+  projectId: number
+  chapterId: number
+  chapterTitle: string
+  chapterSummaryPresent: boolean
+  chapterContentPresent: boolean
+  legacyRecordCount: number
+  legacyGeneratedRecordCount: number
+  legacyAcceptedRecordCount: number
+  legacyFailedRecordCount: number
+  derivedSceneCount: number
+  completedSceneCount: number
+  failedSceneCount: number
+  runtimeOnlySceneCount: number
+  eventCount: number
+  snapshotCount: number
+  patchCount: number
+  hasReaderRevealState: boolean
+  hasChapterState: boolean
+  needsSceneBackfill: boolean
+  needsStateBackfill: boolean
+  notes: string[]
+}
+
+export interface LegacyBackfillActionPlanView {
+  actionKey: string
+  title: string
+  description: string
+  required: boolean
+  blocked: boolean
+  blockReason?: string
+}
+
+export interface LegacyBackfillDryRunView {
+  analysis: LegacyChapterBackfillAnalysisView
+  canRunBackfill: boolean
+  actions: LegacyBackfillActionPlanView[]
+  riskNotes: string[]
+}
+
+export interface LegacyBackfillExecutionResultView {
+  dryRun: LegacyBackfillDryRunView
+  executed: boolean
+  createdEventCount: number
+  createdSnapshotCount: number
+  createdPatchCount: number
+  createdReaderRevealState: boolean
+  createdChapterState: boolean
+  writtenKeys: string[]
+  skippedKeys: string[]
+  warnings: string[]
+}
+
+export interface LegacyChapterBackfillStatusItemView {
+  chapterId: number
+  chapterTitle: string
+  legacyGeneratedRecordCount: number
+  needsSceneBackfill: boolean
+  needsStateBackfill: boolean
+  canRunBackfill: boolean
+  riskNotes: string[]
+}
+
+export interface LegacyProjectBackfillOverviewView {
+  projectId: number
+  totalChapters: number
+  analyzedChapters: number
+  chaptersNeedingSceneBackfill: number
+  chaptersNeedingStateBackfill: number
+  chaptersReadyForBackfill: number
+  chapters: LegacyChapterBackfillStatusItemView[]
+}
+
+export type CompatibilityModeView =
+  | 'NEW_PRIMARY'
+  | 'DUAL_READ'
+  | 'DUAL_WRITE'
+  | 'LEGACY_PRIMARY'
+  | 'LEGACY_FALLBACK'
+  | 'DISABLED'
+
+export type CompatibilityScopeView = 'PAGE' | 'API' | 'DATA'
+
+export interface CompatibilityBoundaryItemView {
+  boundaryKey: string
+  scope: CompatibilityScopeView
+  displayName: string
+  mode: CompatibilityModeView
+  primaryChain: string
+  fallbackChain?: string
+  enabled: boolean
+  notes: string[]
+}
+
+export interface MigrationCompatibilitySnapshotView {
+  projectId: number
+  chapterId: number
+  chapterTitle: string
+  pageBoundaries: CompatibilityBoundaryItemView[]
+  apiBoundaries: CompatibilityBoundaryItemView[]
+  dataBoundaries: CompatibilityBoundaryItemView[]
+  featureFlags: string[]
+  riskNotes: string[]
+}

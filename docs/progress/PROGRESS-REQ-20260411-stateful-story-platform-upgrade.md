@@ -3,27 +3,103 @@
 - Req ID: REQ-20260411-stateful-story-platform-upgrade
 - Status: In Progress
 - Created At: 2026-04-11 Asia/Shanghai
-- Updated At: 2026-04-19 Asia/Shanghai
+- Updated At: 2026-04-23 Asia/Shanghai
 
 ## 当前快照
 
-- Current Phase: `Phase 8` 进行中
-- Current Task: `Phase 8.3` 对象页 `Summary First` 代码侧接近完成，等待最新前端产物部署与统一页面验收
-- Last Completed: 已完成 `Phase 7` 状态系统阶段收口
+- Current Phase: `Phase 9` 进行中
+- Current Task: `Phase 9.3` 兼容边界快照与 feature flag 诊断已落地，正在冻结双读 / 双写灰度边界
+- Last Completed: 已完成 `Phase 8` 代码侧冻结与兼容基线整理
 - Next Action:
-  - 提交并推送当前 `Phase 8.3` 前端代码
-  - 部署最新前端产物
-  - 统一验收 `创作台 / 状态台 / 生成台 / 章节工作区 / 三类对象页`
-  - 若通过则正式收口 `Phase 8`
+  - 继续补齐 `Phase 9.3` 的双读 / 双写边界与灰度快照
+  - 同步状态台的兼容诊断面板
+  - 再进入 `Phase 9.4` 的回填验收与迁移收口
 - Blockers:
   - 旧主线 `REQ-20260409-generation-reliability-refactor` 已归档，但其代码成果和回归报告仍需作为迁移基线继续参考
   - `MCP` 与 `State Server` 的边界仍未形成独立 server 形态，只完成读模型、查询服务与编排消费层
-  - 前端现有页面结构仍是旧工作流，尚未切到新信息架构
+  - `Phase 8` 代码侧已冻结，但最终统一部署与验收仍待后续窗口执行
   - 当前 `旧日王座` 样本缺少无历史写作记录章节，暂时无法在线上补齐 `CHAPTER_COLD_START` 验证
   - 线上 Redis 的 RDB 持久化仍报 `/data` 写权限问题
   - 但 `stop-writes-on-bgsave-error no` 已写入当前挂载的 `redis.conf`，Redis 重启后不再重新阻断业务写入
   - 当前剩余的是环境持久化质量问题，不再阻塞 `Phase 7.2`
 - Latest Verified:
+  - 已开始 `Phase 9.2` 的只读回填分析实现：
+    - 已新增分析合同：
+      - `backend/modules/story-storyunit/src/main/java/com/storyweaver/storyunit/migration/LegacyBackfillAnalysisService.java`
+      - `backend/modules/story-storyunit/src/main/java/com/storyweaver/storyunit/migration/LegacyChapterBackfillAnalysis.java`
+    - 已新增分析实现：
+      - `backend/src/main/java/com/storyweaver/storyunit/migration/impl/DefaultLegacyBackfillAnalysisService.java`
+    - 已新增只读分析接口：
+      - `GET /api/story-state/projects/{projectId}/chapters/{chapterId}/backfill-analysis`
+    - 已完成本地回归：
+      - `DefaultLegacyBackfillAnalysisServiceTest`
+      - `StoryStateControllerTest`
+  - 已继续推进 `Phase 9.2` 的 dry-run 规划与前端同步：
+    - 已新增合同：
+      - `LegacyBackfillActionPlan`
+      - `LegacyBackfillDryRun`
+      - `LegacyBackfillDryRunService`
+    - 已新增实现：
+      - `DefaultLegacyBackfillDryRunService`
+    - 已新增接口：
+      - `GET /api/story-state/projects/{projectId}/chapters/{chapterId}/backfill-dry-run`
+    - 已在 `状态台` 接入兼容分析面板：
+      - 已展示旧记录数量、新状态覆盖、回填判定、dry-run 动作和兼容风险
+    - 已完成本地回归：
+      - `DefaultLegacyBackfillDryRunServiceTest`
+      - `StoryStateControllerTest`
+      - `npm run type-check`
+      - `npm run build`
+  - 已开始 `Phase 9.3` 的灰度边界与 feature flag 诊断：
+    - 已新增兼容快照合同：
+      - `CompatibilityMode`
+      - `CompatibilityScope`
+      - `CompatibilityBoundaryItem`
+      - `MigrationCompatibilitySnapshot`
+      - `MigrationCompatibilitySnapshotService`
+    - 已新增兼容快照实现：
+      - `DefaultMigrationCompatibilitySnapshotService`
+    - 已新增接口：
+      - `GET /api/story-state/projects/{projectId}/chapters/{chapterId}/compatibility-snapshot`
+    - 已新增配置：
+      - `story.compatibility.*`
+      - `legacyWritingCenterEnabled`
+      - `storyContextDualReadEnabled`
+      - `summaryWorkflowDualWriteEnabled`
+      - `backfillExecuteEnabled`
+    - 已将 `backfillExecuteEnabled` 真正接入回填执行服务，不再只是展示开关
+    - 已在 `状态台` 增加“灰度边界与开关”面板：
+      - 页面边界
+      - API 边界
+      - 数据边界
+      - Feature Flags
+      - 兼容风险
+    - 已完成本地回归：
+      - `DefaultMigrationCompatibilitySnapshotServiceTest`
+      - `DefaultLegacyBackfillExecutionServiceTest`
+      - `StoryStateControllerTest`
+      - `npm run type-check`
+      - `npm run build`
+  - 已开始 `Phase 9.4` 的项目级迁移总览：
+    - 已新增项目级总览合同：
+      - `LegacyChapterBackfillStatusItem`
+      - `LegacyProjectBackfillOverview`
+      - `LegacyBackfillOverviewService`
+    - 已新增实现：
+      - `DefaultLegacyBackfillOverviewService`
+    - 已新增接口：
+      - `GET /api/story-state/projects/{projectId}/backfill-overview`
+    - 已在 `状态台` 增加项目级迁移总览面板：
+      - 总章节
+      - 已分析章节
+      - scene/state 回填需求
+      - 可执行回填章节
+      - 首批章节清单
+    - 已完成本地回归：
+      - `DefaultLegacyBackfillOverviewServiceTest`
+      - `StoryStateControllerTest`
+      - `npm run type-check`
+      - `npm run build`
   - 已完成 `helix-runtime` 接入可行性专项评估：
     - 已确认 `helix-runtime` 当前定位更接近：
       - 通用 `AI Session Runtime`
@@ -149,6 +225,10 @@
       - 同步启动 `Phase 9.1` 的迁移、兼容与回填清单整理
     - 已新增 `Phase 9` 兼容基线报告：
       - `docs/reports/REPORT-20260420-phase9-compatibility-baseline-v1.md`
+    - 已新增 `Phase 9.1` 兼容矩阵明细：
+      - `docs/reports/REPORT-20260420-phase9-compatibility-matrix-v1.md`
+    - 已新增 `Phase 9` 迁移与回放样本清单：
+      - `docs/test-data/TESTDATA-20260420-phase9-migration-samples-v1.md`
     - 已完成本地校验：
       - `mvn -Dmaven.repo.local=/usr/local/project/github/story-weaver/.cache/m2 -DskipTests compile`
       - `mvn test -pl backend -am -Dtest=StorySessionOrchestrationControllerTest,RuleBasedChapterSkeletonPlannerTest,DefaultStorySessionOrchestratorTest,DefaultChapterSkeletonMutationServiceTest -Dsurefire.failIfNoSpecifiedTests=false -Dmaven.repo.local=/usr/local/project/github/story-weaver/.cache/m2`

@@ -48,3 +48,12 @@ story:
     chapter-patch-manifest-key-prefix: ${STORY_STATE_SYSTEM_CHAPTER_PATCH_MANIFEST_KEY_PREFIX:story:state:chapter-patches:}
     chapter-reveal-state-key-prefix: ${STORY_STATE_SYSTEM_CHAPTER_REVEAL_STATE_KEY_PREFIX:story:state:chapter-reveal:}
     chapter-state-key-prefix: ${STORY_STATE_SYSTEM_CHAPTER_STATE_KEY_PREFIX:story:state:chapter-state:}
+  compatibility:
+    legacy-writing-center-enabled: ${STORY_COMPATIBILITY_LEGACY_WRITING_CENTER_ENABLED:true}
+    legacy-writing-api-enabled: ${STORY_COMPATIBILITY_LEGACY_WRITING_API_ENABLED:true}
+    chapter-workspace-primary: ${STORY_COMPATIBILITY_CHAPTER_WORKSPACE_PRIMARY:true}
+    state-center-primary: ${STORY_COMPATIBILITY_STATE_CENTER_PRIMARY:true}
+    generation-center-primary: ${STORY_COMPATIBILITY_GENERATION_CENTER_PRIMARY:true}
+    story-context-dual-read-enabled: ${STORY_COMPATIBILITY_STORY_CONTEXT_DUAL_READ_ENABLED:true}
+    summary-workflow-dual-write-enabled: ${STORY_COMPATIBILITY_SUMMARY_WORKFLOW_DUAL_WRITE_ENABLED:true}
+    backfill-execute-enabled: ${STORY_COMPATIBILITY_BACKFILL_EXECUTE_ENABLED:true}

@@ -1,6 +1,6 @@
 # Agent Context
 
-- Last Updated: 2026-04-20 Asia/Shanghai
+- Last Updated: 2026-04-23 Asia/Shanghai
 - Current Primary Req: REQ-20260411-stateful-story-platform-upgrade
 
 ## Active Requirements
@@ -191,11 +191,62 @@
     - 当前线上静态产物与本地最新 `Phase 8.3` 构建结果未对齐
     - 当前不能直接宣布 `Phase 8` 完成
   - 当前下一步已调整为：
-    - `Phase 8` 代码侧先冻结，不再继续扩 scope
-    - 先整理 `Phase 9.1` 的迁移、兼容与回填清单
-    - `Phase 8` 的统一部署与最终人工验收延后到这一轮代码冻结后执行
+  - `Phase 8` 代码侧先冻结，不再继续扩 scope
+  - 先整理 `Phase 9.1` 的迁移、兼容与回填清单
+  - `Phase 8` 的统一部署与最终人工验收延后到这一轮代码冻结后执行
   - `Phase 9` 详细计划已创建：
     - `docs/plans/PLAN-REQ-20260411-stateful-story-platform-upgrade-phase9-migration-compatibility-v1.md`
+  - `Phase 9.1` 已补首批兼容矩阵与样本清单：
+    - `docs/reports/REPORT-20260420-phase9-compatibility-baseline-v1.md`
+    - `docs/reports/REPORT-20260420-phase9-compatibility-matrix-v1.md`
+    - `docs/test-data/TESTDATA-20260420-phase9-migration-samples-v1.md`
+  - `Phase 9.2` 已开始：
+    - 已新增只读回填分析合同：
+      - `backend/modules/story-storyunit/src/main/java/com/storyweaver/storyunit/migration/LegacyBackfillAnalysisService.java`
+      - `backend/modules/story-storyunit/src/main/java/com/storyweaver/storyunit/migration/LegacyChapterBackfillAnalysis.java`
+    - 已新增实现：
+      - `backend/src/main/java/com/storyweaver/storyunit/migration/impl/DefaultLegacyBackfillAnalysisService.java`
+    - 已新增接口：
+      - `GET /api/story-state/projects/{projectId}/chapters/{chapterId}/backfill-analysis`
+    - 当前策略仍是只读分析，不做破坏性写入
+    - 已继续推进到 dry-run 规划：
+      - `backend/modules/story-storyunit/src/main/java/com/storyweaver/storyunit/migration/LegacyBackfillActionPlan.java`
+      - `backend/modules/story-storyunit/src/main/java/com/storyweaver/storyunit/migration/LegacyBackfillDryRun.java`
+      - `backend/modules/story-storyunit/src/main/java/com/storyweaver/storyunit/migration/LegacyBackfillDryRunService.java`
+      - `backend/src/main/java/com/storyweaver/storyunit/migration/impl/DefaultLegacyBackfillDryRunService.java`
+      - `GET /api/story-state/projects/{projectId}/chapters/{chapterId}/backfill-dry-run`
+    - 前端已同步接入：
+      - `front/src/views/state/StateCenterView.vue`
+      - `front/src/api/story-state.ts`
+      - `front/src/types/index.ts`
+    - 已继续推进到幂等执行壳：
+      - `POST /api/story-state/projects/{projectId}/chapters/{chapterId}/backfill-execute`
+      - 已支持只补缺失基线，不覆盖现有 reveal/state，不触碰正文
+  - `Phase 9.3` 已开始：
+    - 已新增兼容快照合同：
+      - `CompatibilityBoundaryItem`
+      - `MigrationCompatibilitySnapshot`
+      - `MigrationCompatibilitySnapshotService`
+    - 已新增配置：
+      - `story.compatibility.*`
+    - 已新增接口：
+      - `GET /api/story-state/projects/{projectId}/chapters/{chapterId}/compatibility-snapshot`
+    - 已将 `backfillExecuteEnabled` 真正接入执行服务
+    - 前端状态台已新增“灰度边界与开关”面板：
+      - 页面边界
+      - API 边界
+      - 数据边界
+      - feature flag
+      - 兼容风险
+  - `Phase 9.4` 已开始：
+    - 已新增项目级迁移总览：
+      - `LegacyProjectBackfillOverview`
+      - `LegacyChapterBackfillStatusItem`
+      - `LegacyBackfillOverviewService`
+    - 已新增接口：
+      - `GET /api/story-state/projects/{projectId}/backfill-overview`
+    - 前端状态台已同步接入项目级迁移总览卡片
+    - 当前策略仍是先做只读验收入口，不提前做批量写入
 - 最新修正：
   - 已确认线上 `POST /api/summary-workflow/chat-turns` 已恢复 `HTTP 200`
   - 已确认普通模式返回结果可继续进入 `proposal / preview`
