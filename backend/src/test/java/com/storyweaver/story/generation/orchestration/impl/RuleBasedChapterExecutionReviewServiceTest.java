@@ -39,6 +39,7 @@ class RuleBasedChapterExecutionReviewServiceTest {
                         new SceneSkeletonItem("scene-1", 1, SceneExecutionStatus.COMPLETED, "开场", List.of(), List.of(), "停在 scene-1", 800, "c1"),
                         new SceneSkeletonItem("scene-2", 2, SceneExecutionStatus.COMPLETED, "承接", List.of(), List.of(), "停在 scene-2", 900, "c2")
                 ),
+                List.of(),
                 List.of()
         );
 
@@ -82,6 +83,7 @@ class RuleBasedChapterExecutionReviewServiceTest {
                         new SceneSkeletonItem("scene-2", 2, SceneExecutionStatus.COMPLETED, "承接", List.of(), List.of(), "停在 scene-2", 900, "c2"),
                         new SceneSkeletonItem("scene-3", 3, SceneExecutionStatus.PLANNED, "收口", List.of(), List.of(), "停在 scene-3", 1000, "c3")
                 ),
+                List.of(),
                 List.of()
         );
 

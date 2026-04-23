@@ -1,6 +1,6 @@
 # Agent Context
 
-- Last Updated: 2026-04-19 Asia/Shanghai
+- Last Updated: 2026-04-20 Asia/Shanghai
 - Current Primary Req: REQ-20260411-stateful-story-platform-upgrade
 
 ## Active Requirements
@@ -149,7 +149,7 @@
     - 普通模式步骤收口为“说想法 -> AI 整理 -> 看变化 -> 确认写回”
     - 普通模式不再强制先选结构意图
 - 当前下一步应进入：
-  - 当前已进入 `Phase 8.2`
+  - 当前已进入 `Phase 8.3`
   - 顶层导航、主入口与三张新台页已完成本地开发：
     - `创作台`
     - `状态台`
@@ -182,14 +182,20 @@
   - 后端已补章节骨架 override 能力：
     - `PUT /api/story-orchestration/projects/{projectId}/chapters/{chapterId}/skeleton-scenes/{sceneId}`
     - `DELETE /api/story-orchestration/projects/{projectId}/chapters/{chapterId}/skeleton-scenes/{sceneId}`
-  - 当前下一步是部署联调：
-    - 镜头编辑
-    - 镜头删除
-    - 根据镜头直出初稿
-    - 草稿接受/拒绝回写
-    - 接受草稿后自动推进 scene 完成与 handoff
-  - 若联调通过，再进入：
-    - `Phase 8.3` 对象页 `Summary First` 重构
+  - `Phase 8.3` 已开始本地开发：
+    - `CharacterListView` 已改成 `Summary / Canon / State / History`
+    - `WorldSettingView` 已改成 `Summary / Canon / State / History`
+    - `ChapterListView` 的章节预览卡已改成 `Summary / Canon / State / History`
+  - 已完成 `Phase 8` 第二轮联调判断：
+    - 浏览器烟测仍受认证链影响，不能单独作为最终退出依据
+    - 当前线上静态产物与本地最新 `Phase 8.3` 构建结果未对齐
+    - 当前不能直接宣布 `Phase 8` 完成
+  - 当前下一步已调整为：
+    - `Phase 8` 代码侧先冻结，不再继续扩 scope
+    - 先整理 `Phase 9.1` 的迁移、兼容与回填清单
+    - `Phase 8` 的统一部署与最终人工验收延后到这一轮代码冻结后执行
+  - `Phase 9` 详细计划已创建：
+    - `docs/plans/PLAN-REQ-20260411-stateful-story-platform-upgrade-phase9-migration-compatibility-v1.md`
 - 最新修正：
   - 已确认线上 `POST /api/summary-workflow/chat-turns` 已恢复 `HTTP 200`
   - 已确认普通模式返回结果可继续进入 `proposal / preview`

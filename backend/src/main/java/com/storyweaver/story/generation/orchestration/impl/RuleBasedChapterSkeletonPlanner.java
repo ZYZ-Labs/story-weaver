@@ -67,6 +67,7 @@ public class RuleBasedChapterSkeletonPlanner implements ChapterSkeletonPlanner {
                     mergedSkeleton.scenes().size(),
                     mergedSkeleton.globalStopCondition(),
                     mergedSkeleton.scenes(),
+                    mergedSkeleton.deletedSceneIds(),
                     appendPlanningNote(mergedSkeleton.planningNotes(), "当前章节骨架已应用手动覆盖层。")
             ));
         }
@@ -84,16 +85,25 @@ public class RuleBasedChapterSkeletonPlanner implements ChapterSkeletonPlanner {
                 scenes.size(),
                 globalStopCondition,
                 scenes,
+                List.of(),
                 planningNotes
         ));
     }
 
     private ChapterSkeleton mergeStoredSkeleton(StorySessionContextPacket context, ChapterSkeleton storedSkeleton) {
+        Set<String> deletedSceneIds = new LinkedHashSet<>(storedSkeleton.deletedSceneIds());
         Map<String, SceneExecutionState> stateBySceneId = new LinkedHashMap<>();
-        context.existingSceneStates().forEach(state -> stateBySceneId.put(state.sceneId(), state));
+        context.existingSceneStates().forEach(state -> {
+            if (!deletedSceneIds.contains(state.sceneId())) {
+                stateBySceneId.put(state.sceneId(), state);
+            }
+        });
 
         List<SceneSkeletonItem> mergedScenes = new ArrayList<>();
         for (SceneSkeletonItem scene : storedSkeleton.scenes()) {
+            if (deletedSceneIds.contains(scene.sceneId())) {
+                continue;
+            }
             SceneExecutionState state = stateBySceneId.remove(scene.sceneId());
             mergedScenes.add(mergeScene(scene, state, context));
         }
@@ -125,6 +135,7 @@ public class RuleBasedChapterSkeletonPlanner implements ChapterSkeletonPlanner {
                 orderedScenes.size(),
                 globalStopCondition,
                 orderedScenes,
+                List.copyOf(deletedSceneIds),
                 storedSkeleton.planningNotes()
         );
     }

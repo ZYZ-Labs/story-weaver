@@ -56,6 +56,7 @@ class DefaultChapterSkeletonMutationServiceTest {
                                 "planned"
                         )
                 ),
+                List.of(),
                 List.of("note")
         );
 
@@ -72,6 +73,7 @@ class DefaultChapterSkeletonMutationServiceTest {
 
         assertEquals(1, updated.sceneCount());
         assertEquals("scene-2", updated.scenes().getFirst().sceneId());
+        assertTrue(updated.deletedSceneIds().contains("scene-1"));
         assertTrue(updated.planningNotes().stream().anyMatch(note -> note.contains("已删除 scene-1")));
         verify(sceneRuntimeStateStore).deleteSceneState(28L, 31L, "scene-1");
         verify(sceneRuntimeStateStore).deleteHandoffsReferencingScene(28L, 31L, "scene-1");

@@ -64,6 +64,7 @@ const summaryWorkflowVisible = ref(false)
 const summaryWorkflowTarget = ref<Chapter | null>(null)
 const summaryWorkflowCreateMode = ref(false)
 const editorMode = ref<SummaryWorkflowOperatorMode>('DEFAULT')
+const chapterPreviewTab = ref('summary')
 
 const currentProjectId = computed(() => projectStore.selectedProjectId)
 const summaryFirstMode = computed(() => editorMode.value === 'DEFAULT')
@@ -741,64 +742,125 @@ async function confirmDelete() {
             <div class="text-body-2 text-medium-emphasis mt-2">
               顺序：{{ currentPreview.orderNum || '-' }} | 状态：{{ getChapterStatusLabel(currentPreview.chapterStatus) }} | 字数：{{ getWordCount(currentPreview) }} | 预计阅读：{{ currentPreview.readingTimeMinutes || 0 }} 分钟
             </div>
-            <div v-if="currentPreview.summary" class="mt-4">
-              <div class="text-caption text-medium-emphasis mb-1">章节摘要</div>
-              <MarkdownContent :source="currentPreview.summary" compact />
-            </div>
-            <v-card class="mt-4" variant="tonal">
-              <v-card-text class="d-flex flex-wrap justify-space-between align-center ga-3">
-                <div>
-                  <div class="text-subtitle-2">摘要优先编辑</div>
-                  <div class="text-body-2 text-medium-emphasis mt-1">
-                    先调整章节摘要，再让系统生成提案并确认写回；这一入口不会直接修改正文。
+            <v-tabs v-model="chapterPreviewTab" color="primary" density="comfortable" class="mt-4">
+              <v-tab value="summary">Summary</v-tab>
+              <v-tab value="canon">Canon</v-tab>
+              <v-tab value="state">State</v-tab>
+              <v-tab value="history">History</v-tab>
+            </v-tabs>
+
+            <v-window v-model="chapterPreviewTab" class="mt-4">
+              <v-window-item value="summary">
+                <div class="text-caption text-medium-emphasis">章节摘要</div>
+                <MarkdownContent
+                  class="mt-2"
+                  :source="currentPreview.summary"
+                  empty-text="当前还没有章节摘要，建议先走摘要工作流沉淀本章目标。"
+                  compact
+                />
+                <v-card class="mt-4" variant="tonal">
+                  <v-card-text class="d-flex flex-wrap justify-space-between align-center ga-3">
+                    <div>
+                      <div class="text-subtitle-2">摘要优先编辑</div>
+                      <div class="text-body-2 text-medium-emphasis mt-1">
+                        先调整章节摘要，再让系统生成提案并确认写回；这一入口不会直接修改正文。
+                      </div>
+                    </div>
+                    <v-btn color="primary" @click="openSummaryWorkflow(currentPreview)">打开摘要工作流</v-btn>
+                  </v-card-text>
+                </v-card>
+              </v-window-item>
+
+              <v-window-item value="canon">
+                <div class="text-caption text-medium-emphasis">章节基线</div>
+                <div class="d-flex flex-wrap ga-2 mt-3">
+                  <v-chip v-if="currentPreview.outlineTitle" size="small" color="primary" variant="tonal">
+                    大纲：{{ currentPreview.outlineTitle }}
+                  </v-chip>
+                  <v-chip v-if="currentPreview.mainPovCharacterName" size="small" color="secondary" variant="tonal">
+                    POV：{{ currentPreview.mainPovCharacterName }}
+                  </v-chip>
+                  <v-chip v-if="currentPreview.prevChapterId" size="small" variant="outlined">
+                    上一章 #{{ currentPreview.prevChapterId }}
+                  </v-chip>
+                  <v-chip v-if="currentPreview.nextChapterId" size="small" variant="outlined">
+                    下一章 #{{ currentPreview.nextChapterId }}
+                  </v-chip>
+                </div>
+                <div v-if="currentPreview.storyBeatTitles?.length" class="d-flex flex-wrap ga-2 mt-4">
+                  <v-chip
+                    v-for="storyBeat in currentPreview.storyBeatTitles"
+                    :key="storyBeat"
+                    size="small"
+                    color="primary"
+                    variant="outlined"
+                  >
+                    节拍：{{ storyBeat }}
+                  </v-chip>
+                </div>
+                <div v-if="currentPreview.requiredCharacterNames?.length" class="d-flex flex-wrap ga-2 mt-3">
+                  <v-chip
+                    v-for="name in currentPreview.requiredCharacterNames"
+                    :key="name"
+                    size="small"
+                    color="secondary"
+                    variant="tonal"
+                  >
+                    必出：{{ name }}
+                  </v-chip>
+                </div>
+                <div
+                  v-if="!currentPreview.storyBeatTitles?.length && !currentPreview.requiredCharacterNames?.length"
+                  class="text-caption text-medium-emphasis mt-4"
+                >
+                  当前还没有补充剧情节拍或必出人物。
+                </div>
+              </v-window-item>
+
+              <v-window-item value="state">
+                <div class="text-caption text-medium-emphasis">当前状态</div>
+                <div class="d-flex flex-wrap ga-2 mt-3">
+                  <v-chip size="small" color="primary" variant="tonal">
+                    正文 {{ currentPreview.content?.trim() ? '已存在' : '未生成' }}
+                  </v-chip>
+                  <v-chip size="small" color="secondary" variant="outlined">
+                    字数 {{ getWordCount(currentPreview) }}
+                  </v-chip>
+                  <v-chip size="small" color="warning" variant="outlined">
+                    阅读 {{ currentPreview.readingTimeMinutes || 0 }} 分钟
+                  </v-chip>
+                </div>
+                <div class="mt-4">
+                  <div class="text-caption text-medium-emphasis mb-1">正文预览</div>
+                  <div class="chapter-preview-content">
+                    <MarkdownContent
+                      :source="currentPreview.content"
+                      empty-text="当前还没有正文，可以直接在下方让 AI 先生成一版初稿。"
+                    />
                   </div>
                 </div>
-                <v-btn color="primary" @click="openSummaryWorkflow(currentPreview)">打开摘要工作流</v-btn>
-              </v-card-text>
-            </v-card>
-            <div class="d-flex flex-wrap ga-2 mt-3">
-              <v-chip v-if="currentPreview.outlineTitle" size="small" color="primary" variant="tonal">
-                大纲：{{ currentPreview.outlineTitle }}
-              </v-chip>
-              <v-chip v-if="currentPreview.mainPovCharacterName" size="small" color="secondary" variant="tonal">
-                POV：{{ currentPreview.mainPovCharacterName }}
-              </v-chip>
-              <v-chip v-if="currentPreview.prevChapterId" size="small" variant="outlined">
-                上一章 #{{ currentPreview.prevChapterId }}
-              </v-chip>
-              <v-chip v-if="currentPreview.nextChapterId" size="small" variant="outlined">
-                下一章 #{{ currentPreview.nextChapterId }}
-              </v-chip>
-            </div>
-            <div v-if="currentPreview.storyBeatTitles?.length" class="d-flex flex-wrap ga-2 mt-3">
-              <v-chip
-                v-for="storyBeat in currentPreview.storyBeatTitles"
-                :key="storyBeat"
-                size="small"
-                color="primary"
-                variant="outlined"
-              >
-                节拍：{{ storyBeat }}
-              </v-chip>
-            </div>
-            <div v-if="currentPreview.requiredCharacterNames?.length" class="d-flex flex-wrap ga-2 mt-3">
-              <v-chip
-                v-for="name in currentPreview.requiredCharacterNames"
-                :key="name"
-                size="small"
-                color="secondary"
-                variant="tonal"
-              >
-                必出：{{ name }}
-              </v-chip>
-            </div>
-            <v-divider class="my-4" />
-            <div class="chapter-preview-content">
-              <MarkdownContent
-                :source="currentPreview.content"
-                empty-text="当前还没有正文，可以直接在下方让 AI 先生成一版初稿。"
-              />
-            </div>
+              </v-window-item>
+
+              <v-window-item value="history">
+                <div class="text-caption text-medium-emphasis">最近变更</div>
+                <div class="text-caption text-medium-emphasis mt-3">
+                  创建时间：{{ currentPreview.createTime || '未记录' }}
+                </div>
+                <div class="text-caption text-medium-emphasis mt-1">
+                  更新时间：{{ currentPreview.updateTime || '未记录' }}
+                </div>
+                <div class="text-caption text-medium-emphasis mt-4">最近 AI 草稿</div>
+                <div class="text-caption text-medium-emphasis mt-2">
+                  状态：{{ displayChapterAiLatestRecord ? getWritingRecordStatusLabel(displayChapterAiLatestRecord.status) : '暂无记录' }}
+                </div>
+                <div class="text-caption text-medium-emphasis mt-1">
+                  类型：{{ displayChapterAiLatestRecord ? getWritingTypeLabel(displayChapterAiLatestRecord.writingType) : '未触发' }}
+                </div>
+                <div class="text-caption text-medium-emphasis mt-1">
+                  生成时间：{{ displayChapterAiLatestRecord?.createTime || '未记录' }}
+                </div>
+              </v-window-item>
+            </v-window>
           </v-card-text>
           <v-card-text v-else class="text-medium-emphasis">
             请选择一个章节查看内容。

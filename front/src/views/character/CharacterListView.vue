@@ -50,6 +50,7 @@ const summaryWorkflowVisible = ref(false)
 const summaryWorkflowTarget = ref<Character | null>(null)
 const summaryWorkflowCreateMode = ref(false)
 const editorMode = ref<SummaryWorkflowOperatorMode>('DEFAULT')
+const characterCardTabs = reactive<Record<number, string>>({})
 
 const currentProjectId = computed(() => projectStore.selectedProjectId)
 const currentProject = computed(() =>
@@ -265,6 +266,13 @@ function buildCharacterProfile(character: Character) {
     profile.goal = resolveCharacterGoal(character)
   }
   return profile
+}
+
+function getCharacterCardTab(characterId: number) {
+  if (!characterCardTabs[characterId]) {
+    characterCardTabs[characterId] = 'summary'
+  }
+  return characterCardTabs[characterId]
 }
 
 function fillAttributeForm(character?: Character | null) {
@@ -633,84 +641,152 @@ async function refreshCharacterInventorySummary() {
               {{ item.description || '暂无角色简介。' }}
             </div>
 
-            <div v-if="item.projectNames?.length" class="d-flex flex-wrap ga-2 mt-4">
-              <v-chip
-                v-for="projectName in item.projectNames"
-                :key="projectName"
-                size="small"
-                variant="outlined"
-              >
-                {{ projectName }}
-              </v-chip>
-            </div>
+            <v-tabs
+              :model-value="getCharacterCardTab(item.id)"
+              color="primary"
+              density="comfortable"
+              class="mt-4"
+              @update:model-value="(value) => (characterCardTabs[item.id] = String(value))"
+            >
+              <v-tab value="summary">Summary</v-tab>
+              <v-tab value="canon">Canon</v-tab>
+              <v-tab value="state">State</v-tab>
+              <v-tab value="history">History</v-tab>
+            </v-tabs>
 
-            <v-divider class="my-4" />
+            <v-window :model-value="getCharacterCardTab(item.id)" class="mt-4">
+              <v-window-item value="summary">
+                <div class="text-caption text-medium-emphasis">人物摘要</div>
+                <MarkdownContent
+                  class="mt-2"
+                  compact
+                  :source="item.description"
+                  empty-text="当前还没有人物摘要，建议先用摘要工作流补一版。"
+                />
+                <div class="d-flex flex-wrap ga-2 mt-4">
+                  <v-chip
+                    v-for="tag in item.profile.tags"
+                    :key="tag"
+                    size="small"
+                    color="secondary"
+                    variant="outlined"
+                  >
+                    {{ tag }}
+                  </v-chip>
+                  <v-chip
+                    v-if="item.retiredFlag"
+                    size="small"
+                    color="warning"
+                    variant="tonal"
+                  >
+                    已退场
+                  </v-chip>
+                  <span
+                    v-if="!item.profile.tags.length && !item.retiredFlag"
+                    class="text-caption text-medium-emphasis"
+                  >
+                    暂无摘要标签
+                  </span>
+                </div>
+              </v-window-item>
 
-            <div class="text-caption text-medium-emphasis">身份：{{ item.coreIdentity || '未填写' }}</div>
-            <div class="text-caption text-medium-emphasis mt-1">阵营：{{ item.profile.camp || '未填写' }}</div>
-            <div class="text-caption text-medium-emphasis mt-1">目标：{{ item.coreGoal || '未填写' }}</div>
-            <div class="text-caption text-medium-emphasis mt-1">成长弧线：{{ item.growthArcLabel || '未填写' }}</div>
-            <div class="text-caption text-medium-emphasis mt-1">当前阶段：{{ item.activeStageLabel || '未填写' }}</div>
-            <div class="d-flex flex-wrap ga-2 mt-3">
-              <v-chip v-if="item.firstAppearanceChapterId" size="small" variant="outlined">
-                初登场章节 #{{ item.firstAppearanceChapterId }}
-              </v-chip>
-              <v-chip v-if="item.retiredFlag" size="small" color="warning" variant="tonal">
-                已退场
-              </v-chip>
-            </div>
+              <v-window-item value="canon">
+                <div class="text-caption text-medium-emphasis">角色设定</div>
+                <div class="text-caption text-medium-emphasis mt-3">身份：{{ item.coreIdentity || '未填写' }}</div>
+                <div class="text-caption text-medium-emphasis mt-1">阵营：{{ item.profile.camp || '未填写' }}</div>
+                <div class="text-caption text-medium-emphasis mt-1">目标：{{ item.coreGoal || '未填写' }}</div>
+                <div class="text-caption text-medium-emphasis mt-1">成长弧线：{{ item.growthArcLabel || '未填写' }}</div>
+                <div class="text-caption text-medium-emphasis mt-1">当前阶段：{{ item.activeStageLabel || '未填写' }}</div>
+                <div class="d-flex flex-wrap ga-2 mt-4">
+                  <v-chip v-if="item.firstAppearanceChapterId" size="small" variant="outlined">
+                    初登场章节 #{{ item.firstAppearanceChapterId }}
+                  </v-chip>
+                </div>
+              </v-window-item>
 
-            <div class="mt-4">
-              <div class="text-caption text-medium-emphasis mb-2">技能</div>
-              <div class="d-flex flex-wrap ga-2">
-                <v-chip
-                  v-for="skill in item.profile.skills"
-                  :key="skill"
-                  size="small"
-                  color="primary"
-                  variant="tonal"
-                >
-                  {{ skill }}
-                </v-chip>
-                <span v-if="!item.profile.skills.length" class="text-caption text-medium-emphasis">暂无技能</span>
-              </div>
-            </div>
+              <v-window-item value="state">
+                <div class="text-caption text-medium-emphasis">当前状态</div>
+                <div class="mt-3">
+                  <div class="text-caption text-medium-emphasis mb-2">技能</div>
+                  <div class="d-flex flex-wrap ga-2">
+                    <v-chip
+                      v-for="skill in item.profile.skills"
+                      :key="skill"
+                      size="small"
+                      color="primary"
+                      variant="tonal"
+                    >
+                      {{ skill }}
+                    </v-chip>
+                    <span v-if="!item.profile.skills.length" class="text-caption text-medium-emphasis">暂无技能</span>
+                  </div>
+                </div>
+                <div class="mt-4">
+                  <div class="text-caption text-medium-emphasis mb-2">特性 / 天赋 / 弱点</div>
+                  <div class="d-flex flex-wrap ga-2">
+                    <v-chip
+                      v-for="tag in [...item.profile.traits, ...item.profile.talents]"
+                      :key="`trait-${tag}`"
+                      size="small"
+                      color="secondary"
+                      variant="outlined"
+                    >
+                      {{ tag }}
+                    </v-chip>
+                    <v-chip
+                      v-for="weakness in item.profile.weaknesses"
+                      :key="`weakness-${weakness}`"
+                      size="small"
+                      color="error"
+                      variant="tonal"
+                    >
+                      {{ weakness }}
+                    </v-chip>
+                    <span
+                      v-if="![...item.profile.traits, ...item.profile.talents, ...item.profile.weaknesses].length"
+                      class="text-caption text-medium-emphasis"
+                    >
+                      暂无状态标签
+                    </span>
+                  </div>
+                </div>
+                <div class="mt-4">
+                  <div class="text-caption text-medium-emphasis mb-2">背包摘要</div>
+                  <div class="d-flex flex-wrap ga-2">
+                    <v-chip size="small" color="primary" variant="tonal">
+                      物品 {{ item.inventoryItemCount || 0 }}
+                    </v-chip>
+                    <v-chip size="small" color="secondary" variant="outlined">
+                      已装备 {{ item.equippedItemCount || 0 }}
+                    </v-chip>
+                    <v-chip size="small" color="warning" variant="outlined">
+                      稀有 {{ item.rareItemCount || 0 }}
+                    </v-chip>
+                  </div>
+                </div>
+              </v-window-item>
 
-            <div class="mt-4">
-              <div class="text-caption text-medium-emphasis mb-2">特性 / 天赋</div>
-              <div class="d-flex flex-wrap ga-2">
-                <v-chip
-                  v-for="tag in [...item.profile.traits, ...item.profile.talents]"
-                  :key="tag"
-                  size="small"
-                  color="secondary"
-                  variant="outlined"
-                >
-                  {{ tag }}
-                </v-chip>
-                <span
-                  v-if="![...item.profile.traits, ...item.profile.talents].length"
-                  class="text-caption text-medium-emphasis"
-                >
-                  暂无特性或天赋
-                </span>
-              </div>
-            </div>
-
-            <div class="mt-4">
-              <div class="text-caption text-medium-emphasis mb-2">背包摘要</div>
-              <div class="d-flex flex-wrap ga-2">
-                <v-chip size="small" color="primary" variant="tonal">
-                  物品 {{ item.inventoryItemCount || 0 }}
-                </v-chip>
-                <v-chip size="small" color="secondary" variant="outlined">
-                  已装备 {{ item.equippedItemCount || 0 }}
-                </v-chip>
-                <v-chip size="small" color="warning" variant="outlined">
-                  稀有 {{ item.rareItemCount || 0 }}
-                </v-chip>
-              </div>
-            </div>
+              <v-window-item value="history">
+                <div class="text-caption text-medium-emphasis">关联历史</div>
+                <div class="d-flex flex-wrap ga-2 mt-3">
+                  <v-chip
+                    v-for="projectName in item.projectNames"
+                    :key="projectName"
+                    size="small"
+                    variant="outlined"
+                  >
+                    {{ projectName }}
+                  </v-chip>
+                  <span v-if="!item.projectNames?.length" class="text-caption text-medium-emphasis">暂无关联项目</span>
+                </div>
+                <div class="text-caption text-medium-emphasis mt-4">
+                  创建时间：{{ item.createTime || '未记录' }}
+                </div>
+                <div class="text-caption text-medium-emphasis mt-1">
+                  更新时间：{{ item.updateTime || '未记录' }}
+                </div>
+              </v-window-item>
+            </v-window>
 
             <div class="d-flex flex-wrap ga-2 mt-auto pt-4">
               <v-btn color="primary" prepend-icon="mdi-text-box-edit-outline" @click="openSummaryWorkflow(item)">

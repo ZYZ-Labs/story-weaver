@@ -584,6 +584,7 @@ export interface ChapterSkeletonView {
   sceneCount: number
   globalStopCondition: string
   scenes: SceneSkeletonItemView[]
+  deletedSceneIds?: string[]
   planningNotes: string[]
 }
 
@@ -621,10 +622,12 @@ export interface ChapterExecutionReviewView {
 }
 
 export interface SessionExecutionTraceItemView {
+  role?: string
   sessionRole: string
   status: string
   attempt?: number
   retryable?: boolean
+  summary?: string
   message?: string
   details?: Record<string, unknown>
 }
@@ -638,6 +641,7 @@ export interface SessionExecutionTraceView {
 export interface DirectorCandidateView {
   id: string
   type: string
+  title?: string
   goal: string
   readerReveal: string[]
   mustUseAnchors: string[]

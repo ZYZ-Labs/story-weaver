@@ -29,6 +29,9 @@
   - `story-context`
   - `story-orchestration`
   - `story-state`
+- 章节工作区的正文产出继续采用结果导向的 `generateStream`
+- `chat` 主要服务于摘要补全与模糊意图采集
+- `MCP / State Server` 主要位于后端编排层，不要求前端必须做成 chat 样式才能消费
 
 ## 范围内
 
@@ -171,11 +174,32 @@
     - `mvn test -pl backend -am -Dtest=StorySessionOrchestrationControllerTest,RuleBasedChapterSkeletonPlannerTest,DefaultStorySessionOrchestratorTest,DefaultChapterSkeletonMutationServiceTest -Dsurefire.failIfNoSpecifiedTests=false -Dmaven.repo.local=/usr/local/project/github/story-weaver/.cache/m2`
     - `npm run type-check`
     - `npm run build`
-- 当前下一步是部署并联调 `Phase 8.2` 的 `Chapter Workspace`：
-  - 验证镜头编辑/删除
-  - 验证根据镜头直接生成初稿
-  - 验证草稿接受/拒绝回写
-  - 验证接受草稿后自动推进 scene 完成与 handoff
+- `Phase 8.2` 当前已完成本地执行语义收口：
+  - 普通主路径已改为“根据镜头生成草稿 -> 接受草稿 -> 自动推进当前镜头完成”
+  - `执行当前镜头` 已降级为专家动作，只推进 runtime/handoff
+  - 已执行镜头删除时会同步清理 runtime/handoff，但不会自动回滚正文
+  - 已执行镜头删除已补 tombstone 机制：
+    - 删除后的 `written/completed` 镜头不会再被骨架规划器从历史 scene state 自动补回
+  - 章节工作区草稿生成已切回流式链：
+    - 已接入 `AIProcessLogPanel`
+    - 已支持流式正文预览
+    - 已支持阶段日志
+    - 已修正草稿与镜头绑定，接受草稿时优先推进草稿所属镜头
+  - 多 session 编排预览已补前端读模型归一化：
+    - trace 已统一消费 `role / summary`
+    - 候选标题已统一做稳定标题归一化
+- `Phase 8.3` 已开始本地开发：
+  - `CharacterListView` 已改成 `Summary / Canon / State / History`
+  - `WorldSettingView` 已改成 `Summary / Canon / State / History`
+  - `ChapterListView` 的章节预览卡已改成 `Summary / Canon / State / History`
+  - 章节对象页已不再把摘要、正文、结构信息平铺在同一块
+- 当前第二轮联调判断已完成：
+  - 浏览器烟测仍受认证链影响，不能单独作为最终退出依据
+  - 当前线上静态产物与本地最新 `Phase 8.3` 构建结果未对齐
+- 当前下一步是：
+  - 提交并推送 `Phase 8.3` 本地前端改动
+  - 重新部署最新前端产物
+  - 统一做一轮页面人工验收，再决定是否正式收口 `Phase 8`
 
 ## 建议代码落点
 
@@ -214,9 +238,9 @@
 
 ## 下一步
 
-1. 部署 `Phase 8.2` 前端改动
-2. 联调 `Chapter Workspace`
-3. 再推进对象页 `Summary First` 重构
+1. 提交并推送 `Phase 8.3` 前端改动
+2. 部署最新前端产物
+3. 完成 `创作台 / 状态台 / 生成台 / 章节工作区 / 三类对象页` 统一人工验收
 
 ## 贡献与署名说明
 

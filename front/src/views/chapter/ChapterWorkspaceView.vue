@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from 'vue'
 
+import AIProcessLogPanel from '@/components/AIProcessLogPanel.vue'
 import ChapterAnchorPanel from '@/components/ChapterAnchorPanel.vue'
 import EmptyState from '@/components/EmptyState.vue'
 import GenerationReadinessCard from '@/components/GenerationReadinessCard.vue'
@@ -8,7 +9,6 @@ import MarkdownContent from '@/components/MarkdownContent.vue'
 import MarkdownEditor from '@/components/MarkdownEditor.vue'
 import PageContainer from '@/components/PageContainer.vue'
 import StatCard from '@/components/StatCard.vue'
-import { acceptWriting, generateWriting, rejectWriting } from '@/api/ai-writing'
 import { getChapterAnchors, getChapterGenerationReadiness } from '@/api/story-generation'
 import {
   deleteChapterSkeletonScene,
@@ -21,8 +21,8 @@ import {
 import { getReaderKnownState } from '@/api/story-context'
 import { getChapterState, getReaderRevealState } from '@/api/story-state'
 import { useProjectWorkspace } from '@/composables/useProjectWorkspace'
+import { useWritingStore } from '@/stores/writing'
 import type {
-  AIWritingRecord,
   ChapterAnchorBundle,
   ChapterExecutionReviewView,
   ChapterIncrementalStateView,
@@ -43,6 +43,7 @@ const {
   chapterOptions,
   selectChapter,
 } = useProjectWorkspace()
+const writingStore = useWritingStore()
 
 const loading = ref(false)
 const sceneLoading = ref(false)
@@ -60,7 +61,7 @@ const sceneMutationMessage = ref('')
 const sceneMutationError = ref('')
 const draftMessage = ref('')
 const draftError = ref('')
-const sceneDraftRecord = ref<AIWritingRecord | null>(null)
+const sceneDraftSceneId = ref('')
 const sceneEditorVisible = ref(false)
 
 const readiness = ref<GenerationReadiness | null>(null)
@@ -93,6 +94,13 @@ const currentScene = computed(
 )
 
 const currentSceneCompleted = computed(() => currentScene.value?.status === 'COMPLETED')
+const currentChapterStreamState = computed(() => writingStore.getStreamState(activeChapterId.value || null))
+const displaySceneDraftRecord = computed(() => currentChapterStreamState.value.lastRecord)
+const displaySceneDraftContent = computed(
+  () => displaySceneDraftRecord.value?.generatedContent || currentChapterStreamState.value.content || '',
+)
+const displaySceneDraftGenerating = computed(() => currentChapterStreamState.value.generating || draftLoading.value)
+const displaySceneDraftLogs = computed(() => currentChapterStreamState.value.logs || [])
 
 const stats = computed(() => [
   {
@@ -286,8 +294,12 @@ async function deleteCurrentScene() {
   sceneMutationError.value = ''
   sceneMutationMessage.value = ''
   try {
-    await deleteChapterSkeletonScene(currentProjectId.value, activeChapterId.value, currentScene.value.sceneId)
-    sceneMutationMessage.value = `已删除 ${currentScene.value.sceneId}。`
+    const deletingSceneId = currentScene.value.sceneId
+    await deleteChapterSkeletonScene(currentProjectId.value, activeChapterId.value, deletingSceneId)
+    if (sceneDraftSceneId.value === deletingSceneId) {
+      sceneDraftSceneId.value = ''
+    }
+    sceneMutationMessage.value = `已删除 ${deletingSceneId}。`
     await loadWorkspace(currentProjectId.value, activeChapterId.value)
   } catch (error) {
     sceneMutationError.value = error instanceof Error ? error.message : '删除镜头失败'
@@ -303,7 +315,7 @@ async function generateSceneDraft() {
   draftLoading.value = true
   draftError.value = ''
   draftMessage.value = ''
-  sceneDraftRecord.value = null
+  sceneDraftSceneId.value = sceneId.value
   try {
     const brief = sessionPreview.value.writerExecutionBrief
     const continuityNotes = sessionPreview.value.contextPacket?.sceneBindingContext?.reason
@@ -317,7 +329,7 @@ async function generateSceneDraft() {
       continuityNotes ? `【承接说明】${continuityNotes}` : '',
     ].filter(Boolean)
 
-    sceneDraftRecord.value = await generateWriting({
+    const record = await writingStore.generateStream({
       chapterId: activeChapterId.value,
       currentContent: editorContent.value,
       userInstruction: instructionSections.join('\n'),
@@ -325,7 +337,8 @@ async function generateSceneDraft() {
       maxTokens: brief.targetWords || 900,
       entryPoint: 'phase8.chapter-workspace.scene-draft',
     })
-    draftMessage.value = `已生成 ${sceneId.value} 的${editorContent.value.trim() ? '续写草稿' : '初稿'}。`
+    sceneDraftSceneId.value = sceneId.value
+    draftMessage.value = `已生成 ${sceneDraftSceneId.value} 的${record.writingType === 'continue' ? '续写草稿' : '初稿'}。`
   } catch (error) {
     draftError.value = error instanceof Error ? error.message : '生成镜头草稿失败'
   } finally {
@@ -334,14 +347,14 @@ async function generateSceneDraft() {
 }
 
 async function acceptSceneDraft() {
-  if (!sceneDraftRecord.value || !currentProjectId.value || !activeChapterId.value) {
+  if (!displaySceneDraftRecord.value || !currentProjectId.value || !activeChapterId.value) {
     return
   }
   draftLoading.value = true
   draftError.value = ''
   try {
-    const acceptedSceneId = sceneId.value
-    await acceptWriting(sceneDraftRecord.value.id)
+    const acceptedSceneId = sceneDraftSceneId.value || sceneId.value
+    await writingStore.accept(displaySceneDraftRecord.value.id)
     let executionTip = ''
     try {
       const execution = await executeStorySession(currentProjectId.value, activeChapterId.value, acceptedSceneId)
@@ -359,7 +372,7 @@ async function acceptSceneDraft() {
     }
     draftMessage.value = `已接受 ${acceptedSceneId} 的草稿并写回章节正文。${executionTip}`.trim()
     await loadWorkspace(currentProjectId.value, activeChapterId.value)
-    sceneDraftRecord.value = null
+    sceneDraftSceneId.value = ''
   } catch (error) {
     draftError.value = error instanceof Error ? error.message : '接受草稿失败'
   } finally {
@@ -368,15 +381,16 @@ async function acceptSceneDraft() {
 }
 
 async function rejectSceneDraft() {
-  if (!sceneDraftRecord.value) {
+  if (!displaySceneDraftRecord.value) {
     return
   }
   draftLoading.value = true
   draftError.value = ''
   try {
-    await rejectWriting(sceneDraftRecord.value.id)
-    draftMessage.value = `已拒绝 ${sceneId.value} 的草稿。`
-    sceneDraftRecord.value = null
+    const rejectedSceneId = sceneDraftSceneId.value || sceneId.value
+    await writingStore.reject(displaySceneDraftRecord.value.id)
+    draftMessage.value = `已拒绝 ${rejectedSceneId} 的草稿。`
+    sceneDraftSceneId.value = ''
   } catch (error) {
     draftError.value = error instanceof Error ? error.message : '拒绝草稿失败'
   } finally {
@@ -396,8 +410,10 @@ watch(
       chapterState.value = null
       readerRevealState.value = null
       readerKnownState.value = null
+      sceneDraftSceneId.value = ''
       return
     }
+    await writingStore.fetchByChapter(chapterId).catch(() => undefined)
     await loadWorkspace(projectId, chapterId)
   },
   { immediate: true },
@@ -666,6 +682,14 @@ watch(sceneId, async (value) => {
 
             <v-divider class="my-4" />
 
+            <AIProcessLogPanel
+              :logs="displaySceneDraftLogs"
+              :loading="displaySceneDraftGenerating"
+              title="当前镜头生成流水线"
+            />
+
+            <v-divider class="my-4" />
+
             <div class="text-subtitle-2 font-weight-medium">当前写手 Brief</div>
             <div class="text-body-2 mt-2">
               {{ sessionPreview?.writerExecutionBrief?.goal || '当前镜头还没有写手目标。' }}
@@ -687,7 +711,7 @@ watch(sceneId, async (value) => {
               Handoff：{{ lastExecution?.writeResult?.handoffSnapshot?.toSceneId || '待执行后生成' }}
             </div>
 
-            <template v-if="sceneDraftRecord">
+            <template v-if="displaySceneDraftRecord || displaySceneDraftGenerating || displaySceneDraftContent">
               <v-divider class="my-4" />
               <div class="d-flex justify-space-between align-center ga-3">
                 <div class="text-subtitle-2 font-weight-medium">当前镜头草稿</div>
@@ -697,15 +721,17 @@ watch(sceneId, async (value) => {
                     variant="tonal"
                     prepend-icon="mdi-check"
                     :loading="draftLoading"
+                    :disabled="!displaySceneDraftRecord"
                     @click="acceptSceneDraft"
                   >
-                  接受写回正文
+                    接受写回正文
                   </v-btn>
                   <v-btn
                     color="error"
                     variant="outlined"
                     prepend-icon="mdi-close"
                     :loading="draftLoading"
+                    :disabled="!displaySceneDraftRecord"
                     @click="rejectSceneDraft"
                   >
                     拒绝草稿
@@ -713,12 +739,20 @@ watch(sceneId, async (value) => {
                 </div>
               </div>
               <div class="text-caption text-medium-emphasis mt-2">
-                {{ sceneDraftRecord.writingType }} · {{ sceneDraftRecord.selectedModel || '默认模型' }}
+                {{
+                  [
+                    sceneDraftSceneId ? `镜头 ${sceneDraftSceneId}` : '',
+                    displaySceneDraftRecord?.writingType || (displaySceneDraftGenerating ? '生成中' : ''),
+                    displaySceneDraftRecord?.selectedModel || '',
+                  ]
+                    .filter(Boolean)
+                    .join(' · ')
+                }}
               </div>
               <div class="text-caption text-medium-emphasis mt-2">
                 接受草稿后会自动完成当前镜头并切到下一镜头；拒绝草稿不会推进镜头状态。
               </div>
-              <MarkdownContent class="mt-4" :content="sceneDraftRecord.generatedContent || ''" />
+              <MarkdownContent class="mt-4" :content="displaySceneDraftContent" />
             </template>
           </v-card-text>
         </v-card>
@@ -792,16 +826,16 @@ watch(sceneId, async (value) => {
               </v-chip>
             </div>
             <v-list lines="two" class="mt-4">
-              <v-list-item
-                v-for="(item, index) in sessionPreview?.trace?.items || []"
-                :key="`${item.sessionRole}-${index}`"
-                :title="`${item.sessionRole} · ${item.status}`"
-                :subtitle="item.message || '当前没有补充说明。'"
-              >
-                <template #append>
-                  <v-chip size="x-small" variant="outlined">
-                    #{{ item.attempt || 1 }}
-                  </v-chip>
+            <v-list-item
+              v-for="(item, index) in sessionPreview?.trace?.items || []"
+              :key="`${item.sessionRole}-${index}`"
+              :title="`${item.sessionRole} · ${item.status}`"
+              :subtitle="item.message || item.summary || '当前没有补充说明。'"
+            >
+              <template #append>
+                <v-chip size="x-small" variant="outlined">
+                  #{{ item.attempt || 1 }}
+                </v-chip>
                 </template>
               </v-list-item>
             </v-list>

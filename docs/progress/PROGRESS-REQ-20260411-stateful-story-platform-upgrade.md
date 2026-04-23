@@ -8,12 +8,13 @@
 ## 当前快照
 
 - Current Phase: `Phase 8` 进行中
-- Current Task: `Phase 8.2` 章节工作区执行语义重构已完成本地开发，待部署联调
+- Current Task: `Phase 8.3` 对象页 `Summary First` 代码侧接近完成，等待最新前端产物部署与统一页面验收
 - Last Completed: 已完成 `Phase 7` 状态系统阶段收口
 - Next Action:
-  - 部署 `Phase 8.2` 前端改动
-  - 联调 `Chapter Workspace` 的镜头编辑/删除、直出初稿与接受后自动推进
-  - 再推进 `Phase 8.3` 对象页 `Summary First` 重构
+  - 提交并推送当前 `Phase 8.3` 前端代码
+  - 部署最新前端产物
+  - 统一验收 `创作台 / 状态台 / 生成台 / 章节工作区 / 三类对象页`
+  - 若通过则正式收口 `Phase 8`
 - Blockers:
   - 旧主线 `REQ-20260409-generation-reliability-refactor` 已归档，但其代码成果和回归报告仍需作为迁移基线继续参考
   - `MCP` 与 `State Server` 的边界仍未形成独立 server 形态，只完成读模型、查询服务与编排消费层
@@ -76,7 +77,7 @@
       - 根据当前镜头直接生成初稿或继续生成
       - 草稿接受写回正文
       - 草稿拒绝
-    - 已完成 `Phase 8.2` 第三轮本地收口：
+  - 已完成 `Phase 8.2` 第三轮本地收口：
       - 已修正章节工作区执行语义：
         - 普通主路径改为“根据当前镜头生成草稿 -> 接受草稿 -> 自动推进镜头完成”
         - `执行当前镜头` 已降级为专家动作，只推进 runtime/handoff，不直接承担正文生成
@@ -87,12 +88,67 @@
     - 已补后端章节骨架 override 能力：
       - `PUT /api/story-orchestration/projects/{projectId}/chapters/{chapterId}/skeleton-scenes/{sceneId}`
       - `DELETE /api/story-orchestration/projects/{projectId}/chapters/{chapterId}/skeleton-scenes/{sceneId}`
-    - 当前章节工作区主路径已具备：
-      - 看镜头
-      - 改镜头
-      - 删可删镜头
-      - 直接从镜头出草稿
-      - 决定是否写回正文
+      - 当前章节工作区主路径已具备：
+        - 看镜头
+        - 改镜头
+        - 删可删镜头
+        - 直接从镜头出草稿
+        - 决定是否写回正文
+  - 已开始 `Phase 8.3` 对象页 `Summary First` 重构：
+    - `CharacterListView` 已改成：
+      - `Summary`
+      - `Canon`
+      - `State`
+      - `History`
+    - `WorldSettingView` 已改成：
+      - `Summary`
+      - `Canon`
+      - `State`
+      - `History`
+    - `ChapterListView` 的章节预览卡已改成：
+      - `Summary`
+      - `Canon`
+      - `State`
+      - `History`
+    - 章节对象页当前已不再默认把摘要、正文、结构信息平铺在一个卡片里
+    - 已完成本地校验：
+      - `npm run type-check`
+      - `npm run build`
+  - 已继续收口 `Phase 8.2` 的章节工作区草稿链：
+    - 当前镜头草稿生成已切回流式生成链
+    - 章节工作区已接入 `AIProcessLogPanel`
+    - 当前镜头草稿区已支持：
+      - 流式正文预览
+      - 阶段日志
+      - 生成完成后接受/拒绝
+    - 已修正草稿与镜头绑定：
+      - 接受草稿时优先推进草稿所属镜头
+      - 不再默认使用当前下拉里的 sceneId
+    - 已修正已删除镜头与草稿引用的清理：
+      - 删除当前镜头时若存在同 scene 草稿绑定，前端会同步清掉草稿场景引用
+    - 已修正已执行镜头删除“提示成功但刷新复活”问题：
+      - `ChapterSkeleton` 已新增 `deletedSceneIds`
+      - 骨架规划器合并历史 `scene runtime state` 时会跳过 tombstone 镜头
+    - 已修正多 session 编排 trace 前端字段映射：
+      - 后端返回的 `role / summary` 已在前端 API 层统一归一化为 `sessionRole / message`
+      - 已避免章节工作区与生成台出现重复 `undefined` trace 项
+    - 已修正多 session 候选标题展示：
+      - 候选列表已使用稳定标题，不再退化为 `.` 或仅靠 `id/type` 硬拼
+  - 已完成 `Phase 8` 第二轮联调判断：
+    - 当前浏览器烟测仍被认证链卡住，不能单独作为最终收口依据
+    - 当前线上静态产物与本地最新 `Phase 8.3` 构建 hash 未对齐
+    - 已形成报告：
+      - `docs/reports/REPORT-20260419-phase8-frontend-ia-live-validation-round2.md`
+    - 因此当前不能直接宣布 `Phase 8` 完成
+    - 当前缺口已收敛为：
+      - 最新前端产物部署
+      - 最后一轮统一页面人工验收
+    - 当前阶段策略已调整：
+      - `Phase 8` 代码侧先冻结，不再继续向内新增功能
+      - 统一部署与最终人工验收延后到本轮代码冻结后执行
+      - 同步启动 `Phase 9.1` 的迁移、兼容与回填清单整理
+    - 已新增 `Phase 9` 兼容基线报告：
+      - `docs/reports/REPORT-20260420-phase9-compatibility-baseline-v1.md`
     - 已完成本地校验：
       - `mvn -Dmaven.repo.local=/usr/local/project/github/story-weaver/.cache/m2 -DskipTests compile`
       - `mvn test -pl backend -am -Dtest=StorySessionOrchestrationControllerTest,RuleBasedChapterSkeletonPlannerTest,DefaultStorySessionOrchestratorTest,DefaultChapterSkeletonMutationServiceTest -Dsurefire.failIfNoSpecifiedTests=false -Dmaven.repo.local=/usr/local/project/github/story-weaver/.cache/m2`

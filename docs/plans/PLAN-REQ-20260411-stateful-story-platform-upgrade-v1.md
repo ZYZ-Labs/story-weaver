@@ -4,7 +4,7 @@
 - Plan Version: v1
 - Status: In Progress
 - Created At: 2026-04-11 Asia/Shanghai
-- Updated At: 2026-04-19 Asia/Shanghai
+- Updated At: 2026-04-20 Asia/Shanghai
 
 ## 计划定位
 
@@ -485,6 +485,14 @@
 退出条件：
 
 - 新旧主链可并存一段时间，直到新主链稳定接管。
+
+当前状态：
+
+- `Phase 9` 详细计划已创建：
+  - `docs/plans/PLAN-REQ-20260411-stateful-story-platform-upgrade-phase9-migration-compatibility-v1.md`
+- 当前优先级：
+  - 先冻结 `Phase 9.1` 兼容清单与迁移样本
+  - 暂不直接进入破坏式大迁移
 
 ### Phase 10. 测试、观测与回放
 

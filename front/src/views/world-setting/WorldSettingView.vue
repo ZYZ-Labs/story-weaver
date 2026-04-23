@@ -25,6 +25,7 @@ const summaryWorkflowVisible = ref(false)
 const summaryWorkflowTarget = ref<WorldSetting | null>(null)
 const summaryWorkflowCreateMode = ref(false)
 const editorMode = ref<SummaryWorkflowOperatorMode>('DEFAULT')
+const worldSettingCardTabs = reactive<Record<number, string>>({})
 
 const projectId = computed(() => projectStore.selectedProjectId)
 const currentProject = computed(() =>
@@ -201,6 +202,13 @@ async function handleSummaryWorkflowApplied(_result: SummaryWorkflowApplyResult)
   }
   await loadData(projectId.value)
 }
+
+function getWorldSettingCardTab(settingId: number) {
+  if (!worldSettingCardTabs[settingId]) {
+    worldSettingCardTabs[settingId] = 'summary'
+  }
+  return worldSettingCardTabs[settingId]
+}
 </script>
 
 <template>
@@ -269,11 +277,61 @@ async function handleSummaryWorkflowApplied(_result: SummaryWorkflowApplyResult)
                   </div>
 
                   <div class="mt-4">
-                    <MarkdownContent
-                      :source="item.description || item.content"
-                      empty-text="暂无设定描述"
-                      compact
-                    />
+                    <v-tabs
+                      :model-value="getWorldSettingCardTab(item.id)"
+                      color="primary"
+                      density="comfortable"
+                      @update:model-value="(value) => (worldSettingCardTabs[item.id] = String(value))"
+                    >
+                      <v-tab value="summary">Summary</v-tab>
+                      <v-tab value="canon">Canon</v-tab>
+                      <v-tab value="state">State</v-tab>
+                      <v-tab value="history">History</v-tab>
+                    </v-tabs>
+
+                    <v-window :model-value="getWorldSettingCardTab(item.id)" class="mt-4">
+                      <v-window-item value="summary">
+                        <div class="text-caption text-medium-emphasis">设定摘要</div>
+                        <MarkdownContent
+                          class="mt-2"
+                          :source="item.description || item.content"
+                          empty-text="暂无设定描述"
+                          compact
+                        />
+                      </v-window-item>
+
+                      <v-window-item value="canon">
+                        <div class="text-caption text-medium-emphasis">设定基线</div>
+                        <div class="text-caption text-medium-emphasis mt-3">
+                          名称：{{ item.name || item.title || '未命名世界观' }}
+                        </div>
+                        <div class="text-caption text-medium-emphasis mt-1">
+                          分类：{{ item.category || '未分类' }}
+                        </div>
+                      </v-window-item>
+
+                      <v-window-item value="state">
+                        <div class="text-caption text-medium-emphasis">当前使用状态</div>
+                        <div class="d-flex flex-wrap ga-2 mt-3">
+                          <v-chip color="secondary" variant="tonal" size="small">
+                            关联项目 {{ item.associationCount || 1 }}
+                          </v-chip>
+                          <v-chip color="primary" variant="outlined" size="small">
+                            当前项目已关联
+                          </v-chip>
+                        </div>
+                      </v-window-item>
+
+                      <v-window-item value="history">
+                        <div class="text-caption text-medium-emphasis">历史信息</div>
+                        <div class="text-caption text-medium-emphasis mt-3">
+                          创建时间：{{ item.createTime || '未记录' }}
+                        </div>
+                        <div class="text-caption text-medium-emphasis mt-1">
+                          更新时间：{{ item.updateTime || '未记录' }}
+                        </div>
+                      </v-window-item>
+                    </v-window>
                   </div>
 
                   <div class="d-flex flex-wrap ga-2 mt-auto pt-4">
@@ -324,11 +382,61 @@ async function handleSummaryWorkflowApplied(_result: SummaryWorkflowApplyResult)
                   </div>
 
                   <div class="mt-4">
-                    <MarkdownContent
-                      :source="item.description || item.content"
-                      empty-text="暂无设定描述"
-                      compact
-                    />
+                    <v-tabs
+                      :model-value="getWorldSettingCardTab(item.id)"
+                      color="primary"
+                      density="comfortable"
+                      @update:model-value="(value) => (worldSettingCardTabs[item.id] = String(value))"
+                    >
+                      <v-tab value="summary">Summary</v-tab>
+                      <v-tab value="canon">Canon</v-tab>
+                      <v-tab value="state">State</v-tab>
+                      <v-tab value="history">History</v-tab>
+                    </v-tabs>
+
+                    <v-window :model-value="getWorldSettingCardTab(item.id)" class="mt-4">
+                      <v-window-item value="summary">
+                        <div class="text-caption text-medium-emphasis">设定摘要</div>
+                        <MarkdownContent
+                          class="mt-2"
+                          :source="item.description || item.content"
+                          empty-text="暂无设定描述"
+                          compact
+                        />
+                      </v-window-item>
+
+                      <v-window-item value="canon">
+                        <div class="text-caption text-medium-emphasis">设定基线</div>
+                        <div class="text-caption text-medium-emphasis mt-3">
+                          名称：{{ item.name || item.title || '未命名世界观' }}
+                        </div>
+                        <div class="text-caption text-medium-emphasis mt-1">
+                          分类：{{ item.category || '未分类' }}
+                        </div>
+                      </v-window-item>
+
+                      <v-window-item value="state">
+                        <div class="text-caption text-medium-emphasis">当前使用状态</div>
+                        <div class="d-flex flex-wrap ga-2 mt-3">
+                          <v-chip color="secondary" variant="tonal" size="small">
+                            已被 {{ item.associationCount || 0 }} 个项目使用
+                          </v-chip>
+                          <v-chip color="primary" variant="outlined" size="small">
+                            可关联到当前项目
+                          </v-chip>
+                        </div>
+                      </v-window-item>
+
+                      <v-window-item value="history">
+                        <div class="text-caption text-medium-emphasis">历史信息</div>
+                        <div class="text-caption text-medium-emphasis mt-3">
+                          创建时间：{{ item.createTime || '未记录' }}
+                        </div>
+                        <div class="text-caption text-medium-emphasis mt-1">
+                          更新时间：{{ item.updateTime || '未记录' }}
+                        </div>
+                      </v-window-item>
+                    </v-window>
                   </div>
 
                   <div class="d-flex flex-wrap ga-2 mt-auto pt-4">

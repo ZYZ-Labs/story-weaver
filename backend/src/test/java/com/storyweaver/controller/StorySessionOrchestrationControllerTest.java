@@ -204,6 +204,7 @@ class StorySessionOrchestrationControllerTest {
                 List.of(
                         new SceneSkeletonItem("scene-1", 1, SceneExecutionStatus.PLANNED, "完成现实状态定向", List.of("林沉舟已退役两年"), List.of("pov=林沉舟"), "回到家，进入书房前。", 900, "director-candidate")
                 ),
+                List.of(),
                 List.of("当前章节暂无已执行镜头，骨架按冷启动三镜头生成。")
         );
         when(chapterSkeletonPlanner.plan(28L, 31L)).thenReturn(Optional.of(skeleton));
@@ -251,6 +252,7 @@ class StorySessionOrchestrationControllerTest {
                 List.of(
                         new SceneSkeletonItem("scene-1", 1, SceneExecutionStatus.PLANNED, "新的 goal", List.of("揭晓 A"), List.of("anchor=A"), "新的停点", 950, "manual-override")
                 ),
+                List.of(),
                 List.of("已对 scene-1 应用手动骨架修改。")
         );
         when(chapterSkeletonMutationService.updateScene(eq(28L), eq(31L), eq(new com.storyweaver.story.generation.orchestration.SceneSkeletonMutationCommand(
@@ -291,6 +293,7 @@ class StorySessionOrchestrationControllerTest {
                         new SceneSkeletonItem("scene-1", 1, SceneExecutionStatus.PLANNED, "开场", List.of(), List.of(), "停在开场后。", 900, "manual-override"),
                         new SceneSkeletonItem("scene-3", 3, SceneExecutionStatus.PLANNED, "收口", List.of(), List.of(), "停在收口前。", 1000, "manual-override")
                 ),
+                List.of("scene-2"),
                 List.of("已删除 scene-2。")
         );
         when(chapterSkeletonMutationService.deleteScene(28L, 31L, "scene-2")).thenReturn(Optional.of(skeleton));

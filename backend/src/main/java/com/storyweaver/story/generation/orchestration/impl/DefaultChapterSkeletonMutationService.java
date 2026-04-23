@@ -74,6 +74,7 @@ public class DefaultChapterSkeletonMutationService implements ChapterSkeletonMut
                 scenes.size(),
                 chapterSkeleton.globalStopCondition(),
                 scenes,
+                chapterSkeleton.deletedSceneIds(),
                 appendPlanningNote(chapterSkeleton.planningNotes(), "已对 " + command.sceneId() + " 应用手动骨架修改。")
         );
         return Optional.of(chapterSkeletonStore.save(next));
@@ -106,6 +107,10 @@ public class DefaultChapterSkeletonMutationService implements ChapterSkeletonMut
         }
         sceneRuntimeStateStore.deleteSceneState(projectId, chapterId, sceneId);
         sceneRuntimeStateStore.deleteHandoffsReferencingScene(projectId, chapterId, sceneId);
+        List<String> deletedSceneIds = new ArrayList<>(chapterSkeleton.deletedSceneIds());
+        if (!deletedSceneIds.contains(sceneId)) {
+            deletedSceneIds.add(sceneId);
+        }
         ChapterSkeleton next = new ChapterSkeleton(
                 chapterSkeleton.projectId(),
                 chapterSkeleton.chapterId(),
@@ -113,6 +118,7 @@ public class DefaultChapterSkeletonMutationService implements ChapterSkeletonMut
                 scenes.size(),
                 resolveGlobalStopCondition(chapterSkeleton, scenes),
                 scenes,
+                List.copyOf(deletedSceneIds),
                 appendPlanningNote(chapterSkeleton.planningNotes(), "已删除 " + sceneId + "，并清理其 runtime/handoff 状态。")
         );
         return Optional.of(chapterSkeletonStore.save(next));

@@ -166,11 +166,14 @@ watch(
             >
               <div class="scene-list-item__header">
                 <div class="text-subtitle-1 font-weight-bold scene-list-item__title">
-                  {{ candidate.id }} · {{ candidate.type }}
+                  {{ candidate.title || candidate.type || candidate.id }}
                 </div>
                 <v-chip size="small" variant="tonal" color="secondary" class="scene-list-item__metric">
                   {{ candidate.targetWords || 0 }} 字
                 </v-chip>
+              </div>
+              <div class="text-caption text-medium-emphasis mt-2">
+                {{ candidate.id }} · {{ candidate.type }}
               </div>
               <div class="text-body-2 mt-2">{{ candidate.goal || '当前候选没有 goal。' }}</div>
               <div class="text-caption text-medium-emphasis mt-3">
@@ -219,7 +222,7 @@ watch(
               v-for="(item, index) in sessionPreview?.trace?.items || []"
               :key="`${item.sessionRole}-${index}`"
               :title="`${item.sessionRole} · ${item.status}`"
-              :subtitle="item.message || '当前没有补充说明。'"
+              :subtitle="item.message || item.summary || '当前没有补充说明。'"
             >
               <template #append>
                 <v-chip size="x-small" variant="outlined">
