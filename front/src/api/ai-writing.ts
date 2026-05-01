@@ -1,7 +1,7 @@
 import http from './http'
 import { appEnv } from '@/utils/env'
 import { readStorage, storageKeys } from '@/utils/storage'
-import type { AIWritingRecord, AIWritingRequest, AIWritingStreamEvent } from '@/types'
+import type { AIWritingRecord, AIWritingRequest, AIWritingRollbackResult, AIWritingStreamEvent } from '@/types'
 
 export function generateWriting(payload: AIWritingRequest) {
   return http.post<never, AIWritingRecord>('/ai-writing/generate', payload)
@@ -36,6 +36,7 @@ export async function streamGenerateWriting(payload: AIWritingRequest, handlers:
   const decoder = new TextDecoder()
   let buffer = ''
   let completedRecord: AIWritingRecord | null = null
+  let lastEvent: AIWritingStreamEvent | null = null
 
   while (true) {
     let done = false
@@ -45,10 +46,21 @@ export async function streamGenerateWriting(payload: AIWritingRequest, handlers:
       done = readResult.done
       value = readResult.value
     } catch (error) {
+      const recoveredTailEvent = parseSseEvent(buffer.trim())
+      if (recoveredTailEvent) {
+        lastEvent = recoveredTailEvent
+        handlers.onEvent?.(recoveredTailEvent)
+        if (recoveredTailEvent.type === 'error') {
+          throw new Error(recoveredTailEvent.message || 'AI generation failed.')
+        }
+        if (recoveredTailEvent.type === 'complete' && recoveredTailEvent.record) {
+          return recoveredTailEvent.record
+        }
+      }
       if (completedRecord) {
         return completedRecord
       }
-      throw error
+      throw resolveStreamReadError(error, lastEvent, '章节生成连接中断，请稍后重试')
     }
     buffer += decoder.decode(value || new Uint8Array(), { stream: !done }).replace(/\r\n/g, '\n')
 
@@ -58,6 +70,7 @@ export async function streamGenerateWriting(payload: AIWritingRequest, handlers:
       buffer = buffer.slice(separatorIndex + 2)
       const event = parseSseEvent(rawEvent)
       if (event) {
+        lastEvent = event
         handlers.onEvent?.(event)
         if (event.type === 'error') {
           throw new Error(event.message || 'AI generation failed.')
@@ -80,6 +93,7 @@ export async function streamGenerateWriting(payload: AIWritingRequest, handlers:
 
   const tailEvent = parseSseEvent(buffer.trim())
   if (tailEvent) {
+    lastEvent = tailEvent
     handlers.onEvent?.(tailEvent)
     if (tailEvent.type === 'error') {
       throw new Error(tailEvent.message || 'AI generation failed.')
@@ -91,7 +105,10 @@ export async function streamGenerateWriting(payload: AIWritingRequest, handlers:
   }
 
   if (!completedRecord) {
-    throw new Error('The stream ended before a final record was returned.')
+    if (lastEvent?.type === 'error' && lastEvent.message) {
+      throw new Error(lastEvent.message)
+    }
+    throw new Error('生成流提前结束，未返回完整结果。')
   }
 
   return completedRecord
@@ -111,6 +128,14 @@ export function acceptWriting(id: number) {
 
 export function rejectWriting(id: number) {
   return http.post<never, AIWritingRecord>(`/ai-writing/${id}/reject`)
+}
+
+export function rollbackLatestAcceptedScene(chapterId: number) {
+  return http.post<never, AIWritingRollbackResult>(`/ai-writing/chapter/${chapterId}/rollback-latest-scene`)
+}
+
+export function rollbackAllAcceptedScenes(chapterId: number) {
+  return http.post<never, AIWritingRollbackResult>(`/ai-writing/chapter/${chapterId}/rollback-all-scenes`)
 }
 
 function parseSseEvent(rawEvent: string) {
@@ -145,6 +170,26 @@ function parseSseEvent(rawEvent: string) {
       message: payloadText,
     } satisfies AIWritingStreamEvent
   }
+}
+
+function resolveStreamReadError(error: unknown, lastEvent: AIWritingStreamEvent | null, fallback: string) {
+  if (lastEvent?.type === 'error' && lastEvent.message) {
+    return new Error(lastEvent.message)
+  }
+  if (error instanceof Error) {
+    const normalized = error.message.trim().toLowerCase()
+    if (
+      normalized.includes('networkerror')
+      || normalized.includes('network error')
+      || normalized.includes('failed to fetch')
+      || normalized.includes('load failed')
+      || normalized.includes('terminated')
+    ) {
+      return new Error(fallback)
+    }
+    return error
+  }
+  return new Error(fallback)
 }
 
 async function readErrorMessage(response: Response) {

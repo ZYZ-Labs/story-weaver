@@ -25,6 +25,8 @@ public class AIWritingRequestDTO {
 
     private String entryPoint;
 
+    private String sceneId;
+
     public Long getChapterId() {
         return chapterId;
     }
@@ -95,5 +97,13 @@ public class AIWritingRequestDTO {
 
     public void setEntryPoint(String entryPoint) {
         this.entryPoint = entryPoint;
+    }
+
+    public String getSceneId() {
+        return sceneId;
+    }
+
+    public void setSceneId(String sceneId) {
+        this.sceneId = sceneId;
     }
 }

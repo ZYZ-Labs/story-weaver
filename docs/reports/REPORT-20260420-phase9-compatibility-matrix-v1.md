@@ -77,9 +77,10 @@
 
 | 样本 | 用途 | 当前阶段 | 备注 |
 | --- | --- | --- | --- |
-| `旧日王座 chapter 31` | 编排、状态、工作区主回归样本 | Phase 6-9 | 当前主样本 |
-| `旧日王座 chapter 32` | 多镜头连续执行、章节审校样本 | Phase 6-9 | 当前主样本 |
-| `旧日王座 chapter 34` | 兼容预览与骨架稳定性样本 | Phase 6-9 | 当前辅样本 |
+| `旧日王座 chapter 32` | 迁移兼容、状态台、章节级 dry-run 主样本 | Phase 6-10 | 当前主样本 |
+| `旧日王座 chapter 33` | 多镜头连续执行、章节审校样本 | Phase 6-10 | 当前主样本 |
+| `旧日王座 chapter 34` | 兼容预览与骨架稳定性样本 | Phase 6-10 | 当前辅样本 |
+| `旧日王座 chapter 35` | 迁移总览与对象/摘要工作流样本 | Phase 6-10 | 当前辅样本 |
 | `[TEST] 冷启动空章` | `CHAPTER_COLD_START` / 回填空样本 | Phase 6-10 | 仍需补全 |
 | `[TEST] scene fallback 样本` | `SCENE_FALLBACK_TO_LATEST` | Phase 6-10 | 建议保留 |
 | `[TEST] 多 scene 混合状态样本` | handoff / review / migration | Phase 6-10 | 建议保留 |
@@ -101,6 +102,7 @@
 - `GET /api/story-state/projects/{projectId}/chapters/{chapterId}/backfill-dry-run`
 - `GET /api/story-state/projects/{projectId}/chapters/{chapterId}/compatibility-snapshot`
 - `GET /api/story-state/projects/{projectId}/backfill-overview`
+- `GET /api/story-state/projects/{projectId}/backfill-project-dry-run`
 
 作用：
 
@@ -115,6 +117,7 @@
 - 状态台已同步展示这两类结果，避免兼容面只能靠后端接口人工观察
 - 状态台已同步展示页面/API/数据三层灰度边界和 feature flag，不再只能靠计划文档判断当前链路口径
 - 状态台已同步展示项目级迁移总览，不再需要逐章点进状态台才能判断整个项目的回填压力
+- 状态台已同步展示项目级 dry-run 计划，不再只能看“哪里有缺口”，还能看“下一步该迁什么”
 
 ## 下一步
 

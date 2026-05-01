@@ -7,7 +7,7 @@
 
 ## 背景
 
-`docs/story_weaver_module_refactor_prd_v_1.md` 提出了现有小说创作系统在大纲、剧情、因果、人物、章节上的结构性缺陷。结合当前代码基线核对，问题已经比较明确：
+`docs/archive/legacy/references/story_weaver_module_refactor_prd_v_1.md` 提出了现有小说创作系统在大纲、剧情、因果、人物、章节上的结构性缺陷。结合当前代码基线核对，问题已经比较明确：
 
 - 大纲仍是“章节附属物”模型，缺少全局/分卷/章节三级层次，也没有真正的树状结构。
 - 剧情节点仍主要是自由文本和顺序号，缺少明确的链式连接和事件职责语义。
@@ -68,7 +68,7 @@
 
 ## 关键决策记录
 
-- [2026-04-09 Asia/Shanghai] 基于 `docs/story_weaver_module_refactor_prd_v_1.md` 新建正式需求，确认本次重构的重点是“底层故事模块结构升级”，不是再做一层 AI 功能。
+- [2026-04-09 Asia/Shanghai] 基于 `docs/archive/legacy/references/story_weaver_module_refactor_prd_v_1.md` 新建正式需求，确认本次重构的重点是“底层故事模块结构升级”，不是再做一层 AI 功能。
 - [2026-04-09 Asia/Shanghai] 确认采用“兼容优先、分阶段迁移”的实施策略，不做 Big Bang 重写。
 - [2026-04-09 Asia/Shanghai] 核对现有仓库后确认 AI 总导层已经基本完成主链路接入，当前更大的系统瓶颈在故事核心模块的数据模型与引用链。
 - [2026-04-10 Asia/Shanghai] 该需求文档归档。已完成的结构化改造继续保留为底层基础，但后续主线改为“先解决生成可靠性、减小作家认知负担、以对话和摘要驱动结构化沉淀”。

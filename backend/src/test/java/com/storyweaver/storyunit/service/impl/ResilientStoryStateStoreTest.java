@@ -13,6 +13,11 @@ import com.storyweaver.storyunit.patch.PatchOperation;
 import com.storyweaver.storyunit.patch.PatchOperationType;
 import com.storyweaver.storyunit.patch.PatchStatus;
 import com.storyweaver.storyunit.patch.StoryPatch;
+import com.storyweaver.storyunit.runtime.StoryActionIntent;
+import com.storyweaver.storyunit.runtime.StoryLoopStatus;
+import com.storyweaver.storyunit.runtime.StoryNodeCheckpoint;
+import com.storyweaver.storyunit.runtime.StoryOpenLoop;
+import com.storyweaver.storyunit.runtime.StoryResolvedTurn;
 import com.storyweaver.storyunit.snapshot.SnapshotScope;
 import com.storyweaver.storyunit.snapshot.StorySnapshot;
 import com.storyweaver.storyunit.model.FacetType;
@@ -88,6 +93,65 @@ class ResilientStoryStateStoreTest {
                 java.util.Map.of("林沉舟", List.of("观察中")),
                 "scene-1 已写回章节状态"
         ));
+        store.recordIntent(new StoryActionIntent(
+                "intent-1",
+                28L,
+                31L,
+                "checkpoint-1",
+                "node-1",
+                "林沉舟",
+                "player",
+                "option-return",
+                "接受老陈的邀约",
+                "确认回归并登录新纪元",
+                java.util.Map.of("tone", "restrained"),
+                new StorySourceTrace("test", "test", "NodeDecisionService", "intent-1")
+        ));
+        store.recordTurn(new StoryResolvedTurn(
+                "turn-1",
+                28L,
+                31L,
+                "checkpoint-1",
+                "node-1",
+                "intent-1",
+                "林沉舟决定登录游戏，旧战队线重新启动。",
+                List.of("event-1"),
+                java.util.Map.of("loginState", "ready"),
+                List.of("读者知道他准备回归"),
+                List.of("loop-return"),
+                List.of(),
+                "checkpoint-2",
+                new StorySourceTrace("test", "test", "WorldResolverService", "turn-1")
+        ));
+        store.saveCheckpoint(new StoryNodeCheckpoint(
+                "checkpoint-2",
+                28L,
+                31L,
+                "node-2",
+                "checkpoint-1",
+                2,
+                "主角已决定回归，世界仍停在开服前夜。",
+                "读者知道主角将于下一节点进入游戏大厅。",
+                List.of("loop-return"),
+                java.util.Map.of("林沉舟", "出租屋"),
+                java.util.Map.of("林沉舟", "进入新纪元"),
+                List.of("option-enter-game", "option-call-old-team"),
+                new StorySourceTrace("test", "test", "CheckpointService", "checkpoint-2")
+        ));
+        store.saveLoop(new StoryOpenLoop(
+                "loop-return",
+                28L,
+                31L,
+                "node-1",
+                "林沉舟是否正式回归旧战队",
+                StoryLoopStatus.OPEN,
+                "林沉舟",
+                "在见到老陈和旧队友后回收",
+                "turn-1",
+                null,
+                List.of("chapter:31", "character:林沉舟"),
+                new StorySourceTrace("test", "test", "OpenLoopService", "loop-return")
+        ));
 
         assertEquals(1, store.listChapterEvents(28L, 31L).size());
         assertEquals("event-1", store.listChapterEvents(28L, 31L).getFirst().eventId());
@@ -97,6 +161,10 @@ class ResilientStoryStateStoreTest {
         assertEquals("patch-1", store.listChapterPatches(28L, 31L).getFirst().patchId());
         assertEquals("主角决定赴约", store.findChapterRevealState(28L, 31L).orElseThrow().readerKnown().getFirst());
         assertEquals("scene:scene-2:pending", store.findChapterState(28L, 31L).orElseThrow().openLoops().getFirst());
+        assertEquals("intent-1", store.listChapterIntents(28L, 31L).getFirst().intentId());
+        assertEquals("turn-1", store.listChapterTurns(28L, 31L).getFirst().turnId());
+        assertEquals("checkpoint-2", store.findCheckpoint(28L, 31L, "checkpoint-2").orElseThrow().checkpointId());
+        assertEquals("loop-return", store.listChapterLoops(28L, 31L).getFirst().loopId());
     }
 
     private static class NullStringRedisTemplateProvider implements ObjectProvider<org.springframework.data.redis.core.StringRedisTemplate> {

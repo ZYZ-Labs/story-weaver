@@ -3,6 +3,10 @@ package com.storyweaver.storyunit.event;
 public enum StoryEventType {
     UNIT_CREATED,
     UNIT_UPDATED,
+    ACTION_INTENT_RECORDED,
+    TURN_RESOLVED,
+    CHECKPOINT_SAVED,
+    OPEN_LOOP_CHANGED,
     STATE_CHANGED,
     RELATION_CHANGED,
     REVEAL_CHANGED,

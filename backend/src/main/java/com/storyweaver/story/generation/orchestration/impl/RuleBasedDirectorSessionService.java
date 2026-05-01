@@ -1,71 +1,97 @@
 package com.storyweaver.story.generation.orchestration.impl;
 
+import com.storyweaver.story.generation.orchestration.ChapterSkeleton;
+import com.storyweaver.story.generation.orchestration.ChapterSkeletonPlanner;
 import com.storyweaver.story.generation.orchestration.DirectorSessionService;
-import com.storyweaver.story.generation.orchestration.SceneBindingMode;
+import com.storyweaver.story.generation.orchestration.SceneSkeletonItem;
 import com.storyweaver.story.generation.orchestration.StorySessionContextPacket;
 import com.storyweaver.storyunit.session.DirectorCandidate;
 import com.storyweaver.storyunit.session.DirectorCandidateType;
 import org.springframework.stereotype.Service;
+import org.springframework.util.StringUtils;
 
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Optional;
 
 @Service
 public class RuleBasedDirectorSessionService implements DirectorSessionService {
 
+    private final ChapterSkeletonPlanner chapterSkeletonPlanner;
+
+    public RuleBasedDirectorSessionService(ChapterSkeletonPlanner chapterSkeletonPlanner) {
+        this.chapterSkeletonPlanner = chapterSkeletonPlanner;
+    }
+
     @Override
     public List<DirectorCandidate> proposeCandidates(StorySessionContextPacket contextPacket) {
-        List<DirectorCandidate> candidates = new ArrayList<>();
-        boolean firstScene = contextPacket.sceneBindingContext().mode() == SceneBindingMode.CHAPTER_COLD_START
-                || contextPacket.existingSceneStates().isEmpty();
-        String chapterTitle = contextPacket.chapterAnchorBundle().chapterTitle();
-        String chapterSummary = contextPacket.chapterAnchorBundle().chapterSummary();
-        String povName = contextPacket.chapterAnchorBundle().mainPovCharacterName();
-        String firstPlot = contextPacket.chapterAnchorBundle().activePlotTitles().stream().findFirst().orElse("");
-        String firstUnrevealed = contextPacket.readerKnownState().unrevealedFacts().stream().findFirst().orElse(chapterSummary);
-        List<String> baseAnchors = buildBaseAnchors(contextPacket);
+        Optional<ChapterSkeleton> skeleton = chapterSkeletonPlanner.plan(contextPacket.projectId(), contextPacket.chapterId());
+        if (skeleton.isEmpty()) {
+            return List.of();
+        }
 
-        candidates.add(new DirectorCandidate(
-                "opening-" + contextPacket.chapterId(),
-                firstScene ? DirectorCandidateType.OPENING : DirectorCandidateType.TRANSITION,
-                "先让读者理解" + povName + "在《" + chapterTitle + "》中的当前状态，并建立本段进入点。",
-                List.of(firstUnrevealed),
-                baseAnchors,
-                List.of("不要默认读者知道未在正文揭晓的信息", "不要越过当前章节目标快速推进到后续章节"),
-                firstScene ? "完成开场定向并抛出本章触发点后停住。" : "完成与上一段的自然衔接后停住。",
-                900,
-                firstScene
-                        ? "当前章节尚无 scene state，优先建立开场与读者定向。"
-                        : (contextPacket.sceneBindingContext().fallbackUsed()
-                        ? "当前 scene 已回退到最近 scene 上下文，优先做承接。"
-                        : "已绑定请求的 scene state，优先做承接。")
-        ));
+        List<SceneSkeletonItem> scenes = skeleton.get().scenes();
+        for (int index = 0; index < scenes.size(); index++) {
+            SceneSkeletonItem scene = scenes.get(index);
+            if (!scene.sceneId().equals(contextPacket.sceneId())) {
+                continue;
+            }
+            SceneSkeletonItem nextScene = index + 1 < scenes.size() ? scenes.get(index + 1) : null;
+            return List.of(toCandidate(scene, nextScene, contextPacket));
+        }
+        return List.of();
+    }
 
-        candidates.add(new DirectorCandidate(
-                "mainline-" + contextPacket.chapterId(),
-                DirectorCandidateType.MAINLINE_ADVANCE,
-                firstPlot.isBlank() ? "围绕本章摘要推进当前主线。" : "围绕“" + firstPlot + "”推进当前主线。",
-                chapterSummary.isBlank() ? List.of(firstUnrevealed) : List.of(chapterSummary),
-                baseAnchors,
-                List.of("不要引入与本章无关的新冲突", "不要让配角抢走 POV"),
-                "完成当前主线推进的一次明确落点后停住。",
-                1100,
-                "当前章节已有明确主线锚点，适合作为默认推进候选。"
-        ));
+    private DirectorCandidate toCandidate(
+            SceneSkeletonItem scene,
+            SceneSkeletonItem nextScene,
+            StorySessionContextPacket contextPacket) {
+        List<String> mustUseAnchors = mergeUnique(buildBaseAnchors(contextPacket), scene.mustUseAnchors());
+        return new DirectorCandidate(
+                "skeleton-" + scene.sceneId(),
+                resolveCandidateType(scene),
+                scene.goal(),
+                scene.readerReveal(),
+                mustUseAnchors,
+                buildForbiddenMoves(contextPacket, nextScene),
+                scene.stopCondition(),
+                scene.targetWords() == null ? 900 : scene.targetWords(),
+                buildSceneReason(scene, contextPacket)
+        );
+    }
 
-        candidates.add(new DirectorCandidate(
-                "reveal-" + contextPacket.chapterId(),
-                DirectorCandidateType.REVEAL,
-                "以较小篇幅释放本章最关键的一条未揭晓信息，并控制节奏。",
-                List.of(firstUnrevealed),
-                baseAnchors,
-                List.of("不要一次性揭穿所有信息", "不要抢跑到完整真相"),
-                "揭晓一条关键信息并留下后续空间后停住。",
-                800,
-                "读者已知状态里存在明确未揭晓信息，适合生成揭晓候选。"
-        ));
+    private DirectorCandidateType resolveCandidateType(SceneSkeletonItem scene) {
+        if (scene.sceneIndex() <= 1) {
+            return DirectorCandidateType.OPENING;
+        }
+        if (!scene.readerReveal().isEmpty()) {
+            return DirectorCandidateType.REVEAL;
+        }
+        return DirectorCandidateType.MAINLINE_ADVANCE;
+    }
 
-        return candidates;
+    private List<String> buildForbiddenMoves(StorySessionContextPacket contextPacket, SceneSkeletonItem nextScene) {
+        List<String> moves = new ArrayList<>();
+        moves.add("不要重复上一镜头已经完成的推进。");
+        moves.add("不要越过当前镜头停点，抢写到下一镜头。");
+        if (contextPacket.readerKnownState().knownFacts().isEmpty()) {
+            moves.add("不要默认读者已经知道未在正文揭晓的信息。");
+        }
+        if (nextScene != null && StringUtils.hasText(nextScene.goal())) {
+            moves.add("不要提前完成 " + nextScene.sceneId() + " 的核心推进：" + nextScene.goal());
+        }
+        return List.copyOf(moves);
+    }
+
+    private String buildSceneReason(SceneSkeletonItem scene, StorySessionContextPacket contextPacket) {
+        if (StringUtils.hasText(scene.source())) {
+            return "当前镜头来自已保存骨架：" + scene.source();
+        }
+        if (contextPacket.previousSceneHandoff() != null && StringUtils.hasText(contextPacket.previousSceneHandoff().outcomeSummary())) {
+            return "当前镜头承接上一镜头 handoff：" + contextPacket.previousSceneHandoff().outcomeSummary();
+        }
+        return "当前镜头来自章节骨架规划。";
     }
 
     private List<String> buildBaseAnchors(StorySessionContextPacket contextPacket) {
@@ -83,5 +109,12 @@ public class RuleBasedDirectorSessionService implements DirectorSessionService {
             anchors.add("summary=" + contextPacket.chapterAnchorBundle().chapterSummary());
         }
         return List.copyOf(anchors);
+    }
+
+    private List<String> mergeUnique(List<String> left, List<String> right) {
+        LinkedHashSet<String> values = new LinkedHashSet<>();
+        values.addAll(left == null ? List.of() : left);
+        values.addAll(right == null ? List.of() : right);
+        return List.copyOf(values);
     }
 }

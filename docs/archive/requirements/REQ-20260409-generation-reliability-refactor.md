@@ -7,7 +7,7 @@
 
 ## 背景
 
-基于 `docs/reports/REPORT-20260409-old-throne-live-review.md` 对线上项目 `旧日王座` 的真实排查，以及 2026-04-10 的进一步讨论，当前系统的核心问题已经进一步收敛：
+基于 `docs/archive/legacy/reports/REPORT-20260409-old-throne-live-review.md` 对线上项目 `旧日王座` 的真实排查，以及 2026-04-10 的进一步讨论，当前系统的核心问题已经进一步收敛：
 
 - 总导在真实 Provider 上 100% fallback
 - 新结构虽然部分落地，但线上主读路径并未真正切到新结构

@@ -69,7 +69,11 @@ public class DefaultSceneExecutionStateQueryService implements SceneExecutionSta
                 if (!StringUtils.hasText(record.getGeneratedContent())) {
                     continue;
                 }
-                legacyStates.add(toSceneExecutionState(record, projectId, chapterId, sceneIndex));
+                JsonNode traceRoot = readJson(record.getGenerationTraceJson());
+                if (isChapterWorkspaceSceneDraft(traceRoot)) {
+                    continue;
+                }
+                legacyStates.add(toSceneExecutionState(record, traceRoot, projectId, chapterId, sceneIndex));
                 sceneIndex++;
             }
         }
@@ -111,10 +115,10 @@ public class DefaultSceneExecutionStateQueryService implements SceneExecutionSta
 
     private SceneExecutionState toSceneExecutionState(
             AIWritingRecord record,
+            JsonNode traceRoot,
             Long projectId,
             Long chapterId,
             int sceneIndex) {
-        JsonNode traceRoot = readJson(record.getGenerationTraceJson());
         List<String> readerRevealDelta = readStringArray(traceRoot.path("readerReveal").path("revealTargets"));
         List<String> openLoops = readStringArray(traceRoot.path("openLoops"));
         List<String> resolvedLoops = readStringArray(traceRoot.path("resolvedLoops"));
@@ -150,6 +154,11 @@ public class DefaultSceneExecutionStateQueryService implements SceneExecutionSta
                 resolveHandoffLine(record.getGeneratedContent()),
                 resolveOutcomeSummary(record, traceRoot)
         );
+    }
+
+    private boolean isChapterWorkspaceSceneDraft(JsonNode traceRoot) {
+        String entryPoint = text(traceRoot.path("orchestration").path("entryPoint"));
+        return "phase8.chapter-workspace.scene-draft".equals(entryPoint);
     }
 
     private SceneExecutionStatus mapStatus(AIWritingRecord record) {

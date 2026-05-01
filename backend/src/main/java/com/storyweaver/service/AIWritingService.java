@@ -3,6 +3,7 @@ package com.storyweaver.service;
 import com.baomidou.mybatisplus.extension.service.IService;
 import com.storyweaver.domain.dto.AIWritingRequestDTO;
 import com.storyweaver.domain.entity.AIWritingRecord;
+import com.storyweaver.domain.vo.AIWritingRollbackResponseVO;
 import com.storyweaver.domain.vo.AIWritingResponseVO;
 import com.storyweaver.domain.vo.AIWritingStreamEventVO;
 
@@ -24,4 +25,8 @@ public interface AIWritingService extends IService<AIWritingRecord> {
     AIWritingResponseVO acceptGeneratedContent(Long id);
 
     AIWritingResponseVO rejectGeneratedContent(Long id);
+
+    AIWritingRollbackResponseVO rollbackLatestAcceptedScene(Long chapterId);
+
+    AIWritingRollbackResponseVO rollbackAllAcceptedScenes(Long chapterId);
 }

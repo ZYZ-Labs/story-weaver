@@ -5,11 +5,17 @@ import com.storyweaver.storyunit.migration.LegacyBackfillDryRunService;
 import com.storyweaver.storyunit.migration.LegacyBackfillAnalysisService;
 import com.storyweaver.storyunit.migration.LegacyBackfillExecutionService;
 import com.storyweaver.storyunit.migration.LegacyBackfillOverviewService;
+import com.storyweaver.storyunit.migration.LegacyProjectBackfillDryRunService;
 import com.storyweaver.storyunit.migration.MigrationCompatibilitySnapshotService;
+import com.storyweaver.storyunit.consistency.StoryConsistencyCheckService;
+import com.storyweaver.storyunit.service.StoryActionIntentStore;
 import com.storyweaver.storyunit.service.ChapterIncrementalStateStore;
 import com.storyweaver.storyunit.service.ReaderRevealStateStore;
 import com.storyweaver.storyunit.service.StoryEventStore;
+import com.storyweaver.storyunit.service.StoryNodeCheckpointStore;
+import com.storyweaver.storyunit.service.StoryOpenLoopStore;
 import com.storyweaver.storyunit.service.StoryPatchStore;
+import com.storyweaver.storyunit.service.StoryResolvedTurnStore;
 import com.storyweaver.storyunit.service.StorySnapshotStore;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -25,11 +31,17 @@ public class StoryStateController {
     private final StoryPatchStore storyPatchStore;
     private final ReaderRevealStateStore readerRevealStateStore;
     private final ChapterIncrementalStateStore chapterIncrementalStateStore;
+    private final StoryActionIntentStore storyActionIntentStore;
+    private final StoryResolvedTurnStore storyResolvedTurnStore;
+    private final StoryNodeCheckpointStore storyNodeCheckpointStore;
+    private final StoryOpenLoopStore storyOpenLoopStore;
     private final LegacyBackfillAnalysisService legacyBackfillAnalysisService;
     private final LegacyBackfillDryRunService legacyBackfillDryRunService;
     private final LegacyBackfillExecutionService legacyBackfillExecutionService;
     private final LegacyBackfillOverviewService legacyBackfillOverviewService;
+    private final LegacyProjectBackfillDryRunService legacyProjectBackfillDryRunService;
     private final MigrationCompatibilitySnapshotService migrationCompatibilitySnapshotService;
+    private final StoryConsistencyCheckService storyConsistencyCheckService;
 
     public StoryStateController(
             StoryEventStore storyEventStore,
@@ -37,21 +49,33 @@ public class StoryStateController {
             StoryPatchStore storyPatchStore,
             ReaderRevealStateStore readerRevealStateStore,
             ChapterIncrementalStateStore chapterIncrementalStateStore,
+            StoryActionIntentStore storyActionIntentStore,
+            StoryResolvedTurnStore storyResolvedTurnStore,
+            StoryNodeCheckpointStore storyNodeCheckpointStore,
+            StoryOpenLoopStore storyOpenLoopStore,
             LegacyBackfillAnalysisService legacyBackfillAnalysisService,
             LegacyBackfillDryRunService legacyBackfillDryRunService,
             LegacyBackfillExecutionService legacyBackfillExecutionService,
             LegacyBackfillOverviewService legacyBackfillOverviewService,
-            MigrationCompatibilitySnapshotService migrationCompatibilitySnapshotService) {
+            LegacyProjectBackfillDryRunService legacyProjectBackfillDryRunService,
+            MigrationCompatibilitySnapshotService migrationCompatibilitySnapshotService,
+            StoryConsistencyCheckService storyConsistencyCheckService) {
         this.storyEventStore = storyEventStore;
         this.storySnapshotStore = storySnapshotStore;
         this.storyPatchStore = storyPatchStore;
         this.readerRevealStateStore = readerRevealStateStore;
         this.chapterIncrementalStateStore = chapterIncrementalStateStore;
+        this.storyActionIntentStore = storyActionIntentStore;
+        this.storyResolvedTurnStore = storyResolvedTurnStore;
+        this.storyNodeCheckpointStore = storyNodeCheckpointStore;
+        this.storyOpenLoopStore = storyOpenLoopStore;
         this.legacyBackfillAnalysisService = legacyBackfillAnalysisService;
         this.legacyBackfillDryRunService = legacyBackfillDryRunService;
         this.legacyBackfillExecutionService = legacyBackfillExecutionService;
         this.legacyBackfillOverviewService = legacyBackfillOverviewService;
+        this.legacyProjectBackfillDryRunService = legacyProjectBackfillDryRunService;
         this.migrationCompatibilitySnapshotService = migrationCompatibilitySnapshotService;
+        this.storyConsistencyCheckService = storyConsistencyCheckService;
     }
 
     @GetMapping("/api/story-state/projects/{projectId}/chapters/{chapterId}/events")
@@ -113,6 +137,50 @@ public class StoryStateController {
                 "获取成功",
                 chapterIncrementalStateStore.findChapterState(projectId, chapterId).orElse(null)
         ));
+    }
+
+    @GetMapping("/api/story-state/projects/{projectId}/chapters/{chapterId}/action-intents")
+    public ResponseEntity<?> chapterActionIntents(
+            @PathVariable Long projectId,
+            @PathVariable Long chapterId,
+            @RequestHeader(value = "Authorization", required = false) String authorizationHeader) {
+        if (!AuthHeaderSupport.hasValidBearerToken(authorizationHeader)) {
+            return AuthHeaderSupport.unauthorizedResponse();
+        }
+        return ResponseEntity.ok(ApiResponse.success("获取成功", storyActionIntentStore.listChapterIntents(projectId, chapterId)));
+    }
+
+    @GetMapping("/api/story-state/projects/{projectId}/chapters/{chapterId}/resolved-turns")
+    public ResponseEntity<?> chapterResolvedTurns(
+            @PathVariable Long projectId,
+            @PathVariable Long chapterId,
+            @RequestHeader(value = "Authorization", required = false) String authorizationHeader) {
+        if (!AuthHeaderSupport.hasValidBearerToken(authorizationHeader)) {
+            return AuthHeaderSupport.unauthorizedResponse();
+        }
+        return ResponseEntity.ok(ApiResponse.success("获取成功", storyResolvedTurnStore.listChapterTurns(projectId, chapterId)));
+    }
+
+    @GetMapping("/api/story-state/projects/{projectId}/chapters/{chapterId}/node-checkpoints")
+    public ResponseEntity<?> chapterNodeCheckpoints(
+            @PathVariable Long projectId,
+            @PathVariable Long chapterId,
+            @RequestHeader(value = "Authorization", required = false) String authorizationHeader) {
+        if (!AuthHeaderSupport.hasValidBearerToken(authorizationHeader)) {
+            return AuthHeaderSupport.unauthorizedResponse();
+        }
+        return ResponseEntity.ok(ApiResponse.success("获取成功", storyNodeCheckpointStore.listChapterCheckpoints(projectId, chapterId)));
+    }
+
+    @GetMapping("/api/story-state/projects/{projectId}/chapters/{chapterId}/open-loops")
+    public ResponseEntity<?> chapterOpenLoops(
+            @PathVariable Long projectId,
+            @PathVariable Long chapterId,
+            @RequestHeader(value = "Authorization", required = false) String authorizationHeader) {
+        if (!AuthHeaderSupport.hasValidBearerToken(authorizationHeader)) {
+            return AuthHeaderSupport.unauthorizedResponse();
+        }
+        return ResponseEntity.ok(ApiResponse.success("获取成功", storyOpenLoopStore.listChapterLoops(projectId, chapterId)));
     }
 
     @GetMapping("/api/story-state/projects/{projectId}/chapters/{chapterId}/backfill-analysis")
@@ -181,6 +249,33 @@ public class StoryStateController {
         return ResponseEntity.ok(ApiResponse.success(
                 "获取成功",
                 legacyBackfillOverviewService.buildProjectOverview(projectId).orElse(null)
+        ));
+    }
+
+    @GetMapping("/api/story-state/projects/{projectId}/backfill-project-dry-run")
+    public ResponseEntity<?> projectBackfillDryRun(
+            @PathVariable Long projectId,
+            @RequestHeader(value = "Authorization", required = false) String authorizationHeader) {
+        if (!AuthHeaderSupport.hasValidBearerToken(authorizationHeader)) {
+            return AuthHeaderSupport.unauthorizedResponse();
+        }
+        return ResponseEntity.ok(ApiResponse.success(
+                "获取成功",
+                legacyProjectBackfillDryRunService.buildProjectDryRun(projectId).orElse(null)
+        ));
+    }
+
+    @GetMapping("/api/story-state/projects/{projectId}/chapters/{chapterId}/consistency-check")
+    public ResponseEntity<?> chapterConsistencyCheck(
+            @PathVariable Long projectId,
+            @PathVariable Long chapterId,
+            @RequestHeader(value = "Authorization", required = false) String authorizationHeader) {
+        if (!AuthHeaderSupport.hasValidBearerToken(authorizationHeader)) {
+            return AuthHeaderSupport.unauthorizedResponse();
+        }
+        return ResponseEntity.ok(ApiResponse.success(
+                "获取成功",
+                storyConsistencyCheckService.checkChapter(projectId, chapterId).orElse(null)
         ));
     }
 }

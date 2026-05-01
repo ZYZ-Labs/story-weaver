@@ -2,6 +2,7 @@ package com.storyweaver.story.generation.orchestration.impl;
 
 import com.storyweaver.story.generation.orchestration.SceneExecutionWriteResult;
 import com.storyweaver.story.generation.orchestration.SceneExecutionWriteService;
+import com.storyweaver.story.generation.orchestration.SceneSkeletonItem;
 import com.storyweaver.story.generation.orchestration.StorySessionContextPacket;
 import com.storyweaver.story.generation.orchestration.WriterSessionResult;
 import com.storyweaver.storyunit.context.ReaderKnownStateView;
@@ -27,6 +28,7 @@ import com.storyweaver.storyunit.snapshot.StorySnapshot;
 import com.storyweaver.storyunit.service.SceneRuntimeStateStore;
 import com.storyweaver.storyunit.session.ReviewDecision;
 import com.storyweaver.storyunit.session.ReviewResult;
+import com.storyweaver.storyunit.session.SceneContinuityState;
 import com.storyweaver.storyunit.session.SceneExecutionState;
 import com.storyweaver.storyunit.session.SceneExecutionStatus;
 import com.storyweaver.storyunit.session.SceneHandoffSnapshot;
@@ -54,6 +56,7 @@ public class DefaultSceneExecutionWriteService implements SceneExecutionWriteSer
     private final StoryPatchStore storyPatchStore;
     private final ReaderRevealStateStore readerRevealStateStore;
     private final ChapterIncrementalStateStore chapterIncrementalStateStore;
+    private final AIContinuityStateService aiContinuityStateService;
 
     public DefaultSceneExecutionWriteService(
             SceneRuntimeStateStore sceneRuntimeStateStore,
@@ -61,13 +64,15 @@ public class DefaultSceneExecutionWriteService implements SceneExecutionWriteSer
             StorySnapshotStore storySnapshotStore,
             StoryPatchStore storyPatchStore,
             ReaderRevealStateStore readerRevealStateStore,
-            ChapterIncrementalStateStore chapterIncrementalStateStore) {
+            ChapterIncrementalStateStore chapterIncrementalStateStore,
+            AIContinuityStateService aiContinuityStateService) {
         this.sceneRuntimeStateStore = sceneRuntimeStateStore;
         this.storyEventStore = storyEventStore;
         this.storySnapshotStore = storySnapshotStore;
         this.storyPatchStore = storyPatchStore;
         this.readerRevealStateStore = readerRevealStateStore;
         this.chapterIncrementalStateStore = chapterIncrementalStateStore;
+        this.aiContinuityStateService = aiContinuityStateService;
     }
 
     @Override
@@ -76,17 +81,102 @@ public class DefaultSceneExecutionWriteService implements SceneExecutionWriteSer
             WriterExecutionBrief writerExecutionBrief,
             WriterSessionResult writerSessionResult,
             ReviewDecision reviewDecision) {
+        SceneExecutionStatus persistedStatus = mapDraftStatus(reviewDecision);
+        return persistWrite(
+                contextPacket,
+                writerExecutionBrief,
+                writerSessionResult,
+                reviewDecision,
+                persistedStatus,
+                "",
+                "phase6.runtime-store",
+                Map.of()
+        );
+    }
+
+    @Override
+    public SceneExecutionWriteResult writeAccepted(
+            StorySessionContextPacket contextPacket,
+            SceneSkeletonItem currentScene,
+            SceneSkeletonItem nextScene,
+            Long writingRecordId,
+            String acceptedContent) {
+        SceneContinuityState previousContinuityState = SceneContinuitySupport.resolveContinuityState(
+                contextPacket.previousSceneHandoff(),
+                contextPacket.sceneBindingContext().resolvedSceneState(),
+                contextPacket.existingSceneStates(),
+                nextScene == null ? "" : nextScene.sceneId(),
+                nextScene == null ? "" : nextScene.goal(),
+                firstNonBlank(currentScene.stopCondition(), "完成当前镜头目标后停住。")
+        );
+        String acceptedSummary = summarizeAcceptedContent(acceptedContent);
+        String acceptedHandoff = extractTailSentence(acceptedContent, HANDOFF_LIMIT);
+        SceneContinuityState continuityState = aiContinuityStateService.extractAcceptedContinuityState(
+                currentScene.sceneId(),
+                acceptedContent,
+                acceptedSummary,
+                acceptedHandoff,
+                currentScene.readerReveal(),
+                nextScene == null ? "" : nextScene.sceneId(),
+                nextScene == null ? "" : nextScene.goal(),
+                firstNonBlank(currentScene.stopCondition(), "完成当前镜头目标后停住。"),
+                previousContinuityState
+        );
+        WriterExecutionBrief acceptedBrief = buildAcceptedBrief(
+                contextPacket,
+                currentScene,
+                nextScene,
+                writingRecordId,
+                continuityState
+        );
+        WriterSessionResult writerSessionResult = new WriterSessionResult(
+                acceptedBrief.sceneId(),
+                acceptedBrief.chosenCandidateId(),
+                acceptedContent,
+                acceptedSummary
+        );
+        ReviewDecision reviewDecision = new ReviewDecision(
+                acceptedBrief.sceneId(),
+                ReviewResult.PASS,
+                "章节工作区已接受当前镜头正文，runtime/handoff 已按真实正文写回。",
+                List.of(),
+                false,
+                ""
+        );
+        return persistWrite(
+                contextPacket,
+                acceptedBrief,
+                writerSessionResult,
+                reviewDecision,
+                SceneExecutionStatus.COMPLETED,
+                acceptedBrief.nextSceneId(),
+                "phase8.accepted-scene-draft",
+                buildAcceptedStateDelta(writingRecordId, continuityState)
+        );
+    }
+
+    private SceneExecutionWriteResult persistWrite(
+            StorySessionContextPacket contextPacket,
+            WriterExecutionBrief writerExecutionBrief,
+            WriterSessionResult writerSessionResult,
+            ReviewDecision reviewDecision,
+            SceneExecutionStatus persistedStatus,
+            String nextSceneId,
+            String source,
+            Map<String, Object> extraStateDelta) {
         SceneExecutionState sceneExecutionState = buildSceneExecutionState(
                 contextPacket,
                 writerExecutionBrief,
                 writerSessionResult,
-                reviewDecision
+                persistedStatus,
+                source,
+                extraStateDelta
         );
         SceneHandoffSnapshot handoffSnapshot = buildHandoffSnapshot(
                 contextPacket,
-                writerSessionResult,
                 reviewDecision,
-                sceneExecutionState
+                sceneExecutionState,
+                nextSceneId
         );
         sceneRuntimeStateStore.saveSceneState(sceneExecutionState);
         sceneRuntimeStateStore.saveHandoff(handoffSnapshot);
@@ -142,22 +232,27 @@ public class DefaultSceneExecutionWriteService implements SceneExecutionWriteSer
             StorySessionContextPacket contextPacket,
             WriterExecutionBrief writerExecutionBrief,
             WriterSessionResult writerSessionResult,
-            ReviewDecision reviewDecision) {
+            SceneExecutionStatus persistedStatus,
+            String source,
+            Map<String, Object> extraStateDelta) {
         String sceneId = sceneIdentity(writerSessionResult.sceneId(), contextPacket.sceneId());
         int sceneIndex = parseSceneIndex(sceneId, contextPacket.existingSceneStates().size() + 1);
         Map<String, Object> stateDelta = new LinkedHashMap<>();
-        stateDelta.put("source", "phase6.runtime-store");
+        stateDelta.put("source", firstNonBlank(source, "phase6.runtime-store"));
         stateDelta.put("candidateId", writerSessionResult.candidateId());
-        stateDelta.put("reviewResult", reviewDecision.result().name());
+        stateDelta.put("reviewResult", persistedStatus.name());
         stateDelta.put("targetWords", writerExecutionBrief.targetWords());
         stateDelta.put("createdAt", LocalDateTime.now().toString());
+        if (extraStateDelta != null && !extraStateDelta.isEmpty()) {
+            stateDelta.putAll(extraStateDelta);
+        }
 
         return new SceneExecutionState(
                 contextPacket.projectId(),
                 contextPacket.chapterId(),
                 sceneId,
                 sceneIndex,
-                mapStatus(reviewDecision),
+                persistedStatus,
                 writerSessionResult.candidateId(),
                 writerExecutionBrief.goal(),
                 writerExecutionBrief.stopCondition(),
@@ -172,15 +267,14 @@ public class DefaultSceneExecutionWriteService implements SceneExecutionWriteSer
 
     private SceneHandoffSnapshot buildHandoffSnapshot(
             StorySessionContextPacket contextPacket,
-            WriterSessionResult writerSessionResult,
             ReviewDecision reviewDecision,
-            SceneExecutionState sceneExecutionState) {
-        String nextSceneId = "scene-" + (sceneExecutionState.sceneIndex() + 1);
+            SceneExecutionState sceneExecutionState,
+            String nextSceneId) {
         return new SceneHandoffSnapshot(
                 contextPacket.projectId(),
                 contextPacket.chapterId(),
                 sceneExecutionState.sceneId(),
-                nextSceneId,
+                sceneExecutionState.status() == SceneExecutionStatus.COMPLETED ? firstNonBlank(nextSceneId) : "",
                 sceneExecutionState.handoffLine(),
                 sceneExecutionState.outcomeSummary(),
                 sceneExecutionState.readerRevealDelta(),
@@ -255,7 +349,9 @@ public class DefaultSceneExecutionWriteService implements SceneExecutionWriteSer
     private StoryPatch buildRevealStatePatch(
             StorySessionContextPacket contextPacket,
             SceneExecutionState sceneExecutionState) {
-        List<String> revealDelta = sanitizeDistinct(sceneExecutionState.readerRevealDelta());
+        List<String> revealDelta = sceneExecutionState.status() == SceneExecutionStatus.COMPLETED
+                ? sanitizeDistinct(sceneExecutionState.readerRevealDelta())
+                : List.of();
         List<PatchOperation> operations = revealDelta.isEmpty()
                 ? List.of()
                 : List.of(new PatchOperation(PatchOperationType.MERGE, "/readerKnown", revealDelta));
@@ -318,7 +414,10 @@ public class DefaultSceneExecutionWriteService implements SceneExecutionWriteSer
             SceneExecutionState sceneExecutionState,
             SceneHandoffSnapshot handoffSnapshot) {
         String currentSceneLoop = scenePendingLoop(sceneExecutionState.sceneId());
-        String nextSceneLoop = scenePendingLoop(handoffSnapshot.toSceneId());
+        boolean completed = sceneExecutionState.status() == SceneExecutionStatus.COMPLETED;
+        String nextSceneLoop = StringUtils.hasText(handoffSnapshot.toSceneId())
+                ? scenePendingLoop(handoffSnapshot.toSceneId())
+                : "";
         List<String> activeLocations = sanitizeDistinct(contextPacket.characterRuntimeStates().stream()
                 .map(com.storyweaver.storyunit.context.CharacterRuntimeStateView::currentLocation)
                 .toList());
@@ -332,8 +431,10 @@ public class DefaultSceneExecutionWriteService implements SceneExecutionWriteSer
                 .filter(character -> !character.stateTags().isEmpty())
                 .collect(LinkedHashMap::new, (map, character) -> map.put(character.characterName(), character.stateTags()), Map::putAll));
         List<PatchOperation> operations = new ArrayList<>();
-        operations.add(new PatchOperation(PatchOperationType.MERGE, "/resolvedLoops", List.of(currentSceneLoop)));
-        if (sceneExecutionState.status() != SceneExecutionStatus.FAILED) {
+        if (completed) {
+            operations.add(new PatchOperation(PatchOperationType.MERGE, "/resolvedLoops", List.of(currentSceneLoop)));
+        }
+        if (completed && StringUtils.hasText(nextSceneLoop)) {
             operations.add(new PatchOperation(PatchOperationType.MERGE, "/openLoops", List.of(nextSceneLoop)));
         }
         operations.add(new PatchOperation(PatchOperationType.REPLACE, "/activeLocations", activeLocations));
@@ -346,7 +447,7 @@ public class DefaultSceneExecutionWriteService implements SceneExecutionWriteSer
                 FacetType.STATE,
                 List.copyOf(operations),
                 "scene " + sceneExecutionState.sceneId() + " 写回章节状态：openLoops="
-                        + (sceneExecutionState.status() == SceneExecutionStatus.FAILED ? 0 : 1)
+                        + (completed && StringUtils.hasText(nextSceneLoop) ? 1 : 0)
                         + "，locations=" + activeLocations.size(),
                 PatchStatus.APPLIED,
                 sourceTrace(sceneExecutionState.sceneId())
@@ -512,9 +613,17 @@ public class DefaultSceneExecutionWriteService implements SceneExecutionWriteSer
             SceneHandoffSnapshot handoffSnapshot,
             List<String> openLoops,
             List<String> activeLocations) {
+        if (sceneExecutionState.status() != SceneExecutionStatus.COMPLETED) {
+            return "scene " + sceneExecutionState.sceneId()
+                    + " 已写入运行态草稿，但尚未正式接纳；开放回路 "
+                    + openLoops.size()
+                    + " 条，活动地点 "
+                    + activeLocations.size()
+                    + " 个";
+        }
         return "scene " + sceneExecutionState.sceneId()
                 + " 已写回章节状态，下一镜头 "
-                + handoffSnapshot.toSceneId()
+                + firstNonBlank(handoffSnapshot.toSceneId(), "无")
                 + " 待执行，开放回路 "
                 + openLoops.size()
                 + " 条，活动地点 "
@@ -580,9 +689,12 @@ public class DefaultSceneExecutionWriteService implements SceneExecutionWriteSer
                 .toList();
     }
 
-    private SceneExecutionStatus mapStatus(ReviewDecision reviewDecision) {
+    private SceneExecutionStatus mapDraftStatus(ReviewDecision reviewDecision) {
         if (reviewDecision.result() == ReviewResult.PASS) {
-            return SceneExecutionStatus.COMPLETED;
+            return SceneExecutionStatus.WRITTEN;
+        }
+        if (reviewDecision.result() == ReviewResult.BLOCK) {
+            return SceneExecutionStatus.BLOCKED;
         }
         if (reviewDecision.canAutoRepair()) {
             return SceneExecutionStatus.REVIEWING;
@@ -591,11 +703,66 @@ public class DefaultSceneExecutionWriteService implements SceneExecutionWriteSer
     }
 
     private String resolveHandoffLine(WriterSessionResult writerSessionResult, WriterExecutionBrief writerExecutionBrief) {
-        String draftText = truncate(writerSessionResult.draftText(), HANDOFF_LIMIT);
+        String draftText = extractTailSentence(writerSessionResult.draftText(), HANDOFF_LIMIT);
         if (StringUtils.hasText(draftText)) {
             return draftText;
         }
-        return truncate(writerExecutionBrief.handoffLine(), HANDOFF_LIMIT);
+        return extractTailSentence(writerExecutionBrief.handoffLine(), HANDOFF_LIMIT);
+    }
+
+    private WriterExecutionBrief buildAcceptedBrief(
+            StorySessionContextPacket contextPacket,
+            SceneSkeletonItem currentScene,
+            SceneSkeletonItem nextScene,
+            Long writingRecordId,
+            SceneContinuityState continuityState) {
+        return new WriterExecutionBrief(
+                contextPacket.projectId(),
+                contextPacket.chapterId(),
+                currentScene.sceneId(),
+                writingRecordId == null ? "accepted-scene-draft" : "accepted-record-" + writingRecordId,
+                firstNonBlank(currentScene.goal(), contextPacket.chapterSummary().summary()),
+                currentScene.readerReveal(),
+                currentScene.mustUseAnchors(),
+                List.of("当前镜头已经正式接纳，禁止回退到上一镜头。"),
+                firstNonBlank(currentScene.stopCondition(), "完成当前镜头目标后停住。"),
+                currentScene.targetWords(),
+                SceneContinuitySupport.buildConstraintLines(continuityState),
+                continuityState.summary(),
+                continuityState.handoffLine(),
+                nextScene == null ? "" : nextScene.sceneId(),
+                nextScene == null ? "" : nextScene.goal(),
+                continuityState
+        );
+    }
+
+    private Map<String, Object> buildAcceptedStateDelta(Long writingRecordId, SceneContinuityState continuityState) {
+        Map<String, Object> stateDelta = new LinkedHashMap<>();
+        if (writingRecordId != null) {
+            stateDelta.put("writingRecordId", writingRecordId);
+        }
+        if (continuityState != null && !continuityState.isEmpty()) {
+            stateDelta.put("continuity", continuityState.toStateDeltaMap());
+        }
+        return stateDelta.isEmpty() ? Map.of() : Map.copyOf(stateDelta);
+    }
+
+    private String summarizeAcceptedContent(String acceptedContent) {
+        return truncate(acceptedContent, SUMMARY_LIMIT);
+    }
+
+    private String extractTailSentence(String value, int limit) {
+        if (!StringUtils.hasText(value)) {
+            return "";
+        }
+        String normalized = value.replaceAll("\\s+", " ").trim();
+        String[] segments = normalized.split("(?<=[。！？!?])");
+        for (int index = segments.length - 1; index >= 0; index--) {
+            if (StringUtils.hasText(segments[index])) {
+                return truncate(segments[index], limit);
+            }
+        }
+        return truncate(normalized, limit);
     }
 
     private String sceneIdentity(String writerSceneId, String contextSceneId) {

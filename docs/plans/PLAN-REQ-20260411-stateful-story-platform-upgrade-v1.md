@@ -2,9 +2,9 @@
 
 - Req ID: REQ-20260411-stateful-story-platform-upgrade
 - Plan Version: v1
-- Status: In Progress
+- Status: Completed
 - Created At: 2026-04-11 Asia/Shanghai
-- Updated At: 2026-04-20 Asia/Shanghai
+- Updated At: 2026-04-24 Asia/Shanghai
 
 ## 计划定位
 
@@ -490,9 +490,9 @@
 
 - `Phase 9` 详细计划已创建：
   - `docs/plans/PLAN-REQ-20260411-stateful-story-platform-upgrade-phase9-migration-compatibility-v1.md`
-- 当前优先级：
-  - 先冻结 `Phase 9.1` 兼容清单与迁移样本
-  - 暂不直接进入破坏式大迁移
+- 已完成
+- 已完成两轮线上联调与样本修正
+- 页面级统一验收模板转入 `Phase 10.3`
 
 ### Phase 10. 测试、观测与回放
 
@@ -512,6 +512,26 @@
 退出条件：
 
 - 关键项目样本可重复回放并定位问题。
+
+当前状态：
+
+- 详细计划已创建：
+  - `docs/plans/PLAN-REQ-20260411-stateful-story-platform-upgrade-phase10-testing-observability-replay-v1.md`
+- 已完成
+- 已完成：
+  - `Phase 10.1` 固定回放矩阵：
+    - `docs/test-data/TESTDATA-20260424-phase10-replay-matrix-v1.md`
+  - `Phase 10.2` 状态一致性检查：
+    - `docs/reports/REPORT-20260424-phase10-consistency-baseline-v1.md`
+  - `Phase 10.3` 页面级人工验收模板：
+    - `docs/guides/GUIDE-20260424-phase10-page-acceptance-template-v1.md`
+  - `Phase 10.4` 阶段收口报告：
+    - `docs/reports/REPORT-20260424-platform-upgrade-final-closure-v1.md`
+
+## 最终结论
+
+- 本计划对应的 `REQ-20260411-stateful-story-platform-upgrade` 已完成。
+- 后续问题不再继续追加 phase，而应拆分为新的稳定性、体验或产品化需求独立推进。
 
 ## 详细实施规则
 

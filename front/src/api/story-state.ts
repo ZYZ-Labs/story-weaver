@@ -4,9 +4,11 @@ import type {
   LegacyChapterBackfillAnalysisView,
   LegacyBackfillDryRunView,
   LegacyBackfillExecutionResultView,
+  LegacyProjectBackfillDryRunView,
   LegacyProjectBackfillOverviewView,
   MigrationCompatibilitySnapshotView,
   ReaderRevealStateView,
+  StoryConsistencyCheckView,
 } from '@/types'
 
 export function getChapterState(projectId: number, chapterId: number) {
@@ -48,5 +50,17 @@ export function getChapterCompatibilitySnapshot(projectId: number, chapterId: nu
 export function getProjectBackfillOverview(projectId: number) {
   return http.get<never, LegacyProjectBackfillOverviewView>(
     `/story-state/projects/${projectId}/backfill-overview`,
+  )
+}
+
+export function getProjectBackfillDryRun(projectId: number) {
+  return http.get<never, LegacyProjectBackfillDryRunView>(
+    `/story-state/projects/${projectId}/backfill-project-dry-run`,
+  )
+}
+
+export function getChapterConsistencyCheck(projectId: number, chapterId: number) {
+  return http.get<never, StoryConsistencyCheckView>(
+    `/story-state/projects/${projectId}/chapters/${chapterId}/consistency-check`,
   )
 }

@@ -251,6 +251,7 @@ function getWritingStatusLabel(value?: string) {
     draft: '草稿',
     accepted: '已采纳',
     rejected: '已拒绝',
+    rolled_back: '已撤回',
   }
   return mapping[value || ''] || value || '草稿'
 }

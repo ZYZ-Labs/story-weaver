@@ -206,6 +206,49 @@ class DefaultSceneExecutionStateQueryServiceTest {
         assertEquals("主角最终决定赴约。", scenes.get(1).outcomeSummary());
     }
 
+    @Test
+    void shouldIgnoreChapterWorkspaceSceneDraftRecordsWhenDerivingLegacyStates() {
+        AIWritingRecordMapper mapper = mock(AIWritingRecordMapper.class);
+        ChapterService chapterService = mock(ChapterService.class);
+        @SuppressWarnings("unchecked")
+        ObjectProvider<SceneRuntimeStateStore> runtimeStoreProvider = mock(ObjectProvider.class);
+
+        Chapter chapter = new Chapter();
+        chapter.setId(31L);
+        chapter.setProjectId(28L);
+
+        AIWritingRecord record = record(
+                103L,
+                31L,
+                "draft",
+                "continue",
+                "【镜头ID】scene-2\n继续推进训练赛前的犹豫",
+                "镜头草稿正文。",
+                """
+                {
+                  "orchestration": {
+                    "entryPoint": "phase8.chapter-workspace.scene-draft",
+                    "sceneId": "scene-2"
+                  }
+                }
+                """,
+                LocalDateTime.of(2026, 4, 17, 12, 0)
+        );
+
+        when(chapterService.getById(31L)).thenReturn(chapter);
+        when(mapper.findByChapterId(31L)).thenReturn(List.of(record));
+        when(runtimeStoreProvider.getIfAvailable()).thenReturn(null);
+
+        DefaultSceneExecutionStateQueryService service = new DefaultSceneExecutionStateQueryService(
+                mapper,
+                chapterService,
+                new ObjectMapper(),
+                runtimeStoreProvider
+        );
+
+        assertTrue(service.listChapterScenes(28L, 31L).isEmpty());
+    }
+
     private AIWritingRecord record(
             Long id,
             Long chapterId,

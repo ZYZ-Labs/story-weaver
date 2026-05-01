@@ -13,7 +13,7 @@ import type {
 export const useWritingStore = defineStore('writing', () => {
   const records = ref<AIWritingRecord[]>([])
   const projectRecords = ref<AIWritingRecord[]>([])
-  const streamStates = ref<Record<number, AIWritingStreamState>>({})
+  const streamStates = ref<Record<string, AIWritingStreamState>>({})
   const loading = ref(false)
 
   function createEmptyStreamState(): AIWritingStreamState {
@@ -29,11 +29,12 @@ export const useWritingStore = defineStore('writing', () => {
     }
   }
 
-  function getStreamState(chapterId?: number | null) {
-    if (!chapterId) {
+  function getStreamState(chapterId?: number | null, scopeKey?: string | null) {
+    const resolvedScopeKey = resolveScopeKey(chapterId, scopeKey)
+    if (!resolvedScopeKey) {
       return createEmptyStreamState()
     }
-    return streamStates.value[chapterId] || createEmptyStreamState()
+    return streamStates.value[resolvedScopeKey] || createEmptyStreamState()
   }
 
   async function fetchByChapter(chapterId: number) {
@@ -56,10 +57,12 @@ export const useWritingStore = defineStore('writing', () => {
     payload: AIWritingRequest,
     handlers: {
       onEvent?: (event: AIWritingStreamEvent) => void
+      scopeKey?: string
     } = {},
   ) {
     const requestId = `${Date.now()}-${Math.random().toString(36).slice(2)}`
-    streamStates.value[payload.chapterId] = {
+    const streamScopeKey = resolveScopeKey(payload.chapterId, handlers.scopeKey)
+    streamStates.value[streamScopeKey] = {
       requestId,
       generating: true,
       content: '',
@@ -75,7 +78,7 @@ export const useWritingStore = defineStore('writing', () => {
     try {
       const record = await writingApi.streamGenerateWriting(payload, {
         onEvent: (event) => {
-          const currentState = streamStates.value[payload.chapterId]
+          const currentState = streamStates.value[streamScopeKey]
           if (!currentState || currentState.requestId !== requestId) {
             return
           }
@@ -107,7 +110,7 @@ export const useWritingStore = defineStore('writing', () => {
         },
       })
 
-      const currentState = streamStates.value[payload.chapterId]
+      const currentState = streamStates.value[streamScopeKey]
       const completedRecord = mergeCompletedRecord(record, currentState?.content || '')
       records.value.unshift(completedRecord)
       projectRecords.value.unshift(completedRecord)
@@ -118,7 +121,7 @@ export const useWritingStore = defineStore('writing', () => {
       }
       return completedRecord
     } catch (error) {
-      const currentState = streamStates.value[payload.chapterId]
+      const currentState = streamStates.value[streamScopeKey]
       if (currentState?.requestId === requestId) {
         currentState.generating = false
         currentState.error = error instanceof Error ? error.message : 'AI 生成失败'
@@ -148,8 +151,17 @@ export const useWritingStore = defineStore('writing', () => {
     return updated
   }
 
+  async function rollbackLatestScene(chapterId: number) {
+    return writingApi.rollbackLatestAcceptedScene(chapterId)
+  }
+
+  async function rollbackAllScenes(chapterId: number) {
+    return writingApi.rollbackAllAcceptedScenes(chapterId)
+  }
+
   function filterPendingRecords(items: AIWritingRecord[]) {
-    return (items || []).filter((item) => item.status !== 'accepted' && item.status !== 'rejected')
+    return (items || []).filter((item) =>
+      item.status !== 'accepted' && item.status !== 'rejected' && item.status !== 'rolled_back')
   }
 
   function removeResolvedRecord(record: AIWritingRecord) {
@@ -157,11 +169,33 @@ export const useWritingStore = defineStore('writing', () => {
     projectRecords.value = projectRecords.value.filter((item) => item.id !== record.id)
 
     if (record.chapterId) {
-      const streamState = streamStates.value[record.chapterId]
-      if (streamState?.lastRecord?.id === record.id) {
-        streamState.lastRecord = records.value.find((item) => item.chapterId === record.chapterId) || null
+      for (const streamState of Object.values(streamStates.value)) {
+        if (streamState?.lastRecord?.id === record.id) {
+          streamState.lastRecord = null
+          streamState.content = ''
+          streamState.error = ''
+          streamState.logs = []
+        }
       }
     }
+  }
+
+  function clearStreamState(chapterId?: number | null, scopeKey?: string | null) {
+    const resolvedScopeKey = resolveScopeKey(chapterId, scopeKey)
+    if (!resolvedScopeKey) {
+      return
+    }
+    delete streamStates.value[resolvedScopeKey]
+  }
+
+  function resolveScopeKey(chapterId?: number | null, scopeKey?: string | null) {
+    if (scopeKey && scopeKey.trim()) {
+      return scopeKey.trim()
+    }
+    if (!chapterId) {
+      return ''
+    }
+    return `chapter:${chapterId}`
   }
 
   function toLogItem(event: AIWritingStreamEvent): AIWritingStreamLogItem {
@@ -235,5 +269,8 @@ export const useWritingStore = defineStore('writing', () => {
     generateStream,
     accept,
     reject,
+    rollbackLatestScene,
+    rollbackAllScenes,
+    clearStreamState,
   }
 })

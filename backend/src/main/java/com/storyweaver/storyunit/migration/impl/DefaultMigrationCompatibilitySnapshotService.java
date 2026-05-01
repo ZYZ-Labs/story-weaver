@@ -3,6 +3,7 @@ package com.storyweaver.storyunit.migration.impl;
 import com.storyweaver.config.StoryCompatibilityProperties;
 import com.storyweaver.domain.entity.Chapter;
 import com.storyweaver.service.ChapterService;
+import com.storyweaver.story.generation.orchestration.ChapterNarrativeRuntimeModeService;
 import com.storyweaver.storyunit.migration.CompatibilityBoundaryItem;
 import com.storyweaver.storyunit.migration.CompatibilityMode;
 import com.storyweaver.storyunit.migration.CompatibilityScope;
@@ -20,14 +21,17 @@ import java.util.Optional;
 public class DefaultMigrationCompatibilitySnapshotService implements MigrationCompatibilitySnapshotService {
 
     private final ChapterService chapterService;
+    private final ChapterNarrativeRuntimeModeService chapterNarrativeRuntimeModeService;
     private final LegacyBackfillAnalysisService legacyBackfillAnalysisService;
     private final StoryCompatibilityProperties properties;
 
     public DefaultMigrationCompatibilitySnapshotService(
             ChapterService chapterService,
+            ChapterNarrativeRuntimeModeService chapterNarrativeRuntimeModeService,
             LegacyBackfillAnalysisService legacyBackfillAnalysisService,
             StoryCompatibilityProperties properties) {
         this.chapterService = chapterService;
+        this.chapterNarrativeRuntimeModeService = chapterNarrativeRuntimeModeService;
         this.legacyBackfillAnalysisService = legacyBackfillAnalysisService;
         this.properties = properties;
     }
@@ -44,6 +48,7 @@ public class DefaultMigrationCompatibilitySnapshotService implements MigrationCo
         }
 
         LegacyChapterBackfillAnalysis analysis = legacyBackfillAnalysisService.analyzeChapter(projectId, chapterId).orElse(null);
+        String runtimeMode = chapterNarrativeRuntimeModeService.getMode(projectId, chapterId).apiValue();
 
         return Optional.of(new MigrationCompatibilitySnapshot(
                 projectId,
@@ -52,8 +57,8 @@ public class DefaultMigrationCompatibilitySnapshotService implements MigrationCo
                 buildPageBoundaries(),
                 buildApiBoundaries(),
                 buildDataBoundaries(),
-                buildFeatureFlags(),
-                buildRiskNotes(analysis)
+                buildFeatureFlags(runtimeMode),
+                buildRiskNotes(analysis, runtimeMode)
         ));
     }
 
@@ -212,11 +217,14 @@ public class DefaultMigrationCompatibilitySnapshotService implements MigrationCo
         return List.copyOf(boundaries);
     }
 
-    private List<String> buildFeatureFlags() {
+    private List<String> buildFeatureFlags(String runtimeMode) {
         return List.of(
+                "chapterNarrativeRuntimeMode=" + runtimeMode,
                 "legacyWritingCenterEnabled=" + properties.isLegacyWritingCenterEnabled(),
                 "legacyWritingApiEnabled=" + properties.isLegacyWritingApiEnabled(),
                 "chapterWorkspacePrimary=" + properties.isChapterWorkspacePrimary(),
+                "chapterWorkspaceNodePreviewEnabled=" + properties.isChapterWorkspaceNodePreviewEnabled(),
+                "chapterWorkspaceNodeResolveEnabled=" + properties.isChapterWorkspaceNodeResolveEnabled(),
                 "stateCenterPrimary=" + properties.isStateCenterPrimary(),
                 "generationCenterPrimary=" + properties.isGenerationCenterPrimary(),
                 "storyContextDualReadEnabled=" + properties.isStoryContextDualReadEnabled(),
@@ -225,7 +233,7 @@ public class DefaultMigrationCompatibilitySnapshotService implements MigrationCo
         );
     }
 
-    private List<String> buildRiskNotes(LegacyChapterBackfillAnalysis analysis) {
+    private List<String> buildRiskNotes(LegacyChapterBackfillAnalysis analysis, String runtimeMode) {
         List<String> notes = new ArrayList<>();
         if (analysis == null) {
             notes.add("当前章节还没有兼容分析结果，灰度切换前应先跑 backfill-analysis。");
@@ -242,6 +250,12 @@ public class DefaultMigrationCompatibilitySnapshotService implements MigrationCo
         }
         if (properties.isLegacyWritingCenterEnabled()) {
             notes.add("旧写作中心仍保留为回退入口，统一切换前不要提前下线。");
+        }
+        if (!properties.isChapterWorkspaceNodeResolveEnabled()) {
+            notes.add("node runtime 当前仅开放预览，推进动作默认关闭，避免与现有 scene mode 混写。");
+        }
+        if ("node".equals(runtimeMode)) {
+            notes.add("当前章节已经切到 node mode，scene 草稿链会被主链保护拒绝。");
         }
         return List.copyOf(notes);
     }

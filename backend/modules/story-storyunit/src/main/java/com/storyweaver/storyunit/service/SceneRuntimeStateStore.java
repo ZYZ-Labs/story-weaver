@@ -22,5 +22,7 @@ public interface SceneRuntimeStateStore {
 
     SceneHandoffSnapshot saveHandoff(SceneHandoffSnapshot snapshot);
 
+    void deleteHandoffsFromScene(Long projectId, Long chapterId, String sceneId);
+
     void deleteHandoffsReferencingScene(Long projectId, Long chapterId, String sceneId);
 }

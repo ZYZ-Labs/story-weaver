@@ -424,6 +424,7 @@ function getWritingRecordStatusLabel(value?: string) {
     draft: '草稿',
     accepted: '已采纳',
     rejected: '已拒绝',
+    rolled_back: '已撤回',
   }
   return mapping[value || ''] || value || '草稿'
 }
@@ -1012,7 +1013,7 @@ async function confirmDelete() {
                     size="small"
                     color="primary"
                     variant="text"
-                    :disabled="displayChapterAiLatestRecord.status === 'accepted'"
+                    :disabled="displayChapterAiLatestRecord.status === 'accepted' || displayChapterAiLatestRecord.status === 'rolled_back'"
                     @click="acceptLatestAiRecord"
                   >
                     采纳到正文
@@ -1021,7 +1022,7 @@ async function confirmDelete() {
                     size="small"
                     color="error"
                     variant="text"
-                    :disabled="displayChapterAiLatestRecord.status === 'rejected'"
+                    :disabled="displayChapterAiLatestRecord.status === 'rejected' || displayChapterAiLatestRecord.status === 'rolled_back'"
                     @click="rejectLatestAiRecord"
                   >
                     拒绝

@@ -61,6 +61,7 @@ function formatStage(item: AIWritingStreamLogItem) {
     plan: '规划',
     write: '写作',
     check: '检查',
+    persist: '落盘',
     revise: '修订',
   }
   const statusMap: Record<string, string> = {

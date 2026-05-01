@@ -8,9 +8,11 @@ import { getCharacterRuntimeState, getReaderKnownState } from '@/api/story-conte
 import {
   executeChapterBackfill,
   getChapterBackfillAnalysis,
+  getChapterConsistencyCheck,
   getChapterCompatibilitySnapshot,
   getChapterBackfillDryRun,
   getChapterState,
+  getProjectBackfillDryRun,
   getProjectBackfillOverview,
   getReaderRevealState,
 } from '@/api/story-state'
@@ -18,6 +20,7 @@ import { useProjectWorkspace } from '@/composables/useProjectWorkspace'
 import type {
   ChapterIncrementalStateView,
   CompatibilityModeView,
+  LegacyProjectBackfillDryRunView,
   LegacyProjectBackfillOverviewView,
   MigrationCompatibilitySnapshotView,
   LegacyBackfillExecutionResultView,
@@ -26,6 +29,7 @@ import type {
   LegacyChapterBackfillAnalysisView,
   ReaderKnownStateView,
   ReaderRevealStateView,
+  StoryConsistencyCheckView,
 } from '@/types'
 
 const {
@@ -47,6 +51,8 @@ const backfillDryRun = ref<LegacyBackfillDryRunView | null>(null)
 const backfillExecutionResult = ref<LegacyBackfillExecutionResultView | null>(null)
 const compatibilitySnapshot = ref<MigrationCompatibilitySnapshotView | null>(null)
 const projectBackfillOverview = ref<LegacyProjectBackfillOverviewView | null>(null)
+const projectBackfillDryRun = ref<LegacyProjectBackfillDryRunView | null>(null)
+const consistencyCheck = ref<StoryConsistencyCheckView | null>(null)
 const backfillRunning = ref(false)
 const backfillMessage = ref('')
 const backfillError = ref('')
@@ -61,6 +67,42 @@ const compatibilityFlagMap = computed(() =>
 )
 
 const backfillExecuteEnabled = computed(() => compatibilityFlagMap.value.backfillExecuteEnabled !== 'false')
+const hasPhase9ChapterData = computed(
+  () => !!(backfillAnalysis.value || backfillDryRun.value || compatibilitySnapshot.value),
+)
+
+const recommendedMigrationChapters = computed(() =>
+  (projectBackfillOverview.value?.chapters || [])
+    .filter((item) => item.needsSceneBackfill || item.needsStateBackfill)
+    .slice(0, 4)
+    .map((item) => ({
+      id: item.chapterId,
+      title: item.chapterTitle,
+    })),
+)
+
+const phase9Checklist = computed(() => [
+  {
+    label: '章节级兼容分析',
+    passed: !!backfillAnalysis.value,
+  },
+  {
+    label: '章节级 dry-run',
+    passed: !!backfillDryRun.value,
+  },
+  {
+    label: '兼容边界快照',
+    passed: !!compatibilitySnapshot.value,
+  },
+  {
+    label: '项目级迁移总览',
+    passed: !!projectBackfillOverview.value,
+  },
+  {
+    label: '项目级 dry-run',
+    passed: !!projectBackfillDryRun.value,
+  },
+])
 
 const stats = computed(() => [
   {
@@ -103,12 +145,14 @@ async function loadStateCenterData(projectId: number, chapterId: number | null) 
       backfillExecutionResult.value = null
       compatibilitySnapshot.value = null
       projectBackfillOverview.value = null
+      projectBackfillDryRun.value = null
+      consistencyCheck.value = null
       return
   }
 
   loading.value = true
   try {
-    const [stateResult, revealResult, knownResult, analysisResult, dryRunResult, compatibilityResult, overviewResult] = await Promise.allSettled([
+    const [stateResult, revealResult, knownResult, analysisResult, dryRunResult, compatibilityResult, overviewResult, projectDryRunResult, consistencyResult] = await Promise.allSettled([
       getChapterState(projectId, chapterId),
       getReaderRevealState(projectId, chapterId),
       getReaderKnownState(projectId, chapterId),
@@ -116,6 +160,8 @@ async function loadStateCenterData(projectId: number, chapterId: number | null) 
       getChapterBackfillDryRun(projectId, chapterId),
       getChapterCompatibilitySnapshot(projectId, chapterId),
       getProjectBackfillOverview(projectId),
+      getProjectBackfillDryRun(projectId),
+      getChapterConsistencyCheck(projectId, chapterId),
     ])
 
     chapterState.value = stateResult.status === 'fulfilled' ? stateResult.value : null
@@ -125,6 +171,8 @@ async function loadStateCenterData(projectId: number, chapterId: number | null) 
     backfillDryRun.value = dryRunResult.status === 'fulfilled' ? dryRunResult.value : null
     compatibilitySnapshot.value = compatibilityResult.status === 'fulfilled' ? compatibilityResult.value : null
     projectBackfillOverview.value = overviewResult.status === 'fulfilled' ? overviewResult.value : null
+    projectBackfillDryRun.value = projectDryRunResult.status === 'fulfilled' ? projectDryRunResult.value : null
+    consistencyCheck.value = consistencyResult.status === 'fulfilled' ? consistencyResult.value : null
 
     if (activeChapter.value?.mainPovCharacterId) {
       const runtimeResult = await getCharacterRuntimeState(projectId, activeChapter.value.mainPovCharacterId).catch(() => null)
@@ -150,6 +198,8 @@ watch(
       backfillExecutionResult.value = null
       compatibilitySnapshot.value = null
       projectBackfillOverview.value = null
+      projectBackfillDryRun.value = null
+      consistencyCheck.value = null
       return
     }
     await loadStateCenterData(projectId, chapterId)
@@ -175,6 +225,10 @@ async function runBackfill() {
   } finally {
     backfillRunning.value = false
   }
+}
+
+async function jumpToRecommendedChapter(chapterId: number) {
+  await selectChapter(chapterId)
 }
 
 function compatibilityModeColor(mode: CompatibilityModeView) {
@@ -210,6 +264,17 @@ function compatibilityModeLabel(mode: CompatibilityModeView) {
       return '关闭'
   }
 }
+
+function consistencySeverityColor(severity: 'INFO' | 'WARNING' | 'ERROR') {
+  switch (severity) {
+    case 'ERROR':
+      return 'error'
+    case 'WARNING':
+      return 'warning'
+    default:
+      return 'info'
+  }
+}
 </script>
 
 <template>
@@ -242,6 +307,58 @@ function compatibilityModeLabel(mode: CompatibilityModeView) {
         :color="item.color"
       />
     </div>
+
+    <v-card v-if="projectStore.currentProject && activeChapter" class="soft-panel mt-6">
+      <v-card-title>Phase 9 验收提示</v-card-title>
+      <v-card-text>
+        <div class="text-body-2 text-medium-emphasis">
+          这块只服务迁移验收。先确认当前章节有没有 `Phase 9` 数据，再决定要不要切到推荐样本。
+        </div>
+
+        <div class="chip-stack mt-4">
+          <v-chip
+            :color="hasPhase9ChapterData ? 'primary' : 'warning'"
+            variant="tonal"
+            size="small"
+          >
+            当前章节：{{ hasPhase9ChapterData ? '有迁移数据' : '暂无迁移数据' }}
+          </v-chip>
+          <v-chip size="small" color="secondary" variant="outlined">
+            当前章节 #{{ activeChapter.id }} · {{ activeChapter.title }}
+          </v-chip>
+        </div>
+
+        <div class="text-subtitle-2 font-weight-medium mt-5">推荐联调样本</div>
+        <div class="chip-stack mt-3">
+          <v-btn
+            v-for="chapter in recommendedMigrationChapters"
+            :key="`recommended-btn-${chapter.id}`"
+            size="small"
+            variant="outlined"
+            color="primary"
+            @click="jumpToRecommendedChapter(chapter.id)"
+          >
+            #{{ chapter.id }} · {{ chapter.title }}
+          </v-btn>
+          <span v-if="!recommendedMigrationChapters.length" class="text-body-2 text-medium-emphasis">
+            当前没有可推荐的迁移样本章节。
+          </span>
+        </div>
+
+        <div class="text-subtitle-2 font-weight-medium mt-5">当前章节验收清单</div>
+        <div class="chip-stack mt-3">
+          <v-chip
+            v-for="item in phase9Checklist"
+            :key="item.label"
+            size="small"
+            :color="item.passed ? 'secondary' : 'warning'"
+            variant="tonal"
+          >
+            {{ item.label }} · {{ item.passed ? '已返回' : '未返回' }}
+          </v-chip>
+        </div>
+      </v-card-text>
+    </v-card>
 
     <EmptyState
       v-if="!projectStore.currentProject || !activeChapter"
@@ -363,6 +480,30 @@ function compatibilityModeLabel(mode: CompatibilityModeView) {
         <div class="text-body-2 text-medium-emphasis">
           这块服务 `Phase 9`。它不是作者主工作流，而是告诉你：当前章节的旧记录和新状态链之间还差多少。
         </div>
+
+        <div class="chip-stack mt-4">
+          <v-chip size="small" color="primary" variant="tonal">
+            当前章节 #{{ activeChapter.id }} · {{ activeChapter.title }}
+          </v-chip>
+          <v-chip
+            v-for="chapter in recommendedMigrationChapters"
+            :key="`recommended-${chapter.id}`"
+            size="small"
+            color="secondary"
+            variant="outlined"
+          >
+            推荐样本 #{{ chapter.id }} · {{ chapter.title }}
+          </v-chip>
+        </div>
+
+        <v-alert
+          v-if="!backfillAnalysis && !backfillDryRun && !compatibilitySnapshot"
+          type="info"
+          variant="tonal"
+          class="mt-4"
+        >
+          当前章节暂时没有可展示的 `Phase 9` 迁移兼容数据。优先切到推荐样本章节再看状态台。
+        </v-alert>
 
         <v-divider class="my-4" />
 
@@ -536,6 +677,141 @@ function compatibilityModeLabel(mode: CompatibilityModeView) {
             </template>
           </v-list-item>
         </v-list>
+      </v-card-text>
+    </v-card>
+
+    <v-card v-if="projectBackfillDryRun" class="soft-panel mt-6">
+      <v-card-title>项目级 dry-run 计划</v-card-title>
+      <v-card-text>
+        <div class="text-body-2 text-medium-emphasis">
+          这块把“整项目接下来怎么迁”说清楚。它仍然只读，不会直接批量写入，只告诉你哪些章节可跑、哪些还被阻塞。
+        </div>
+
+        <div class="chip-stack mt-4">
+          <v-chip size="small" color="primary" variant="tonal">
+            需回填 {{ projectBackfillDryRun.chaptersNeedingBackfill }}
+          </v-chip>
+          <v-chip size="small" color="secondary" variant="tonal">
+            可执行 {{ projectBackfillDryRun.runnableChapters }}
+          </v-chip>
+          <v-chip size="small" color="warning" variant="tonal">
+            阻塞 {{ projectBackfillDryRun.blockedChapters }}
+          </v-chip>
+        </div>
+
+        <div class="text-subtitle-2 font-weight-medium mt-5">项目级建议动作</div>
+        <div class="chip-stack mt-3">
+          <v-chip
+            v-for="action in projectBackfillDryRun.requiredActions"
+            :key="action"
+            size="small"
+            color="primary"
+            variant="outlined"
+          >
+            {{ action }}
+          </v-chip>
+          <span v-if="!projectBackfillDryRun.requiredActions.length" class="text-body-2 text-medium-emphasis">
+            当前没有新的项目级必需动作。
+          </span>
+        </div>
+
+        <div class="text-subtitle-2 font-weight-medium mt-5">章节清单</div>
+        <v-list lines="three" density="compact" class="mt-3">
+          <v-list-item
+            v-for="item in projectBackfillDryRun.chapters.slice(0, 6)"
+            :key="item.chapterId"
+            :title="item.chapterTitle"
+            :subtitle="`scene 回填 ${item.needsSceneBackfill ? '需要' : '无'} · state 回填 ${item.needsStateBackfill ? '需要' : '无'} · 动作 ${item.actions.length}`"
+          >
+            <template #append>
+              <v-chip size="x-small" :color="item.canRunBackfill ? 'primary' : 'warning'" variant="tonal">
+                {{ item.canRunBackfill ? '可执行' : '阻塞' }}
+              </v-chip>
+            </template>
+          </v-list-item>
+        </v-list>
+
+        <div class="text-subtitle-2 font-weight-medium mt-5">dry-run 风险</div>
+        <div class="chip-stack mt-3">
+          <v-chip
+            v-for="note in projectBackfillDryRun.riskNotes"
+            :key="note"
+            size="small"
+            color="warning"
+            variant="tonal"
+          >
+            {{ note }}
+          </v-chip>
+          <span v-if="!projectBackfillDryRun.riskNotes.length" class="text-body-2 text-medium-emphasis">
+            当前没有额外项目级 dry-run 风险提示。
+          </span>
+        </div>
+      </v-card-text>
+    </v-card>
+
+    <v-card v-if="consistencyCheck" class="soft-panel mt-6">
+      <v-card-title>状态一致性检查</v-card-title>
+      <v-card-text>
+        <div class="text-body-2 text-medium-emphasis">
+          这块是 `Phase 10.2` 的最小诊断入口。它不替代 chapter review，而是把 scene、handoff、event、snapshot、patch 和章节级状态放到同一张检查单里。
+        </div>
+
+        <div class="chip-stack mt-4">
+          <v-chip size="small" color="primary" variant="tonal">
+            scene {{ consistencyCheck.sceneCount }}
+          </v-chip>
+          <v-chip size="small" color="secondary" variant="tonal">
+            completed {{ consistencyCheck.completedSceneCount }}
+          </v-chip>
+          <v-chip size="small" color="accent" variant="tonal">
+            handoff {{ consistencyCheck.handoffCount }}
+          </v-chip>
+          <v-chip size="small" color="info" variant="tonal">
+            event {{ consistencyCheck.eventCount }}
+          </v-chip>
+          <v-chip size="small" color="info" variant="outlined">
+            snapshot {{ consistencyCheck.snapshotCount }}
+          </v-chip>
+          <v-chip size="small" color="warning" variant="tonal">
+            patch {{ consistencyCheck.patchCount }}
+          </v-chip>
+        </div>
+
+        <div class="chip-stack mt-4">
+          <v-chip size="small" :color="consistencyCheck.hasReaderRevealState ? 'secondary' : 'warning'" variant="tonal">
+            ReaderReveal {{ consistencyCheck.hasReaderRevealState ? '已建立' : '缺失' }}
+          </v-chip>
+          <v-chip size="small" :color="consistencyCheck.hasChapterState ? 'secondary' : 'warning'" variant="tonal">
+            ChapterState {{ consistencyCheck.hasChapterState ? '已建立' : '缺失' }}
+          </v-chip>
+          <v-chip
+            size="small"
+            :color="consistencyCheck.chapterReviewPresent ? 'primary' : 'default'"
+            variant="outlined"
+          >
+            chapter review {{ consistencyCheck.chapterReviewPresent ? consistencyCheck.chapterReviewResult || '已返回' : '未返回' }}
+          </v-chip>
+        </div>
+
+        <div v-if="consistencyCheck.chapterReviewSummary" class="text-body-2 text-medium-emphasis mt-4">
+          {{ consistencyCheck.chapterReviewSummary }}
+        </div>
+
+        <div class="text-subtitle-2 font-weight-medium mt-5">一致性问题</div>
+        <div class="chip-stack mt-3">
+          <v-chip
+            v-for="issue in consistencyCheck.issues"
+            :key="issue.issueKey"
+            size="small"
+            :color="consistencySeverityColor(issue.severity)"
+            variant="tonal"
+          >
+            {{ issue.issueKey }} · {{ issue.message }}
+          </v-chip>
+          <span v-if="!consistencyCheck.issues.length" class="text-body-2 text-medium-emphasis">
+            当前没有额外一致性问题。
+          </span>
+        </div>
       </v-card-text>
     </v-card>
 

@@ -78,6 +78,19 @@ export const useChapterStore = defineStore('chapter', () => {
     }
   }
 
+  async function updateRuntimeMode(projectId: number, chapterId: number, mode: 'scene' | 'node') {
+    const chapter = await chapterApi.updateChapterRuntimeMode(projectId, chapterId, mode)
+    currentChapter.value = chapter
+
+    const target = chapters.value.find((item) => item.id === chapterId)
+    if (target) {
+      Object.assign(target, chapter)
+      chapters.value = sortChapters(chapters.value)
+    }
+
+    return chapter
+  }
+
   return {
     chapters,
     currentChapter,
@@ -86,6 +99,7 @@ export const useChapterStore = defineStore('chapter', () => {
     fetchDetail,
     create,
     update,
+    updateRuntimeMode,
     remove,
   }
 })

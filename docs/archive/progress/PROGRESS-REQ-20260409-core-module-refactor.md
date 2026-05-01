@@ -59,11 +59,11 @@
 ### [2026-04-09 Asia/Shanghai] 完成模块重构正式规划
 
 - 背景:
-  - 用户要求先阅读 agent 文档，确认前序需求完成度，再重点审阅 `docs/story_weaver_module_refactor_prd_v_1.md`，输出完整重构计划。
+  - 用户要求先阅读 agent 文档，确认前序需求完成度，再重点审阅 `docs/archive/legacy/references/story_weaver_module_refactor_prd_v_1.md`，输出完整重构计划。
 - 本次完成:
   - 阅读 `docs/agent-context.md`、`docs/agent-handoff-rules.md`
   - 阅读 AI 总导层 requirement / plan / progress 文档
-  - 阅读 `docs/story_weaver_module_refactor_prd_v_1.md`
+  - 阅读 `docs/archive/legacy/references/story_weaver_module_refactor_prd_v_1.md`
   - 抽查后端实体、服务、控制器和前端视图，确认当前故事模块结构问题
   - 新建正式 requirement / plan / progress 文档
 - 修改文件:
@@ -76,7 +76,7 @@
   - 执行 `npm run build` 成功
 - 风险/遗留:
   - 当前重构仍处于规划阶段，尚未进入 SQL 和服务实现
-  - `docs/story_weaver_module_refactor_prd_v_1.md` 仍是上游 PRD 来源，不等于正式实施计划
+  - `docs/archive/legacy/references/story_weaver_module_refactor_prd_v_1.md` 仍是上游 PRD 来源，不等于正式实施计划
 - 下一步:
   - 根据计划的 Step 0 输出字段映射表与第一批 SQL 迁移脚本
 

@@ -48,6 +48,7 @@ export async function streamWritingChatMessage(
   const decoder = new TextDecoder()
   let buffer = ''
   let completedSession: AIWritingChatSession | null = null
+  let lastEvent: AIWritingChatStreamEvent | null = null
 
   while (true) {
     let done = false
@@ -57,10 +58,21 @@ export async function streamWritingChatMessage(
       done = readResult.done
       value = readResult.value
     } catch (error) {
+      const recoveredTailEvent = parseSseEvent(buffer.trim())
+      if (recoveredTailEvent) {
+        lastEvent = recoveredTailEvent
+        handlers.onEvent?.(recoveredTailEvent)
+        if (recoveredTailEvent.type === 'error') {
+          throw new Error(recoveredTailEvent.message || '背景聊天生成失败')
+        }
+        if (recoveredTailEvent.type === 'complete' && recoveredTailEvent.session) {
+          return recoveredTailEvent.session
+        }
+      }
       if (completedSession) {
         return completedSession
       }
-      throw error
+      throw resolveStreamReadError(error, lastEvent, '背景聊天连接中断，请稍后重试')
     }
     buffer += decoder.decode(value || new Uint8Array(), { stream: !done }).replace(/\r\n/g, '\n')
 
@@ -70,6 +82,7 @@ export async function streamWritingChatMessage(
       buffer = buffer.slice(separatorIndex + 2)
       const event = parseSseEvent(rawEvent)
       if (event) {
+        lastEvent = event
         handlers.onEvent?.(event)
         if (event.type === 'error') {
           throw new Error(event.message || '背景聊天生成失败')
@@ -91,6 +104,7 @@ export async function streamWritingChatMessage(
 
   const tailEvent = parseSseEvent(buffer.trim())
   if (tailEvent) {
+    lastEvent = tailEvent
     handlers.onEvent?.(tailEvent)
     if (tailEvent.type === 'error') {
       throw new Error(tailEvent.message || '背景聊天生成失败')
@@ -102,6 +116,9 @@ export async function streamWritingChatMessage(
   }
 
   if (!completedSession) {
+    if (lastEvent?.type === 'error' && lastEvent.message) {
+      throw new Error(lastEvent.message)
+    }
     throw new Error('聊天流提前结束，未返回完整会话。')
   }
 
@@ -152,6 +169,26 @@ function parseSseEvent(rawEvent: string) {
       message: payloadText,
     } satisfies AIWritingChatStreamEvent
   }
+}
+
+function resolveStreamReadError(error: unknown, lastEvent: AIWritingChatStreamEvent | null, fallback: string) {
+  if (lastEvent?.type === 'error' && lastEvent.message) {
+    return new Error(lastEvent.message)
+  }
+  if (error instanceof Error) {
+    const normalized = error.message.trim().toLowerCase()
+    if (
+      normalized.includes('networkerror')
+      || normalized.includes('network error')
+      || normalized.includes('failed to fetch')
+      || normalized.includes('load failed')
+      || normalized.includes('terminated')
+    ) {
+      return new Error(fallback)
+    }
+    return error
+  }
+  return new Error(fallback)
 }
 
 async function readErrorMessage(response: Response) {

@@ -1,9 +1,12 @@
 package com.storyweaver.controller;
 
 import com.storyweaver.domain.dto.ChapterRequestDTO;
+import com.storyweaver.domain.dto.ChapterNarrativeRuntimeModeRequestDTO;
 import com.storyweaver.domain.entity.Chapter;
 import com.storyweaver.security.SecurityUtils;
 import com.storyweaver.service.ChapterService;
+import com.storyweaver.story.generation.orchestration.ChapterNarrativeRuntimeMode;
+import com.storyweaver.story.generation.orchestration.ChapterNarrativeRuntimeModeService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.util.StringUtils;
@@ -26,9 +29,13 @@ import java.util.Map;
 public class ChapterController {
 
     private final ChapterService chapterService;
+    private final ChapterNarrativeRuntimeModeService chapterNarrativeRuntimeModeService;
 
-    public ChapterController(ChapterService chapterService) {
+    public ChapterController(
+            ChapterService chapterService,
+            ChapterNarrativeRuntimeModeService chapterNarrativeRuntimeModeService) {
         this.chapterService = chapterService;
+        this.chapterNarrativeRuntimeModeService = chapterNarrativeRuntimeModeService;
     }
 
     @GetMapping
@@ -155,6 +162,43 @@ public class ChapterController {
         return ResponseEntity.ok(Map.of(
                 "code", 200,
                 "message", "获取成功",
+                "data", chapter
+        ));
+    }
+
+    @PutMapping("/{chapterId}/runtime-mode")
+    public ResponseEntity<Map<String, Object>> updateRuntimeMode(
+            @PathVariable Long projectId,
+            @PathVariable Long chapterId,
+            @RequestBody ChapterNarrativeRuntimeModeRequestDTO requestDTO,
+            @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
+            Authentication authentication) {
+        if (!AuthHeaderSupport.hasValidBearerToken(authorizationHeader)) {
+            return AuthHeaderSupport.unauthorizedResponse();
+        }
+        Long userId = SecurityUtils.getCurrentUserId(authentication);
+        if (requestDTO == null || !StringUtils.hasText(requestDTO.getMode())) {
+            return ResponseEntity.badRequest().body(Map.of(
+                    "code", 400,
+                    "message", "章节运行模式不能为空"
+            ));
+        }
+
+        Chapter chapter = chapterService.getChapterWithAuth(chapterId, userId);
+        if (chapter == null || !projectId.equals(chapter.getProjectId())) {
+            return ResponseEntity.status(404).body(Map.of(
+                    "code", 404,
+                    "message", "章节不存在或无权访问"
+            ));
+        }
+
+        ChapterNarrativeRuntimeMode targetMode = ChapterNarrativeRuntimeMode.fromValue(requestDTO.getMode());
+        ChapterNarrativeRuntimeMode updatedMode = chapterNarrativeRuntimeModeService.updateMode(chapter, targetMode);
+        chapter.setNarrativeRuntimeMode(updatedMode.apiValue());
+
+        return ResponseEntity.ok(Map.of(
+                "code", 200,
+                "message", "切换成功",
                 "data", chapter
         ));
     }

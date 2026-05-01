@@ -52,6 +52,12 @@ public class GlobalExceptionHandler {
                 .body(new ApiErrorResponse(409, ex.getMessage()));
     }
 
+    @ExceptionHandler(SceneWorkflowConflictException.class)
+    public ResponseEntity<ApiErrorResponse> handleSceneWorkflowConflictException(SceneWorkflowConflictException ex) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(new ApiErrorResponse(409, ex.getMessage()));
+    }
+
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ApiErrorResponse> handleMethodArgumentNotValidException(MethodArgumentNotValidException ex) {
         String message = ex.getBindingResult().getFieldErrors().stream()

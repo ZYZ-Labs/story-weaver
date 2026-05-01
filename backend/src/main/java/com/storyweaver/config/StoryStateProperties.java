@@ -29,6 +29,22 @@ public class StoryStateProperties {
 
     private String chapterSkeletonKeyPrefix = "story:state:chapter-skeleton:";
 
+    private String actionIntentKeyPrefix = "story:state:action-intent:";
+
+    private String chapterIntentManifestKeyPrefix = "story:state:chapter-intents:";
+
+    private String resolvedTurnKeyPrefix = "story:state:resolved-turn:";
+
+    private String chapterTurnManifestKeyPrefix = "story:state:chapter-turns:";
+
+    private String nodeCheckpointKeyPrefix = "story:state:node-checkpoint:";
+
+    private String chapterCheckpointManifestKeyPrefix = "story:state:chapter-checkpoints:";
+
+    private String openLoopKeyPrefix = "story:state:open-loop:";
+
+    private String chapterOpenLoopManifestKeyPrefix = "story:state:chapter-open-loops:";
+
     public boolean isRedisStoreEnabled() {
         return redisStoreEnabled;
     }
@@ -115,5 +131,69 @@ public class StoryStateProperties {
 
     public void setChapterSkeletonKeyPrefix(String chapterSkeletonKeyPrefix) {
         this.chapterSkeletonKeyPrefix = chapterSkeletonKeyPrefix;
+    }
+
+    public String getActionIntentKeyPrefix() {
+        return actionIntentKeyPrefix;
+    }
+
+    public void setActionIntentKeyPrefix(String actionIntentKeyPrefix) {
+        this.actionIntentKeyPrefix = actionIntentKeyPrefix;
+    }
+
+    public String getChapterIntentManifestKeyPrefix() {
+        return chapterIntentManifestKeyPrefix;
+    }
+
+    public void setChapterIntentManifestKeyPrefix(String chapterIntentManifestKeyPrefix) {
+        this.chapterIntentManifestKeyPrefix = chapterIntentManifestKeyPrefix;
+    }
+
+    public String getResolvedTurnKeyPrefix() {
+        return resolvedTurnKeyPrefix;
+    }
+
+    public void setResolvedTurnKeyPrefix(String resolvedTurnKeyPrefix) {
+        this.resolvedTurnKeyPrefix = resolvedTurnKeyPrefix;
+    }
+
+    public String getChapterTurnManifestKeyPrefix() {
+        return chapterTurnManifestKeyPrefix;
+    }
+
+    public void setChapterTurnManifestKeyPrefix(String chapterTurnManifestKeyPrefix) {
+        this.chapterTurnManifestKeyPrefix = chapterTurnManifestKeyPrefix;
+    }
+
+    public String getNodeCheckpointKeyPrefix() {
+        return nodeCheckpointKeyPrefix;
+    }
+
+    public void setNodeCheckpointKeyPrefix(String nodeCheckpointKeyPrefix) {
+        this.nodeCheckpointKeyPrefix = nodeCheckpointKeyPrefix;
+    }
+
+    public String getChapterCheckpointManifestKeyPrefix() {
+        return chapterCheckpointManifestKeyPrefix;
+    }
+
+    public void setChapterCheckpointManifestKeyPrefix(String chapterCheckpointManifestKeyPrefix) {
+        this.chapterCheckpointManifestKeyPrefix = chapterCheckpointManifestKeyPrefix;
+    }
+
+    public String getOpenLoopKeyPrefix() {
+        return openLoopKeyPrefix;
+    }
+
+    public void setOpenLoopKeyPrefix(String openLoopKeyPrefix) {
+        this.openLoopKeyPrefix = openLoopKeyPrefix;
+    }
+
+    public String getChapterOpenLoopManifestKeyPrefix() {
+        return chapterOpenLoopManifestKeyPrefix;
+    }
+
+    public void setChapterOpenLoopManifestKeyPrefix(String chapterOpenLoopManifestKeyPrefix) {
+        this.chapterOpenLoopManifestKeyPrefix = chapterOpenLoopManifestKeyPrefix;
     }
 }

@@ -43,6 +43,8 @@ class DefaultMigrationCompatibilitySnapshotServiceTest {
         properties.setStoryContextDualReadEnabled(true);
         properties.setSummaryWorkflowDualWriteEnabled(true);
         properties.setBackfillExecuteEnabled(true);
+        properties.setChapterWorkspaceNodePreviewEnabled(true);
+        properties.setChapterWorkspaceNodeResolveEnabled(false);
 
         Chapter chapter = new Chapter();
         chapter.setId(31L);
@@ -75,6 +77,8 @@ class DefaultMigrationCompatibilitySnapshotServiceTest {
         assertEquals("chapter-workspace", snapshot.pageBoundaries().get(0).boundaryKey());
         assertEquals("story-context", snapshot.apiBoundaries().get(0).boundaryKey());
         assertTrue(snapshot.featureFlags().contains("storyContextDualReadEnabled=true"));
+        assertTrue(snapshot.featureFlags().contains("chapterWorkspaceNodeResolveEnabled=false"));
         assertTrue(snapshot.riskNotes().stream().anyMatch(note -> note.contains("scene 基线")));
+        assertTrue(snapshot.riskNotes().stream().anyMatch(note -> note.contains("node runtime 当前仅开放预览")));
     }
 }

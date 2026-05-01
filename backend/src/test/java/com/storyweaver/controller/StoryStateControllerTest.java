@@ -10,11 +10,18 @@ import com.storyweaver.storyunit.migration.LegacyBackfillExecutionResult;
 import com.storyweaver.storyunit.migration.LegacyBackfillExecutionService;
 import com.storyweaver.storyunit.migration.LegacyBackfillAnalysisService;
 import com.storyweaver.storyunit.migration.LegacyChapterBackfillAnalysis;
+import com.storyweaver.storyunit.migration.LegacyProjectBackfillDryRun;
+import com.storyweaver.storyunit.migration.LegacyProjectBackfillDryRunItem;
+import com.storyweaver.storyunit.migration.LegacyProjectBackfillDryRunService;
 import com.storyweaver.storyunit.migration.LegacyProjectBackfillOverview;
 import com.storyweaver.storyunit.migration.LegacyBackfillOverviewService;
 import com.storyweaver.storyunit.migration.LegacyChapterBackfillStatusItem;
 import com.storyweaver.storyunit.migration.MigrationCompatibilitySnapshot;
 import com.storyweaver.storyunit.migration.MigrationCompatibilitySnapshotService;
+import com.storyweaver.storyunit.consistency.ConsistencySeverity;
+import com.storyweaver.storyunit.consistency.StoryConsistencyCheck;
+import com.storyweaver.storyunit.consistency.StoryConsistencyCheckService;
+import com.storyweaver.storyunit.consistency.StoryConsistencyIssue;
 import com.storyweaver.storyunit.migration.CompatibilityBoundaryItem;
 import com.storyweaver.storyunit.migration.CompatibilityMode;
 import com.storyweaver.storyunit.migration.CompatibilityScope;
@@ -29,12 +36,21 @@ import com.storyweaver.storyunit.patch.PatchStatus;
 import com.storyweaver.storyunit.patch.StoryPatch;
 import com.storyweaver.storyunit.service.ChapterIncrementalStateStore;
 import com.storyweaver.storyunit.service.ReaderRevealStateStore;
+import com.storyweaver.storyunit.service.StoryActionIntentStore;
 import com.storyweaver.storyunit.service.StoryEventStore;
+import com.storyweaver.storyunit.service.StoryNodeCheckpointStore;
+import com.storyweaver.storyunit.service.StoryOpenLoopStore;
 import com.storyweaver.storyunit.service.StoryPatchStore;
+import com.storyweaver.storyunit.service.StoryResolvedTurnStore;
 import com.storyweaver.storyunit.service.StorySnapshotStore;
 import com.storyweaver.storyunit.snapshot.SnapshotScope;
 import com.storyweaver.storyunit.snapshot.StorySnapshot;
 import com.storyweaver.storyunit.model.FacetType;
+import com.storyweaver.storyunit.runtime.StoryActionIntent;
+import com.storyweaver.storyunit.runtime.StoryLoopStatus;
+import com.storyweaver.storyunit.runtime.StoryNodeCheckpoint;
+import com.storyweaver.storyunit.runtime.StoryOpenLoop;
+import com.storyweaver.storyunit.runtime.StoryResolvedTurn;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.web.servlet.MockMvc;
@@ -57,11 +73,17 @@ class StoryStateControllerTest {
     private StoryPatchStore storyPatchStore;
     private ReaderRevealStateStore readerRevealStateStore;
     private ChapterIncrementalStateStore chapterIncrementalStateStore;
+    private StoryActionIntentStore storyActionIntentStore;
+    private StoryResolvedTurnStore storyResolvedTurnStore;
+    private StoryNodeCheckpointStore storyNodeCheckpointStore;
+    private StoryOpenLoopStore storyOpenLoopStore;
     private LegacyBackfillAnalysisService legacyBackfillAnalysisService;
     private LegacyBackfillDryRunService legacyBackfillDryRunService;
     private LegacyBackfillExecutionService legacyBackfillExecutionService;
     private LegacyBackfillOverviewService legacyBackfillOverviewService;
+    private LegacyProjectBackfillDryRunService legacyProjectBackfillDryRunService;
     private MigrationCompatibilitySnapshotService migrationCompatibilitySnapshotService;
+    private StoryConsistencyCheckService storyConsistencyCheckService;
 
     @BeforeEach
     void setUp() {
@@ -70,22 +92,34 @@ class StoryStateControllerTest {
         storyPatchStore = mock(StoryPatchStore.class);
         readerRevealStateStore = mock(ReaderRevealStateStore.class);
         chapterIncrementalStateStore = mock(ChapterIncrementalStateStore.class);
+        storyActionIntentStore = mock(StoryActionIntentStore.class);
+        storyResolvedTurnStore = mock(StoryResolvedTurnStore.class);
+        storyNodeCheckpointStore = mock(StoryNodeCheckpointStore.class);
+        storyOpenLoopStore = mock(StoryOpenLoopStore.class);
         legacyBackfillAnalysisService = mock(LegacyBackfillAnalysisService.class);
         legacyBackfillDryRunService = mock(LegacyBackfillDryRunService.class);
         legacyBackfillExecutionService = mock(LegacyBackfillExecutionService.class);
         legacyBackfillOverviewService = mock(LegacyBackfillOverviewService.class);
+        legacyProjectBackfillDryRunService = mock(LegacyProjectBackfillDryRunService.class);
         migrationCompatibilitySnapshotService = mock(MigrationCompatibilitySnapshotService.class);
+        storyConsistencyCheckService = mock(StoryConsistencyCheckService.class);
         mockMvc = MockMvcBuilders.standaloneSetup(new StoryStateController(
                         storyEventStore,
                         storySnapshotStore,
                         storyPatchStore,
                         readerRevealStateStore,
                         chapterIncrementalStateStore,
+                        storyActionIntentStore,
+                        storyResolvedTurnStore,
+                        storyNodeCheckpointStore,
+                        storyOpenLoopStore,
                         legacyBackfillAnalysisService,
                         legacyBackfillDryRunService,
                         legacyBackfillExecutionService,
                         legacyBackfillOverviewService,
-                        migrationCompatibilitySnapshotService
+                        legacyProjectBackfillDryRunService,
+                        migrationCompatibilitySnapshotService,
+                        storyConsistencyCheckService
                 ))
                 .setControllerAdvice(new GlobalExceptionHandler())
                 .build();
@@ -215,6 +249,113 @@ class StoryStateControllerTest {
     }
 
     @Test
+    void shouldReturnChapterActionIntents() throws Exception {
+        when(storyActionIntentStore.listChapterIntents(28L, 31L)).thenReturn(List.of(
+                new StoryActionIntent(
+                        "intent-1",
+                        28L,
+                        31L,
+                        "",
+                        "node-1",
+                        "林沉舟",
+                        "player",
+                        "advance-goal",
+                        "正面推进",
+                        "答应回归",
+                        java.util.Map.of("mode", "recommended"),
+                        new StorySourceTrace("system", "system", "NodeRuntimeService", "node-1")
+                )
+        ));
+
+        mockMvc.perform(get("/api/story-state/projects/28/chapters/31/action-intents")
+                        .header("Authorization", "Bearer test-token"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data[0].intentId").value("intent-1"))
+                .andExpect(jsonPath("$.data[0].nodeId").value("node-1"));
+    }
+
+    @Test
+    void shouldReturnChapterResolvedTurns() throws Exception {
+        when(storyResolvedTurnStore.listChapterTurns(28L, 31L)).thenReturn(List.of(
+                new StoryResolvedTurn(
+                        "turn-1",
+                        28L,
+                        31L,
+                        "",
+                        "node-1",
+                        "intent-1",
+                        "答应回归并把局面送到 node-2 的入口前。",
+                        List.of("event-1", "event-2"),
+                        java.util.Map.of("currentNodeId", "node-1"),
+                        List.of("读者确认主角准备回归"),
+                        List.of("node-loop:node-2"),
+                        List.of("node-loop:node-1"),
+                        "checkpoint-2",
+                        new StorySourceTrace("system", "system", "NodeRuntimeService", "node-1")
+                )
+        ));
+
+        mockMvc.perform(get("/api/story-state/projects/28/chapters/31/resolved-turns")
+                        .header("Authorization", "Bearer test-token"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data[0].turnId").value("turn-1"))
+                .andExpect(jsonPath("$.data[0].nodeId").value("node-1"));
+    }
+
+    @Test
+    void shouldReturnChapterNodeCheckpoints() throws Exception {
+        when(storyNodeCheckpointStore.listChapterCheckpoints(28L, 31L)).thenReturn(List.of(
+                new StoryNodeCheckpoint(
+                        "checkpoint-2",
+                        28L,
+                        31L,
+                        "node-2",
+                        "",
+                        2,
+                        "答应回归并把局面送到 node-2 的入口前。",
+                        "读者当前已知 1 条节点级信息。",
+                        List.of("node-loop:node-2"),
+                        java.util.Map.of("林沉舟", "退役者的邀请函"),
+                        java.util.Map.of("林沉舟", "进入游戏"),
+                        List.of("advance-goal"),
+                        new StorySourceTrace("system", "system", "NodeRuntimeService", "node-1")
+                )
+        ));
+
+        mockMvc.perform(get("/api/story-state/projects/28/chapters/31/node-checkpoints")
+                        .header("Authorization", "Bearer test-token"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data[0].checkpointId").value("checkpoint-2"))
+                .andExpect(jsonPath("$.data[0].nodeId").value("node-2"));
+    }
+
+    @Test
+    void shouldReturnChapterOpenLoops() throws Exception {
+        when(storyOpenLoopStore.listChapterLoops(28L, 31L)).thenReturn(List.of(
+                new StoryOpenLoop(
+                        "node-loop:node-2",
+                        28L,
+                        31L,
+                        "node-2",
+                        "进入节点 node-2",
+                        StoryLoopStatus.OPEN,
+                        "chapter-runtime",
+                        "在推进到 node-2 并完成结算后回收。",
+                        null,
+                        null,
+                        List.of("chapter:31"),
+                        new StorySourceTrace("system", "system", "NodeRuntimeService", "node-1")
+                )
+        ));
+
+        mockMvc.perform(get("/api/story-state/projects/28/chapters/31/open-loops")
+                        .header("Authorization", "Bearer test-token"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data[0].loopId").value("node-loop:node-2"))
+                .andExpect(jsonPath("$.data[0].status").value("OPEN"));
+    }
+
+    @Test
     void shouldReturnChapterBackfillAnalysis() throws Exception {
         when(legacyBackfillAnalysisService.analyzeChapter(28L, 31L)).thenReturn(Optional.of(
                 new LegacyChapterBackfillAnalysis(
@@ -250,6 +391,36 @@ class StoryStateControllerTest {
                 .andExpect(jsonPath("$.data.legacyRecordCount").value(5))
                 .andExpect(jsonPath("$.data.needsSceneBackfill").value(true))
                 .andExpect(jsonPath("$.data.notes[0]").value("旧记录尚未形成 StoryEvent 基线。"));
+    }
+
+    @Test
+    void shouldReturnChapterConsistencyCheck() throws Exception {
+        when(storyConsistencyCheckService.checkChapter(28L, 32L)).thenReturn(Optional.of(
+                new StoryConsistencyCheck(
+                        28L,
+                        32L,
+                        2,
+                        1,
+                        1,
+                        0,
+                        0,
+                        0,
+                        false,
+                        false,
+                        true,
+                        "REVISE",
+                        "章节还未收口",
+                        List.of(new StoryConsistencyIssue("missing_events", ConsistencySeverity.WARNING, "当前章节已有 scene runtime state，但还没有 StoryEvent 基线。"))
+                )
+        ));
+
+        mockMvc.perform(get("/api/story-state/projects/28/chapters/32/consistency-check")
+                        .header("Authorization", "Bearer test-token"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(200))
+                .andExpect(jsonPath("$.data.sceneCount").value(2))
+                .andExpect(jsonPath("$.data.chapterReviewResult").value("REVISE"))
+                .andExpect(jsonPath("$.data.issues[0].issueKey").value("missing_events"));
     }
 
     @Test
@@ -416,5 +587,45 @@ class StoryStateControllerTest {
                 .andExpect(jsonPath("$.data.totalChapters").value(4))
                 .andExpect(jsonPath("$.data.chapters[0].chapterTitle").value("退役者的邀请函"))
                 .andExpect(jsonPath("$.data.chapters[0].canRunBackfill").value(true));
+    }
+
+    @Test
+    void shouldReturnProjectBackfillDryRun() throws Exception {
+        when(legacyProjectBackfillDryRunService.buildProjectDryRun(28L)).thenReturn(Optional.of(
+                new LegacyProjectBackfillDryRun(
+                        28L,
+                        4,
+                        2,
+                        1,
+                        1,
+                        List.of(new LegacyProjectBackfillDryRunItem(
+                                31L,
+                                "退役者的邀请函",
+                                true,
+                                true,
+                                false,
+                                List.of(new LegacyBackfillActionPlan(
+                                        "derive-scene-state",
+                                        "补齐 scene 执行基线",
+                                        "将旧正文记录映射为 SceneExecutionState。",
+                                        true,
+                                        false,
+                                        ""
+                                )),
+                                List.of("当前章节仍缺 scene 基线。")
+                        )),
+                        List.of("补齐 scene 执行基线（退役者的邀请函）"),
+                        List.of("当前章节仍缺 scene 基线。")
+                )
+        ));
+
+        mockMvc.perform(get("/api/story-state/projects/28/backfill-project-dry-run")
+                        .header("Authorization", "Bearer test-token"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(200))
+                .andExpect(jsonPath("$.data.projectId").value(28))
+                .andExpect(jsonPath("$.data.runnableChapters").value(1))
+                .andExpect(jsonPath("$.data.chapters[0].chapterTitle").value("退役者的邀请函"))
+                .andExpect(jsonPath("$.data.requiredActions[0]").value("补齐 scene 执行基线（退役者的邀请函）"));
     }
 }

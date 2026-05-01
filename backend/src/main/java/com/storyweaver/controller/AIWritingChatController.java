@@ -76,10 +76,10 @@ public class AIWritingChatController {
         Thread.startVirtualThread(() -> {
             try {
                 aiWritingChatService.streamMessage(userId, chapterId, requestDTO, event -> sendStreamEvent(emitter, event));
-                emitter.complete();
             } catch (Exception exception) {
-                sendStreamEvent(emitter, AIWritingChatStreamEventVO.error(resolveMessage(exception)));
-                emitter.complete();
+                finishStreamWithError(emitter, AIWritingChatStreamEventVO.error(resolveMessage(exception)));
+            } finally {
+                completeEmitterQuietly(emitter);
             }
         });
 
@@ -135,8 +135,22 @@ public class AIWritingChatController {
     private void sendStreamEvent(SseEmitter emitter, AIWritingChatStreamEventVO event) {
         try {
             emitter.send(SseEmitter.event().name(event.getType()).data(event));
-        } catch (IOException exception) {
-            throw new IllegalStateException("聊天流式连接已中断");
+        } catch (IOException | IllegalStateException exception) {
+            throw new IllegalStateException("聊天流式连接已中断", exception);
+        }
+    }
+
+    private void finishStreamWithError(SseEmitter emitter, AIWritingChatStreamEventVO event) {
+        try {
+            emitter.send(SseEmitter.event().name(event.getType()).data(event));
+        } catch (IOException | IllegalStateException ignored) {
+        }
+    }
+
+    private void completeEmitterQuietly(SseEmitter emitter) {
+        try {
+            emitter.complete();
+        } catch (IllegalStateException ignored) {
         }
     }
 

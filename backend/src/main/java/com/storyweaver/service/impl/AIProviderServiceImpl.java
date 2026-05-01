@@ -19,10 +19,16 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.net.ConnectException;
+import java.net.NoRouteToHostException;
+import java.net.SocketException;
+import java.net.SocketTimeoutException;
 import java.net.URI;
+import java.net.UnknownHostException;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.net.http.HttpTimeoutException;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -34,6 +40,9 @@ import java.util.function.Function;
 
 @Service
 public class AIProviderServiceImpl extends ServiceImpl<AIProviderMapper, AIProvider> implements AIProviderService {
+
+    private static final int DEFAULT_PROVIDER_REQUEST_TIMEOUT_SECONDS = 60;
+    private static final int DEFAULT_GLOBAL_AI_REQUEST_TIMEOUT_SECONDS = 3600;
 
     private final ObjectMapper objectMapper;
     private final HttpClient httpClient;
@@ -171,7 +180,7 @@ public class AIProviderServiceImpl extends ServiceImpl<AIProviderMapper, AIProvi
             }
             return requestCompatibleChat(provider, resolvedModelName, systemPrompt, userPrompt, temperature, maxTokens);
         } catch (IOException exception) {
-            throw new IllegalStateException("调用模型服务失败，无法读取返回结果");
+            throw translateTransportFailure(exception, provider);
         } catch (InterruptedException exception) {
             Thread.currentThread().interrupt();
             throw new IllegalStateException("调用模型服务时被中断，请稍后重试");
@@ -200,7 +209,7 @@ public class AIProviderServiceImpl extends ServiceImpl<AIProviderMapper, AIProvi
             }
             requestCompatibleChatStream(provider, resolvedModelName, systemPrompt, userPrompt, temperature, maxTokens, onChunk);
         } catch (IOException exception) {
-            throw new IllegalStateException("调用模型服务失败，无法读取返回结果");
+            throw translateTransportFailure(exception, provider);
         } catch (InterruptedException exception) {
             Thread.currentThread().interrupt();
             throw new IllegalStateException("调用模型服务时被中断，请稍后重试");
@@ -241,7 +250,7 @@ public class AIProviderServiceImpl extends ServiceImpl<AIProviderMapper, AIProvi
                     toolExecutor
             );
         } catch (IOException exception) {
-            throw new IllegalStateException("调用模型服务失败，无法读取返回结果");
+            throw translateTransportFailure(exception, provider);
         } catch (InterruptedException exception) {
             Thread.currentThread().interrupt();
             throw new IllegalStateException("调用模型服务时被中断，请稍后重试");
@@ -313,24 +322,63 @@ public class AIProviderServiceImpl extends ServiceImpl<AIProviderMapper, AIProvi
     }
 
     private int resolveGenerationTimeoutSeconds(AIProvider provider) {
-        return Math.max(resolveTimeoutSeconds(provider), resolveConfiguredAiTimeoutSeconds());
+        return resolveRequestTimeoutSeconds(provider);
     }
 
     private int resolveStreamingTimeoutSeconds(AIProvider provider) {
-        return Math.max(resolveTimeoutSeconds(provider), resolveConfiguredAiTimeoutSeconds());
+        return resolveRequestTimeoutSeconds(provider);
+    }
+
+    int resolveRequestTimeoutSeconds(AIProvider provider) {
+        int providerTimeoutSeconds = resolveProviderRequestTimeoutSeconds(provider);
+        int configuredTimeoutSeconds = resolveConfiguredAiTimeoutSeconds();
+        return configuredTimeoutSeconds > 0
+                ? Math.min(providerTimeoutSeconds, configuredTimeoutSeconds)
+                : providerTimeoutSeconds;
+    }
+
+    private int resolveProviderRequestTimeoutSeconds(AIProvider provider) {
+        Integer timeout = provider == null ? null : provider.getTimeoutSeconds();
+        return timeout != null && timeout > 0 ? timeout : DEFAULT_PROVIDER_REQUEST_TIMEOUT_SECONDS;
     }
 
     private int resolveConfiguredAiTimeoutSeconds() {
         String configuredValue = systemConfigService.getConfigValue("ai.request.timeout_seconds");
         if (!StringUtils.hasText(configuredValue)) {
-            return 3600;
+            return DEFAULT_GLOBAL_AI_REQUEST_TIMEOUT_SECONDS;
         }
         try {
             int parsed = Integer.parseInt(configuredValue.trim());
-            return parsed > 0 ? parsed : 3600;
+            return parsed > 0 ? parsed : DEFAULT_GLOBAL_AI_REQUEST_TIMEOUT_SECONDS;
         } catch (NumberFormatException exception) {
-            return 3600;
+            return DEFAULT_GLOBAL_AI_REQUEST_TIMEOUT_SECONDS;
         }
+    }
+
+    private IllegalStateException translateTransportFailure(IOException exception, AIProvider provider) {
+        String providerLabel = provider != null && StringUtils.hasText(provider.getName())
+                ? "模型服务「" + provider.getName().trim() + "」"
+                : "模型服务";
+
+        if (exception instanceof HttpTimeoutException || exception instanceof SocketTimeoutException) {
+            return new IllegalStateException(
+                    providerLabel + " 响应超时（" + resolveRequestTimeoutSeconds(provider) + " 秒），请检查模型服务状态或调整超时配置",
+                    exception
+            );
+        }
+        if (exception instanceof UnknownHostException
+                || exception instanceof ConnectException
+                || exception instanceof NoRouteToHostException
+                || exception instanceof SocketException) {
+            return new IllegalStateException(
+                    providerLabel + " 连接失败，请检查服务地址、端口和网络连通性",
+                    exception
+            );
+        }
+        if (StringUtils.hasText(exception.getMessage())) {
+            return new IllegalStateException(providerLabel + " 调用失败：" + exception.getMessage().trim(), exception);
+        }
+        return new IllegalStateException(providerLabel + " 调用失败，无法读取返回结果", exception);
     }
 
     private boolean preferCompatibleOllamaEndpoint(AIProvider provider) {

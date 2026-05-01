@@ -224,6 +224,36 @@ public class ResilientSceneRuntimeStateStore implements SceneRuntimeStateStore {
     }
 
     @Override
+    public void deleteHandoffsFromScene(Long projectId, Long chapterId, String sceneId) {
+        fallbackStore.deleteHandoffsFromScene(projectId, chapterId, sceneId);
+        if (!isRedisStoreEnabled() || !StringUtils.hasText(sceneId)) {
+            return;
+        }
+        try {
+            List<SceneHandoffSnapshot> retained = listChapterHandoffs(projectId, chapterId).stream()
+                    .filter(snapshot -> !sceneId.equals(snapshot.fromSceneId()))
+                    .toList();
+            List<String> manifest = readHandoffManifest(projectId, chapterId);
+            for (String candidate : manifest) {
+                Optional<SceneHandoffSnapshot> snapshot = findHandoffToScene(projectId, chapterId, candidate);
+                if (snapshot.isPresent() && sceneId.equals(snapshot.get().fromSceneId())) {
+                    stringRedisTemplate.delete(buildHandoffKey(projectId, chapterId, candidate));
+                }
+            }
+            writeHandoffManifest(projectId, chapterId, retained.stream()
+                    .map(SceneHandoffSnapshot::toSceneId)
+                    .filter(StringUtils::hasText)
+                    .toList());
+        } catch (JsonProcessingException ex) {
+            log.warn("Failed to rewrite handoff manifest after deleting outgoing handoffs {}/{}/{}", projectId, chapterId, sceneId, ex);
+        } catch (RedisConnectionFailureException ex) {
+            log.warn("Redis unavailable when deleting outgoing scene handoffs {}/{}/{}", projectId, chapterId, sceneId);
+        } catch (RuntimeException ex) {
+            log.warn("Failed to delete outgoing scene handoffs {}/{}/{}", projectId, chapterId, sceneId, ex);
+        }
+    }
+
+    @Override
     public void deleteHandoffsReferencingScene(Long projectId, Long chapterId, String sceneId) {
         fallbackStore.deleteHandoffsReferencingScene(projectId, chapterId, sceneId);
         if (!isRedisStoreEnabled() || !StringUtils.hasText(sceneId)) {
@@ -427,6 +457,16 @@ public class ResilientSceneRuntimeStateStore implements SceneRuntimeStateStore {
         public SceneHandoffSnapshot saveHandoff(SceneHandoffSnapshot snapshot) {
             handoffMap.put(buildSceneKey(snapshot.projectId(), snapshot.chapterId(), snapshot.toSceneId()), snapshot);
             return snapshot;
+        }
+
+        @Override
+        public void deleteHandoffsFromScene(Long projectId, Long chapterId, String sceneId) {
+            handoffMap.entrySet().removeIf(entry -> {
+                SceneHandoffSnapshot snapshot = entry.getValue();
+                return projectId.equals(snapshot.projectId())
+                        && chapterId.equals(snapshot.chapterId())
+                        && sceneId.equals(snapshot.fromSceneId());
+            });
         }
 
         @Override

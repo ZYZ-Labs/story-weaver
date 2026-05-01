@@ -67,6 +67,7 @@ export interface Chapter {
   readingTimeMinutes?: number
   requiredCharacterIds?: number[]
   requiredCharacterNames?: string[]
+  narrativeRuntimeMode?: 'scene' | 'node'
   createTime?: string
   updateTime?: string
 }
@@ -252,6 +253,7 @@ export interface AIWritingRequest {
   selectedModel?: string
   promptSnapshot?: string
   entryPoint?: string
+  sceneId?: string
 }
 
 export interface AIWritingStreamLogItem {
@@ -327,6 +329,10 @@ export interface AIWritingGenerationTrace {
     decisionSummary?: string
     selectedAnchorSummary?: string
   }
+  orchestration?: {
+    entryPoint?: string
+    sceneId?: string
+  }
   summaryTrace?: {
     promptSnapshotPreview?: string
     userInstructionPreview?: string
@@ -356,6 +362,17 @@ export interface AIWritingRecord {
   generationTrace?: AIWritingGenerationTrace | null
   status?: string
   createTime?: string
+}
+
+export interface AIWritingRollbackResult {
+  chapterId: number
+  mode: string
+  rolledBackRecordIds: number[]
+  rolledBackSceneIds: string[]
+  remainingAcceptedSceneIds: string[]
+  currentUnlockedSceneId?: string
+  restoredContentLength?: number
+  message?: string
 }
 
 export interface AIDirectorDecisionRequest {
@@ -588,6 +605,137 @@ export interface ChapterSkeletonView {
   planningNotes: string[]
 }
 
+export interface ChapterSkeletonStreamEvent {
+  type: 'meta' | 'stage' | 'log' | 'complete' | 'error' | string
+  message?: string
+  stage?: string
+  stageStatus?: string
+  selectedProviderId?: number | null
+  selectedModel?: string
+  forceRefresh?: boolean
+  skeleton?: ChapterSkeletonView
+}
+
+export interface NodeActionOptionView {
+  optionId: string
+  label: string
+  intentSummary: string
+  riskNote: string
+  revealHint: string
+}
+
+export interface StoryNodeSkeletonItemView {
+  nodeId: string
+  nodeIndex: number
+  title: string
+  situation: string
+  playerGoal: string
+  recommendedActions: NodeActionOptionView[]
+  customActionAllowed: boolean
+  stopCondition: string
+  checkpointHint: string
+  nextNodeHints: string[]
+}
+
+export interface ChapterNodeSkeletonView {
+  projectId: number
+  chapterId: number
+  skeletonId: string
+  nodeCount: number
+  globalObjective: string
+  nodes: StoryNodeSkeletonItemView[]
+  planningNotes: string[]
+}
+
+export type StoryLoopStatusView = 'OPEN' | 'SUSPENDED' | 'RESOLVED'
+
+export interface StoryActionIntentView {
+  intentId: string
+  projectId: number
+  chapterId: number
+  checkpointId?: string | null
+  nodeId?: string | null
+  actorId?: string | null
+  actorRole?: string | null
+  selectedOptionId?: string | null
+  rawAction: string
+  normalizedAction: string
+  constraints: Record<string, unknown>
+  sourceTrace?: Record<string, unknown> | null
+}
+
+export interface StoryResolvedTurnView {
+  turnId: string
+  projectId: number
+  chapterId: number
+  checkpointId?: string | null
+  nodeId?: string | null
+  actionIntentId?: string | null
+  resolutionSummary: string
+  eventIds: string[]
+  stateDelta: Record<string, unknown>
+  readerRevealDelta: string[]
+  openedLoopIds: string[]
+  resolvedLoopIds: string[]
+  nextCheckpointId?: string | null
+  sourceTrace?: Record<string, unknown> | null
+}
+
+export interface StoryNodeCheckpointView {
+  checkpointId: string
+  projectId: number
+  chapterId: number
+  nodeId?: string | null
+  previousCheckpointId?: string | null
+  nodeIndex?: number | null
+  worldSummary: string
+  readerSummary: string
+  activeOpenLoopIds: string[]
+  actorPositions: Record<string, string>
+  actorGoals: Record<string, string>
+  availableOptionIds: string[]
+  sourceTrace?: Record<string, unknown> | null
+}
+
+export interface StoryOpenLoopView {
+  loopId: string
+  projectId: number
+  chapterId: number
+  sourceNodeId?: string | null
+  label: string
+  status: StoryLoopStatusView
+  owner?: string | null
+  payoffHint: string
+  sourceTurnId?: string | null
+  resolvedByTurnId?: string | null
+  relatedUnitRefs: string[]
+  sourceTrace?: Record<string, unknown> | null
+}
+
+export interface ChapterNodeRuntimeView {
+  projectId: number
+  chapterId: number
+  skeleton: ChapterNodeSkeletonView
+  currentNodeId: string
+  latestCheckpointId: string
+  completedNodeIds: string[]
+  checkpoints: StoryNodeCheckpointView[]
+  activeLoops: StoryOpenLoopView[]
+}
+
+export interface NodeResolutionResultView {
+  projectId: number
+  chapterId: number
+  nodeId: string
+  checkpointId: string
+  actionIntent: StoryActionIntentView
+  resolvedTurn: StoryResolvedTurnView
+  nextCheckpoint: StoryNodeCheckpointView
+  activeLoops: StoryOpenLoopView[]
+  readerRevealState: ReaderRevealStateView
+  chapterState: ChapterIncrementalStateView
+}
+
 export interface ReviewIssueView {
   code?: string
   message?: string
@@ -661,8 +809,26 @@ export interface WriterExecutionBriefView {
   goal?: string
   readerReveal?: string[]
   mustUseAnchors?: string[]
+  forbiddenMoves?: string[]
   stopCondition?: string
   targetWords?: number | null
+  continuityNotes?: string[]
+  previousSceneSummary?: string
+  handoffLine?: string
+  nextSceneId?: string
+  nextSceneGoal?: string
+  continuityState?: {
+    sourceSceneId?: string
+    summary?: string
+    handoffLine?: string
+    carryForwardFacts?: string[]
+    timeAnchors?: string[]
+    expectedNames?: string[]
+    counterpartNames?: string[]
+    nextSceneId?: string
+    nextSceneGoal?: string
+    stopCondition?: string
+  } | null
 }
 
 export interface StorySessionContextPacketView {
@@ -999,6 +1165,27 @@ export interface LegacyProjectBackfillOverviewView {
   chapters: LegacyChapterBackfillStatusItemView[]
 }
 
+export interface LegacyProjectBackfillDryRunItemView {
+  chapterId: number
+  chapterTitle: string
+  canRunBackfill: boolean
+  needsSceneBackfill: boolean
+  needsStateBackfill: boolean
+  actions: LegacyBackfillActionPlanView[]
+  riskNotes: string[]
+}
+
+export interface LegacyProjectBackfillDryRunView {
+  projectId: number
+  totalChapters: number
+  chaptersNeedingBackfill: number
+  runnableChapters: number
+  blockedChapters: number
+  chapters: LegacyProjectBackfillDryRunItemView[]
+  requiredActions: string[]
+  riskNotes: string[]
+}
+
 export type CompatibilityModeView =
   | 'NEW_PRIMARY'
   | 'DUAL_READ'
@@ -1029,4 +1216,29 @@ export interface MigrationCompatibilitySnapshotView {
   dataBoundaries: CompatibilityBoundaryItemView[]
   featureFlags: string[]
   riskNotes: string[]
+}
+
+export type ConsistencySeverityView = 'INFO' | 'WARNING' | 'ERROR'
+
+export interface StoryConsistencyIssueView {
+  issueKey: string
+  severity: ConsistencySeverityView
+  message: string
+}
+
+export interface StoryConsistencyCheckView {
+  projectId: number
+  chapterId: number
+  sceneCount: number
+  completedSceneCount: number
+  handoffCount: number
+  eventCount: number
+  snapshotCount: number
+  patchCount: number
+  hasReaderRevealState: boolean
+  hasChapterState: boolean
+  chapterReviewPresent: boolean
+  chapterReviewResult: string
+  chapterReviewSummary: string
+  issues: StoryConsistencyIssueView[]
 }

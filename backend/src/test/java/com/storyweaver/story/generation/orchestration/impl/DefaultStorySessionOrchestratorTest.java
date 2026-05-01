@@ -103,7 +103,7 @@ class DefaultStorySessionOrchestratorTest {
         WriterExecutionBrief writerExecutionBrief = new WriterExecutionBrief(
                 28L, 31L, "scene-1", "opening-31", "先做开场定向",
                 List.of("待揭晓"), List.of("pov=林沉舟"), List.of("不要跳过开场"),
-                "完成触发点后停住。", 900, List.of(), ""
+                "完成触发点后停住。", 900, List.of(), "", "", "scene-2", "转入回归决定"
         );
         WriterSessionResult writerSessionResult = new WriterSessionResult(
                 "scene-1", "opening-31", "【目标】先做开场定向\n\n【收束点】完成触发点后停住。", "退役者的邀请函 / 先做开场定向"
@@ -188,7 +188,7 @@ class DefaultStorySessionOrchestratorTest {
         WriterExecutionBrief writerExecutionBrief = new WriterExecutionBrief(
                 28L, 31L, "scene-2", "mainline-31", "围绕主线推进",
                 List.of("待揭晓"), List.of("pov=林沉舟"), List.of("不要跳过承接"),
-                "完成承接后停住。", 1100, List.of(), ""
+                "完成承接后停住。", 1100, List.of(), "上一镜头已建立开场", "", "scene-3", "转入新手村会合"
         );
         WriterSessionResult writerSessionResult = new WriterSessionResult(
                 "scene-2", "mainline-31", "【目标】围绕主线推进\n\n【收束点】完成承接后停住。", "退役者的邀请函 / 围绕主线推进"
@@ -261,7 +261,7 @@ class DefaultStorySessionOrchestratorTest {
         WriterExecutionBrief writerExecutionBrief = new WriterExecutionBrief(
                 28L, 31L, "scene-1", "opening-31", "先做开场定向",
                 List.of("待揭晓"), List.of("pov=林沉舟"), List.of("不要跳过开场"),
-                "完成触发点后停住。", 900, List.of(), ""
+                "完成触发点后停住。", 900, List.of(), "", "", "scene-2", "转入回归决定"
         );
         WriterSessionResult writerSessionResult = new WriterSessionResult(
                 "scene-1", "opening-31", "【目标】先做开场定向\n\n【收束点】完成触发点后停住。", "退役者的邀请函 / 先做开场定向"

@@ -79,7 +79,7 @@
     - 总导 fallback
     - generation trace 不完整
   - 已完成 `旧日王座` 第一章首轮线上回归，并沉淀报告：
-    - `docs/reports/REPORT-20260410-old-throne-live-regression-round1.md`
+    - `docs/archive/legacy/reports/REPORT-20260410-old-throne-live-regression-round1.md`
   - 已确认第一章问题并非“首稿完全失效”，而是首轮续写记录目标漂移、收束失败、并出现明显截断
   - 已确认系统当前缺少“系统已知 != 读者已知”的揭晓边界控制
   - 已确认 AI 即使创作出新人物 / 新因果，也还没有对应的结构化新增承接链路
@@ -102,7 +102,7 @@
   - 已通过 `cd front && npm run build`
   - 已完成多轮 `mvn -Dmaven.repo.local=/usr/local/project/github/story-weaver/.cache/m2 -f backend/pom.xml -DskipTests compile`
   - 已完成第二轮线上回归并新增报告：
-    - `docs/reports/REPORT-20260410-old-throne-live-regression-round2.md`
+    - `docs/archive/legacy/reports/REPORT-20260410-old-throne-live-regression-round2.md`
   - 已确认新部署版本的 fresh record `ai_writing_record.id=35` 已写入：
     - `generationTrace.readerReveal`
     - 新版 `director.mode`
@@ -117,7 +117,7 @@
     - 修订后若仍未通过结尾完整性硬检查，会直接失败而不是继续保存破损结果
   - 已再次通过 `mvn -Dmaven.repo.local=/usr/local/project/github/story-weaver/.cache/m2 -f backend/pom.xml -DskipTests compile`
   - 已完成第三轮线上回归并新增报告：
-    - `docs/reports/REPORT-20260411-old-throne-live-regression-round3.md`
+    - `docs/archive/legacy/reports/REPORT-20260411-old-throne-live-regression-round3.md`
   - 已确认 `chapter 31` 当前真实为空章，可直接用于“清空后从零开始写”回归
   - 已确认空章起稿开场不再像从章节中段切入，读者定向已明显改善
   - 已确认 `chapter 31` 的坏稿会被结尾完整性硬检查挡回，且不会新增 `ai_writing_record`
@@ -153,7 +153,7 @@
   - 新建本需求的 requirement / plan / progress 文档
   - 更新 `docs/agent-context.md`
 - 修改文件:
-  - `docs/reports/REPORT-20260409-old-throne-live-review.md`
+  - `docs/archive/legacy/reports/REPORT-20260409-old-throne-live-review.md`
   - `docs/requirements/REQ-20260409-generation-reliability-refactor.md`
   - `docs/plans/PLAN-REQ-20260409-generation-reliability-refactor-v1.md`
   - `docs/progress/PROGRESS-REQ-20260409-generation-reliability-refactor.md`
@@ -431,7 +431,7 @@
   - 新增首轮线上回归报告
   - 将上述两点写回 requirement / plan / agent-context
 - 修改文件:
-  - `docs/reports/REPORT-20260410-old-throne-live-regression-round1.md`
+  - `docs/archive/legacy/reports/REPORT-20260410-old-throne-live-regression-round1.md`
   - `docs/requirements/REQ-20260409-generation-reliability-refactor.md`
   - `docs/plans/PLAN-REQ-20260409-generation-reliability-refactor-v2.md`
   - `docs/progress/PROGRESS-REQ-20260409-generation-reliability-refactor.md`
@@ -504,7 +504,7 @@
   - 确认 Step 10 的摘要建议接口已可返回 `proposedCreates`
   - 新增第二轮线上回归报告
 - 修改文件:
-  - `docs/reports/REPORT-20260410-old-throne-live-regression-round2.md`
+  - `docs/archive/legacy/reports/REPORT-20260410-old-throne-live-regression-round2.md`
   - `docs/progress/PROGRESS-REQ-20260409-generation-reliability-refactor.md`
   - `docs/agent-context.md`
 - 验证:

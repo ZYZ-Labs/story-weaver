@@ -20,6 +20,8 @@ import com.storyweaver.repository.PlotMapper;
 import com.storyweaver.repository.ProjectCharacterMapper;
 import com.storyweaver.service.ChapterService;
 import com.storyweaver.service.ProjectService;
+import com.storyweaver.story.generation.orchestration.ChapterNarrativeRuntimeMode;
+import com.storyweaver.story.generation.orchestration.ChapterNarrativeRuntimeModeService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -46,6 +48,7 @@ public class ChapterServiceImpl extends ServiceImpl<ChapterMapper, Chapter> impl
     private final OutlineMapper outlineMapper;
     private final PlotMapper plotMapper;
     private final ChapterPlotMapper chapterPlotMapper;
+    private final ChapterNarrativeRuntimeModeService chapterNarrativeRuntimeModeService;
 
     public ChapterServiceImpl(
             ProjectService projectService,
@@ -54,7 +57,8 @@ public class ChapterServiceImpl extends ServiceImpl<ChapterMapper, Chapter> impl
             CharacterMapper characterMapper,
             OutlineMapper outlineMapper,
             PlotMapper plotMapper,
-            ChapterPlotMapper chapterPlotMapper) {
+            ChapterPlotMapper chapterPlotMapper,
+            ChapterNarrativeRuntimeModeService chapterNarrativeRuntimeModeService) {
         this.projectService = projectService;
         this.chapterCharacterMapper = chapterCharacterMapper;
         this.projectCharacterMapper = projectCharacterMapper;
@@ -62,6 +66,7 @@ public class ChapterServiceImpl extends ServiceImpl<ChapterMapper, Chapter> impl
         this.outlineMapper = outlineMapper;
         this.plotMapper = plotMapper;
         this.chapterPlotMapper = chapterPlotMapper;
+        this.chapterNarrativeRuntimeModeService = chapterNarrativeRuntimeModeService;
     }
 
     @Override
@@ -306,6 +311,8 @@ public class ChapterServiceImpl extends ServiceImpl<ChapterMapper, Chapter> impl
             return;
         }
 
+        Map<Long, ChapterNarrativeRuntimeMode> runtimeModes = chapterNarrativeRuntimeModeService.getModes(chapters);
+
         List<Long> chapterIds = chapters.stream()
                 .map(Chapter::getId)
                 .filter(Objects::nonNull)
@@ -405,6 +412,7 @@ public class ChapterServiceImpl extends ServiceImpl<ChapterMapper, Chapter> impl
                     chapter.getMainPovCharacterId() == null ? null : povCharacterNameMap.get(chapter.getMainPovCharacterId())
             );
             chapter.setReadingTimeMinutes(resolveReadingTimeMinutes(chapter.getWordCount()));
+            chapter.setNarrativeRuntimeMode(runtimeModes.getOrDefault(chapter.getId(), ChapterNarrativeRuntimeMode.SCENE).apiValue());
             if (!StringUtils.hasText(chapter.getChapterStatus())) {
                 chapter.setChapterStatus(resolveChapterStatus(null, chapter.getStatus(), null));
             }

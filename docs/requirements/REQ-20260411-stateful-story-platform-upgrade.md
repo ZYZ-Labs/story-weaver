@@ -1,9 +1,9 @@
 # Story 平台级架构升级：Summary First、StoryUnit、MCP/State Server 与多 Session 编排
 
 - Req ID: REQ-20260411-stateful-story-platform-upgrade
-- Status: In Progress
+- Status: Completed
 - Created At: 2026-04-11 Asia/Shanghai
-- Updated At: 2026-04-11 Asia/Shanghai
+- Updated At: 2026-04-24 Asia/Shanghai
 
 ## 背景
 
@@ -145,6 +145,21 @@
 - 前端主交互不再默认暴露对象字段表单，而是以摘要、工作台和状态面板为核心。
 - 多 session 写作链路具备明确的职责切分、输入输出协议与状态交接定义。
 - 文档治理流程可支持数周级、上千文件级工程推进与智能体切换。
+
+## 完成结论
+
+- 本次平台级架构升级已完成正式收口。
+- `Phase 0 ~ Phase 10` 的主目标已全部落地：
+  - `Summary First`
+  - `StoryUnit + Facets`
+  - `story-context` 只读上下文服务
+  - 多 session 编排壳
+  - scene / skeleton / handoff / chapter review
+  - 增量状态系统
+  - 前端工作台与章节工作区主入口重构
+  - 迁移兼容、dry-run、compatibility snapshot
+  - 固定样本矩阵、状态一致性检查、页面级验收模板
+- 已知问题仍然存在，但它们不再归属本次架构升级主线，而应转入后续独立的稳定性/体验修复需求。
 
 ## 风险与代价
 

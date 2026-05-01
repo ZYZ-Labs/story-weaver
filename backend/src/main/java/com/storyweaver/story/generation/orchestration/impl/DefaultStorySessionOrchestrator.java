@@ -113,6 +113,9 @@ public class DefaultStorySessionOrchestrator implements StorySessionOrchestrator
         }
 
         List<DirectorCandidate> candidates = directorSessionService.proposeCandidates(contextPacket.get());
+        if (candidates.isEmpty()) {
+            return Optional.empty();
+        }
         SelectionDecision selectionDecision = selectorSessionService.selectCandidate(contextPacket.get(), candidates);
         DirectorCandidate chosenCandidate = candidates.stream()
                 .filter(candidate -> candidate.candidateId().equals(selectionDecision.chosenCandidateId()))

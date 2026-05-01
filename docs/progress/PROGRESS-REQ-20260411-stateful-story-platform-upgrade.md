@@ -1,19 +1,18 @@
 # Story 平台级架构升级 进度记录
 
 - Req ID: REQ-20260411-stateful-story-platform-upgrade
-- Status: In Progress
+- Status: Completed
 - Created At: 2026-04-11 Asia/Shanghai
-- Updated At: 2026-04-23 Asia/Shanghai
+- Updated At: 2026-04-24 Asia/Shanghai
 
 ## 当前快照
 
-- Current Phase: `Phase 9` 进行中
-- Current Task: `Phase 9.3` 兼容边界快照与 feature flag 诊断已落地，正在冻结双读 / 双写灰度边界
-- Last Completed: 已完成 `Phase 8` 代码侧冻结与兼容基线整理
+- Current Phase: `Completed`
+- Current Task: `本次平台级架构升级已正式收口`
+- Last Completed: 已完成 `Phase 10` 测试、观测与回放收口
 - Next Action:
-  - 继续补齐 `Phase 9.3` 的双读 / 双写边界与灰度快照
-  - 同步状态台的兼容诊断面板
-  - 再进入 `Phase 9.4` 的回填验收与迁移收口
+- 新建独立的后续稳定性/体验修复需求
+- 不再继续向 `REQ-20260411-stateful-story-platform-upgrade` 追加 phase
 - Blockers:
   - 旧主线 `REQ-20260409-generation-reliability-refactor` 已归档，但其代码成果和回归报告仍需作为迁移基线继续参考
   - `MCP` 与 `State Server` 的边界仍未形成独立 server 形态，只完成读模型、查询服务与编排消费层
@@ -22,6 +21,7 @@
   - 线上 Redis 的 RDB 持久化仍报 `/data` 写权限问题
   - 但 `stop-writes-on-bgsave-error no` 已写入当前挂载的 `redis.conf`，Redis 重启后不再重新阻断业务写入
   - 当前剩余的是环境持久化质量问题，不再阻塞 `Phase 7.2`
+  - 已知问题仍存在，但已降级为后续独立修复项，不再阻止本次架构升级关闭
 - Latest Verified:
   - 已开始 `Phase 9.2` 的只读回填分析实现：
     - 已新增分析合同：
@@ -100,6 +100,100 @@
       - `StoryStateControllerTest`
       - `npm run type-check`
       - `npm run build`
+  - 已继续推进 `Phase 9.4` 的项目级 dry-run 计划：
+    - 已新增项目级 dry-run 合同：
+      - `LegacyProjectBackfillDryRun`
+      - `LegacyProjectBackfillDryRunItem`
+      - `LegacyProjectBackfillDryRunService`
+    - 已新增实现：
+      - `DefaultLegacyProjectBackfillDryRunService`
+    - 已新增接口：
+      - `GET /api/story-state/projects/{projectId}/backfill-project-dry-run`
+    - 已在 `状态台` 增加项目级 dry-run 面板：
+      - 需回填章节
+      - 可执行章节
+      - 阻塞章节
+      - 项目级建议动作
+      - 章节级 dry-run 清单
+    - 已完成本地回归：
+      - `DefaultLegacyProjectBackfillDryRunServiceTest`
+      - `StoryStateControllerTest`
+      - `npm run type-check`
+      - `npm run build`
+  - 已完成 `Phase 9` 首轮线上联调：
+    - `GET /api/story-state/projects/28/backfill-overview` -> `200`
+    - `GET /api/story-state/projects/28/backfill-project-dry-run` -> `200`
+    - `GET /api/story-state/projects/28/chapters/32/backfill-analysis` -> `200`
+    - `GET /api/story-state/projects/28/chapters/32/backfill-dry-run` -> `200`
+    - `GET /api/story-state/projects/28/chapters/32/compatibility-snapshot` -> `200`
+    - 已确认：
+      - 项目级迁移总览有真实章节统计
+      - 项目级 dry-run 有真实动作和风险清单
+      - 章节级兼容分析 / dry-run / 兼容快照均返回真实数据
+    - 已确认初始 `chapter 31` 返回 `data=null` 的原因是线上项目章节编号已变，不是接口缺陷
+    - 已开始修正样本与前端引导：
+      - `状态台` 在章节级兼容数据为空时会提示切到推荐样本章节
+      - `Phase 9` 样本清单已改为当前真实章节：
+        - `#32 算法少女苏晚`
+        - `#33 训练赛首胜`
+        - `#34 宿敌归来`
+        - `#35 退役者的邀请`
+    - 已形成报告：
+      - `docs/reports/REPORT-20260423-phase9-migration-live-validation-round1.md`
+  - 已完成 `Phase 9` 第二轮线上联调与收口判断：
+    - 已确认当前部署前端产物包含：
+      - `项目级 dry-run 计划`
+      - `Phase 9 验收提示`
+      - `推荐样本章节`
+    - 已确认项目级和章节级接口继续稳定返回 `200`
+    - 已确认当前推荐样本章节冻结为：
+      - `#32 算法少女苏晚`
+      - `#33 训练赛首胜`
+      - `#34 宿敌归来`
+      - `#35 退役者的邀请`
+    - 已判断：
+      - `Phase 9` 可以收口
+      - 页面级统一人工验收模板转入 `Phase 10.3`
+    - 已形成报告：
+      - `docs/reports/REPORT-20260424-phase9-migration-live-validation-round2.md`
+  - 已完成 `Phase 10.1` 固定样本矩阵与回放基线冻结：
+    - 已新增：
+      - `docs/test-data/TESTDATA-20260424-phase10-replay-matrix-v1.md`
+    - 已将 `旧日王座 / projectId=28` 的固定回放章节矩阵冻结为：
+      - `#32 算法少女苏晚`
+      - `#33 训练赛首胜`
+      - `#34 宿敌归来`
+      - `#35 退役者的邀请`
+  - 已开始 `Phase 10.2` 状态一致性检查：
+    - 已新增合同：
+      - `StoryConsistencyCheck`
+      - `StoryConsistencyIssue`
+      - `StoryConsistencyCheckService`
+    - 已新增实现：
+      - `DefaultStoryConsistencyCheckService`
+    - 已新增接口：
+      - `GET /api/story-state/projects/{projectId}/chapters/{chapterId}/consistency-check`
+    - 已在 `状态台` 新增“一致性检查”面板：
+      - scene/completed/handoff/event/snapshot/patch 统计
+      - `ReaderRevealState / ChapterIncrementalState / ChapterReview` 存在性与结果
+      - 一致性问题列表
+    - 已完成本地回归：
+      - `DefaultStoryConsistencyCheckServiceTest`
+      - `StoryStateControllerTest`
+      - `npm run type-check`
+      - `npm run build`
+    - 已形成报告：
+      - `docs/reports/REPORT-20260424-phase10-consistency-baseline-v1.md`
+  - 已开始 `Phase 10.3` 页面级人工验收模板整理：
+    - 已新增：
+      - `docs/guides/GUIDE-20260424-phase10-page-acceptance-template-v1.md`
+    - 当前目标是把页面验收从口头顺序收敛为固定模板
+  - 已完成本次平台级架构升级总收口：
+    - 已新增：
+      - `docs/reports/REPORT-20260424-platform-upgrade-final-closure-v1.md`
+    - 已确认：
+      - `Phase 0 ~ Phase 10` 已全部完成
+      - 后续问题转入独立稳定性/体验修复需求
   - 已完成 `helix-runtime` 接入可行性专项评估：
     - 已确认 `helix-runtime` 当前定位更接近：
       - 通用 `AI Session Runtime`

@@ -67,8 +67,14 @@ public class RuleBasedChapterExecutionReviewService implements ChapterExecutionR
                 executedSceneIds.add(item.sceneId());
                 switch (state.status()) {
                     case COMPLETED -> completedSceneCount++;
-                    case REVIEWING, WRITING, WRITTEN -> reviewingSceneCount++;
-                    case FAILED, BLOCKED -> failedSceneCount++;
+                    case REVIEWING, WRITING, WRITTEN -> {
+                        reviewingSceneCount++;
+                        pendingSceneIds.add(item.sceneId());
+                    }
+                    case FAILED, BLOCKED -> {
+                        failedSceneCount++;
+                        pendingSceneIds.add(item.sceneId());
+                    }
                     default -> pendingSceneIds.add(item.sceneId());
                 }
             }
@@ -111,7 +117,7 @@ public class RuleBasedChapterExecutionReviewService implements ChapterExecutionR
             ));
         }
 
-        boolean chapterExecutionComplete = pendingSceneIds.isEmpty() && failedSceneCount == 0;
+        boolean chapterExecutionComplete = completedSceneCount == scenes.size() && failedSceneCount == 0;
         ReviewResult result = issues.stream().anyMatch(issue -> issue.severity() == ReviewSeverity.ERROR || issue.severity() == ReviewSeverity.BLOCKER)
                 ? ReviewResult.REVISE
                 : (chapterExecutionComplete ? ReviewResult.PASS : ReviewResult.REVISE);

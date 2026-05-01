@@ -7,9 +7,11 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.NullNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.storyweaver.ai.director.application.AIDirectorApplicationService;
 import com.storyweaver.domain.dto.AIDirectorDecisionRequestDTO;
 import com.storyweaver.domain.dto.AIWritingRequestDTO;
+import com.storyweaver.exception.SceneWorkflowConflictException;
 import com.storyweaver.domain.entity.AIProvider;
 import com.storyweaver.domain.entity.AIWritingRecord;
 import com.storyweaver.domain.entity.Causality;
@@ -20,6 +22,7 @@ import com.storyweaver.domain.entity.Plot;
 import com.storyweaver.domain.entity.Project;
 import com.storyweaver.domain.vo.AIWritingChatParticipationVO;
 import com.storyweaver.domain.vo.AIDirectorDecisionVO;
+import com.storyweaver.domain.vo.AIWritingRollbackResponseVO;
 import com.storyweaver.domain.vo.AIWritingResponseVO;
 import com.storyweaver.domain.vo.AIWritingStreamEventVO;
 import com.storyweaver.domain.vo.WorldSettingVO;
@@ -46,8 +49,18 @@ import com.storyweaver.story.generation.GenerationReadinessVO;
 import com.storyweaver.story.generation.ReaderRevealConstraint;
 import com.storyweaver.story.generation.StructuredCreationSuggestion;
 import com.storyweaver.story.generation.StructuredCreationSuggestionService;
+import com.storyweaver.story.generation.orchestration.StorySessionContextPacket;
+import com.storyweaver.story.generation.orchestration.SceneExecutionWriteService;
+import com.storyweaver.story.generation.orchestration.SceneSkeletonItem;
+import com.storyweaver.story.generation.orchestration.StorySessionContextAssembler;
+import com.storyweaver.story.generation.orchestration.ChapterNarrativeRuntimeModeService;
+import com.storyweaver.story.generation.orchestration.impl.AIContinuityStateService;
+import com.storyweaver.story.generation.orchestration.impl.SceneContinuitySupport;
+import com.storyweaver.story.generation.orchestration.impl.ChapterSceneWorkflowGuardService;
+import com.storyweaver.storyunit.session.SceneContinuityState;
 import org.springframework.beans.BeanUtils;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 import java.util.ArrayList;
@@ -62,6 +75,7 @@ import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
+import java.time.LocalDateTime;
 
 @Service
 public class AIWritingServiceImpl extends ServiceImpl<AIWritingRecordMapper, AIWritingRecord> implements AIWritingService {
@@ -85,6 +99,12 @@ public class AIWritingServiceImpl extends ServiceImpl<AIWritingRecordMapper, AIW
     private final AIDirectorApplicationService aiDirectorApplicationService;
     private final GenerationReadinessService generationReadinessService;
     private final StructuredCreationSuggestionService structuredCreationSuggestionService;
+    private final StorySessionContextAssembler storySessionContextAssembler;
+    private final SceneExecutionWriteService sceneExecutionWriteService;
+    private final ChapterSceneWorkflowGuardService chapterSceneWorkflowGuardService;
+    private final ChapterNarrativeRuntimeModeService chapterNarrativeRuntimeModeService;
+    private final ChapterWorkspaceAcceptedSceneRollbackService chapterWorkspaceAcceptedSceneRollbackService;
+    private final AIContinuityStateService aiContinuityStateService;
     private final ObjectMapper objectMapper;
 
     public AIWritingServiceImpl(
@@ -104,6 +124,12 @@ public class AIWritingServiceImpl extends ServiceImpl<AIWritingRecordMapper, AIW
             AIDirectorApplicationService aiDirectorApplicationService,
             GenerationReadinessService generationReadinessService,
             StructuredCreationSuggestionService structuredCreationSuggestionService,
+            StorySessionContextAssembler storySessionContextAssembler,
+            SceneExecutionWriteService sceneExecutionWriteService,
+            ChapterSceneWorkflowGuardService chapterSceneWorkflowGuardService,
+            ChapterNarrativeRuntimeModeService chapterNarrativeRuntimeModeService,
+            ChapterWorkspaceAcceptedSceneRollbackService chapterWorkspaceAcceptedSceneRollbackService,
+            AIContinuityStateService aiContinuityStateService,
             ObjectMapper objectMapper) {
         this.chapterService = chapterService;
         this.knowledgeDocumentService = knowledgeDocumentService;
@@ -121,6 +147,12 @@ public class AIWritingServiceImpl extends ServiceImpl<AIWritingRecordMapper, AIW
         this.aiDirectorApplicationService = aiDirectorApplicationService;
         this.generationReadinessService = generationReadinessService;
         this.structuredCreationSuggestionService = structuredCreationSuggestionService;
+        this.storySessionContextAssembler = storySessionContextAssembler;
+        this.sceneExecutionWriteService = sceneExecutionWriteService;
+        this.chapterSceneWorkflowGuardService = chapterSceneWorkflowGuardService;
+        this.chapterNarrativeRuntimeModeService = chapterNarrativeRuntimeModeService;
+        this.chapterWorkspaceAcceptedSceneRollbackService = chapterWorkspaceAcceptedSceneRollbackService;
+        this.aiContinuityStateService = aiContinuityStateService;
         this.objectMapper = objectMapper;
     }
 
@@ -178,26 +210,60 @@ public class AIWritingServiceImpl extends ServiceImpl<AIWritingRecordMapper, AIW
     }
 
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public AIWritingResponseVO acceptGeneratedContent(Long id) {
         AIWritingRecord record = getById(id);
         if (record == null || Integer.valueOf(1).equals(record.getDeleted())) {
             return null;
         }
+        if ("accepted".equalsIgnoreCase(record.getStatus())
+                || "rejected".equalsIgnoreCase(record.getStatus())
+                || "rolled_back".equalsIgnoreCase(record.getStatus())) {
+            throw new SceneWorkflowConflictException("该草稿已处理，不能重复接纳。");
+        }
 
         Chapter chapter = chapterService.getById(record.getChapterId());
-        if (chapter != null) {
-            if ("continue".equals(record.getWritingType())) {
-                String currentContent = chapter.getContent() == null ? "" : chapter.getContent();
-                String newContent = currentContent.isBlank()
-                        ? record.getGeneratedContent()
-                        : currentContent + "\n\n" + record.getGeneratedContent();
-                chapter.setContent(newContent);
-            } else {
-                chapter.setContent(record.getGeneratedContent());
+        JsonNode traceRoot = readJson(record.getGenerationTraceJson());
+        String entryPoint = resolveOrchestrationEntryPoint(traceRoot);
+        String sceneId = resolveOrchestrationSceneId(record, traceRoot);
+        Long projectId = chapter == null ? null : chapter.getProjectId();
+        ChapterSceneWorkflowGuardService.SceneWorkflowState workflowState = null;
+        if (isChapterWorkspaceSceneDraftEntryPoint(entryPoint)) {
+            if (chapter == null || projectId == null) {
+                throw new SceneWorkflowConflictException("章节工作区镜头草稿缺少有效的章节或项目信息，无法完成接纳。");
             }
+            chapterNarrativeRuntimeModeService.assertSceneMode(chapter, "在章节工作区接纳 scene 草稿");
+            workflowState = chapterSceneWorkflowGuardService.assertCurrentUnlockedScene(
+                    projectId,
+                    record.getChapterId(),
+                    sceneId,
+                    "接纳当前镜头"
+                );
+        }
+        if (chapter != null) {
+            String contentBeforeAccept = chapter.getContent() == null ? "" : chapter.getContent();
+            String newContent;
+            if ("continue".equals(record.getWritingType())) {
+                newContent = contentBeforeAccept.isBlank()
+                        ? record.getGeneratedContent()
+                        : contentBeforeAccept + "\n\n" + record.getGeneratedContent();
+            } else {
+                newContent = record.getGeneratedContent();
+            }
+            chapter.setContent(newContent);
             chapter.setWordCount(chapter.getContent() == null ? 0 : chapter.getContent().length());
             chapterService.updateById(chapter);
+            record.setGenerationTraceJson(updateGenerationTraceWithAcceptance(
+                    traceRoot,
+                    entryPoint,
+                    sceneId,
+                    contentBeforeAccept,
+                    newContent
+            ));
             syncKnowledgeDocument(chapter, record);
+        }
+        if (workflowState != null && projectId != null) {
+            writeAcceptedSceneRuntime(projectId, chapter.getId(), sceneId, workflowState, record);
         }
 
         record.setStatus("accepted");
@@ -216,6 +282,117 @@ public class AIWritingServiceImpl extends ServiceImpl<AIWritingRecordMapper, AIW
         return null;
     }
 
+    @Override
+    public AIWritingRollbackResponseVO rollbackLatestAcceptedScene(Long chapterId) {
+        Chapter chapter = chapterService.getById(chapterId);
+        if (chapter != null) {
+            chapterNarrativeRuntimeModeService.assertSceneMode(chapter, "撤回已接纳 scene");
+        }
+        return chapterWorkspaceAcceptedSceneRollbackService.rollbackLatestAcceptedScene(chapterId);
+    }
+
+    @Override
+    public AIWritingRollbackResponseVO rollbackAllAcceptedScenes(Long chapterId) {
+        Chapter chapter = chapterService.getById(chapterId);
+        if (chapter != null) {
+            chapterNarrativeRuntimeModeService.assertSceneMode(chapter, "撤回已接纳 scene");
+        }
+        return chapterWorkspaceAcceptedSceneRollbackService.rollbackAllAcceptedScenes(chapterId);
+    }
+
+    private void writeAcceptedSceneRuntime(
+            Long projectId,
+            Long chapterId,
+            String sceneId,
+            ChapterSceneWorkflowGuardService.SceneWorkflowState workflowState,
+            AIWritingRecord record) {
+        if (!StringUtils.hasText(sceneId)) {
+            throw new SceneWorkflowConflictException("当前镜头草稿缺少 sceneId，无法完成接纳。");
+        }
+        SceneSkeletonItem currentScene = workflowState.findScene(sceneId)
+                .orElseThrow(() -> new SceneWorkflowConflictException("当前镜头 " + sceneId + " 不存在于章节骨架中。"));
+        SceneSkeletonItem nextScene = workflowState.nextScene(sceneId).orElse(null);
+        storySessionContextAssembler.assemble(projectId, chapterId, sceneId)
+                .ifPresentOrElse(
+                        contextPacket -> sceneExecutionWriteService.writeAccepted(
+                                contextPacket,
+                                currentScene,
+                                nextScene,
+                                record.getId(),
+                                record.getGeneratedContent()
+                        ),
+                        () -> {
+                            throw new SceneWorkflowConflictException("当前镜头上下文装配失败，无法完成接纳写回。");
+                        }
+                );
+    }
+
+    private String updateGenerationTraceWithAcceptance(
+            JsonNode traceRoot,
+            String entryPoint,
+            String sceneId,
+            String contentBeforeAccept,
+            String contentAfterAccept) {
+        ObjectNode root = traceRoot instanceof ObjectNode objectNode
+                ? objectNode.deepCopy()
+                : objectMapper.createObjectNode();
+        ObjectNode acceptanceNode = root.putObject("acceptance");
+        acceptanceNode.put("entryPoint", entryPoint == null ? "" : entryPoint.trim());
+        acceptanceNode.put("sceneId", sceneId == null ? "" : sceneId.trim());
+        acceptanceNode.put("contentBeforeAccept", contentBeforeAccept == null ? "" : contentBeforeAccept);
+        acceptanceNode.put("contentAfterAccept", contentAfterAccept == null ? "" : contentAfterAccept);
+        acceptanceNode.put("acceptedAt", LocalDateTime.now().toString());
+        try {
+            return objectMapper.writeValueAsString(root);
+        } catch (JsonProcessingException exception) {
+            return "{}";
+        }
+    }
+
+    private String resolveRequestedSceneId(AIWritingRequestDTO requestDTO, String userInstruction) {
+        if (StringUtils.hasText(requestDTO.getSceneId())) {
+            return requestDTO.getSceneId().trim();
+        }
+        return extractSceneIdFromInstruction(userInstruction);
+    }
+
+    private String resolveOrchestrationEntryPoint(JsonNode traceRoot) {
+        return traceRoot.path("orchestration").path("entryPoint").asText("").trim();
+    }
+
+    private String resolveOrchestrationSceneId(AIWritingRecord record, JsonNode traceRoot) {
+        String sceneId = traceRoot.path("orchestration").path("sceneId").asText("").trim();
+        if (StringUtils.hasText(sceneId)) {
+            return sceneId;
+        }
+        return extractSceneIdFromInstruction(record.getUserInstruction());
+    }
+
+    private String extractSceneIdFromInstruction(String userInstruction) {
+        if (!StringUtils.hasText(userInstruction)) {
+            return "";
+        }
+        for (String line : userInstruction.split("\\R")) {
+            String trimmed = line.trim();
+            if (trimmed.startsWith("【镜头ID】")) {
+                return trimmed.substring("【镜头ID】".length()).trim();
+            }
+        }
+        int marker = userInstruction.indexOf("scene-");
+        if (marker < 0) {
+            return "";
+        }
+        int endIndex = marker + "scene-".length();
+        while (endIndex < userInstruction.length() && Character.isDigit(userInstruction.charAt(endIndex))) {
+            endIndex++;
+        }
+        return endIndex > marker + "scene-".length() ? userInstruction.substring(marker, endIndex).trim() : "";
+    }
+
+    private boolean isChapterWorkspaceSceneDraftEntryPoint(String entryPoint) {
+        return "phase8.chapter-workspace.scene-draft".equals(entryPoint == null ? "" : entryPoint.trim());
+    }
+
     private PreparedGenerationContext prepareGeneration(
             Long userId,
             AIWritingRequestDTO requestDTO,
@@ -230,10 +407,31 @@ public class AIWritingServiceImpl extends ServiceImpl<AIWritingRecordMapper, AIW
         );
         String writingType = normalizeWritingType(requestDTO.getWritingType(), currentContent);
         String userInstruction = normalizeText(requestDTO.getUserInstruction());
+        String entryPoint = normalizeText(requestDTO.getEntryPoint());
+        String sceneId = resolveRequestedSceneId(requestDTO, userInstruction);
+        SceneDraftConstraintBundle sceneDraftConstraintBundle = null;
+        if (isChapterWorkspaceSceneDraftEntryPoint(entryPoint)) {
+            if (chapter.getProjectId() == null) {
+                throw new SceneWorkflowConflictException("当前章节缺少项目归属，无法按镜头顺序生成。");
+            }
+            chapterNarrativeRuntimeModeService.assertSceneMode(chapter, "在章节工作区生成 scene 草稿");
+            ChapterSceneWorkflowGuardService.SceneWorkflowState workflowState = chapterSceneWorkflowGuardService.assertCurrentUnlockedScene(
+                    chapter.getProjectId(),
+                    chapter.getId(),
+                    sceneId,
+                    "生成当前镜头草稿"
+            );
+            sceneDraftConstraintBundle = buildSceneDraftConstraintBundle(
+                    chapter.getProjectId(),
+                    chapter.getId(),
+                    sceneId,
+                    workflowState
+            );
+        }
         AIModelRoutingService.ResolvedModelSelection selection = aiModelRoutingService.resolve(
                 requestDTO.getSelectedProviderId(),
                 requestDTO.getSelectedModel(),
-                requestDTO.getEntryPoint()
+                entryPoint
         );
         AIProvider provider = selection.provider();
         String selectedModel = selection.model();
@@ -288,6 +486,8 @@ public class AIWritingServiceImpl extends ServiceImpl<AIWritingRecordMapper, AIW
                 provider,
                 selectedModel,
                 promptSnapshot,
+                entryPoint,
+                sceneId,
                 buildSystemPrompt(promptSnapshot),
                 buildUserPrompt(
                         project,
@@ -297,6 +497,7 @@ public class AIWritingServiceImpl extends ServiceImpl<AIWritingRecordMapper, AIW
                         readiness,
                         readerRevealConstraint,
                         directorDecision,
+                        sceneDraftConstraintBundle,
                         currentContent,
                         writingType,
                         userInstruction
@@ -306,6 +507,7 @@ public class AIWritingServiceImpl extends ServiceImpl<AIWritingRecordMapper, AIW
                 readiness,
                 anchorBundle,
                 readerRevealConstraint,
+                sceneDraftConstraintBundle,
                 resolveMaxTokens(requestDTO.getMaxTokens(), chapter, currentContent, writingType)
         );
     }
@@ -956,6 +1158,7 @@ public class AIWritingServiceImpl extends ServiceImpl<AIWritingRecordMapper, AIW
             GenerationReadinessVO readiness,
             ReaderRevealConstraint readerRevealConstraint,
             AIDirectorDecisionVO directorDecision,
+            SceneDraftConstraintBundle sceneDraftConstraintBundle,
             String currentContent,
             String writingType,
             String userInstruction) {
@@ -1010,6 +1213,7 @@ public class AIWritingServiceImpl extends ServiceImpl<AIWritingRecordMapper, AIW
         appendInlineConstraint(builder, "背景补充硬性约束", contextBundle.chatParticipation().getHardConstraints());
         appendAnchorSnapshotSection(builder, anchorBundle, readiness);
         appendReaderRevealSection(builder, readerRevealConstraint);
+        appendSceneDraftConstraintSection(builder, sceneDraftConstraintBundle);
         builder.append(resolveWritingIntent(writingType));
         appendDirectorDecisionSection(builder, directorDecision);
 
@@ -1051,6 +1255,93 @@ public class AIWritingServiceImpl extends ServiceImpl<AIWritingRecordMapper, AIW
         }
 
         return builder.toString();
+    }
+
+    private SceneDraftConstraintBundle buildSceneDraftConstraintBundle(
+            Long projectId,
+            Long chapterId,
+            String sceneId,
+            ChapterSceneWorkflowGuardService.SceneWorkflowState workflowState) {
+        SceneSkeletonItem currentScene = workflowState.findScene(sceneId)
+                .orElseThrow(() -> new SceneWorkflowConflictException("当前镜头 " + sceneId + " 不存在于章节骨架中。"));
+        SceneSkeletonItem nextScene = workflowState.nextScene(sceneId).orElse(null);
+        StorySessionContextPacket contextPacket = storySessionContextAssembler.assemble(projectId, chapterId, sceneId).orElse(null);
+        SceneContinuityState continuityState = contextPacket == null
+                ? new SceneContinuityState(
+                "",
+                "",
+                "",
+                List.of(),
+                List.of(),
+                List.of(),
+                List.of(),
+                false,
+                nextScene == null ? "" : nextScene.sceneId(),
+                nextScene == null ? "" : nextScene.goal(),
+                currentScene.stopCondition()
+        )
+                : SceneContinuitySupport.resolveContinuityState(
+                contextPacket.previousSceneHandoff(),
+                contextPacket.sceneBindingContext().resolvedSceneState(),
+                contextPacket.existingSceneStates(),
+                nextScene == null ? "" : nextScene.sceneId(),
+                nextScene == null ? "" : nextScene.goal(),
+                currentScene.stopCondition()
+        );
+        return new SceneDraftConstraintBundle(
+                currentScene.sceneId(),
+                currentScene.goal(),
+                currentScene.readerReveal(),
+                currentScene.mustUseAnchors(),
+                currentScene.stopCondition(),
+                nextScene == null ? "" : nextScene.sceneId(),
+                nextScene == null ? "" : nextScene.goal(),
+                continuityState
+        );
+    }
+
+    private void appendSceneDraftConstraintSection(
+            StringBuilder builder,
+            SceneDraftConstraintBundle sceneDraftConstraintBundle) {
+        if (builder == null || sceneDraftConstraintBundle == null) {
+            return;
+        }
+        builder.append("\n【镜头顺序硬约束】\n");
+        builder.append("当前镜头：").append(sceneDraftConstraintBundle.sceneId()).append('\n');
+        if (StringUtils.hasText(sceneDraftConstraintBundle.goal())) {
+            builder.append("本镜头目标：").append(sceneDraftConstraintBundle.goal()).append('\n');
+        }
+        appendInlineConstraint(builder, "本镜头应揭晓", sceneDraftConstraintBundle.readerReveal());
+        appendInlineConstraint(builder, "本镜头必须使用锚点", sceneDraftConstraintBundle.mustUseAnchors());
+        if (StringUtils.hasText(sceneDraftConstraintBundle.stopCondition())) {
+            builder.append("本镜头停点：").append(sceneDraftConstraintBundle.stopCondition()).append('\n');
+        }
+        if (sceneDraftConstraintBundle.continuityState() != null && !sceneDraftConstraintBundle.continuityState().isEmpty()) {
+            if (StringUtils.hasText(sceneDraftConstraintBundle.continuityState().summary())) {
+                builder.append("上一镜头真实摘要：").append(sceneDraftConstraintBundle.continuityState().summary()).append('\n');
+            }
+            if (StringUtils.hasText(sceneDraftConstraintBundle.continuityState().handoffLine())) {
+                builder.append("上一镜头真实交接：").append(sceneDraftConstraintBundle.continuityState().handoffLine()).append('\n');
+            }
+            appendInlineConstraint(builder, "必须继承事实", sceneDraftConstraintBundle.continuityState().carryForwardFacts());
+            appendInlineConstraint(builder, "时间锚点", sceneDraftConstraintBundle.continuityState().timeAnchors());
+            appendInlineConstraint(
+                    builder,
+                    "沿用人物称呼",
+                    sceneDraftConstraintBundle.continuityState().counterpartNames().isEmpty()
+                            ? sceneDraftConstraintBundle.continuityState().expectedNames()
+                            : sceneDraftConstraintBundle.continuityState().counterpartNames()
+            );
+        }
+        if (StringUtils.hasText(sceneDraftConstraintBundle.nextSceneId())
+                && StringUtils.hasText(sceneDraftConstraintBundle.nextSceneGoal())) {
+            builder.append("下一镜头入口预留：")
+                    .append(sceneDraftConstraintBundle.nextSceneId())
+                    .append(" 将转入 ")
+                    .append(sceneDraftConstraintBundle.nextSceneGoal())
+                    .append("。\n");
+        }
+        builder.append("顺序规则：只能完成当前镜头，禁止回写已接纳前缀，禁止提前展开下一镜头正文。\n");
     }
 
     private void appendAnchorSnapshotSection(
@@ -1474,9 +1765,12 @@ public class AIWritingServiceImpl extends ServiceImpl<AIWritingRecordMapper, AIW
         List<String> hardIssuesAfterWrite = detectHardConstraintIssues(context, content);
 
         if (settings.maxCheckRounds() <= 0) {
-            String stabilizedContent = stabilizeEndingIfNeeded(context, eventConsumer, content, hardIssuesAfterWrite);
-            failOnHardConstraintIssues(detectHardConstraintIssues(context, stabilizedContent));
-            return new WorkflowResult(stabilizedContent);
+            return new WorkflowResult(finalizeContentWithHardConstraintRepair(
+                    context,
+                    eventConsumer,
+                    content,
+                    hardIssuesAfterWrite
+            ));
         }
 
         emitStage(eventConsumer, "check", "started", "正在检查连贯性与约束条件");
@@ -1514,9 +1808,12 @@ public class AIWritingServiceImpl extends ServiceImpl<AIWritingRecordMapper, AIW
         emitStage(eventConsumer, "check", "completed", checkResult.requiresRevision() ? "建议进行修订" : "检查通过");
 
         if (!checkResult.requiresRevision() || settings.maxRevisionRounds() <= 0) {
-            String stabilizedContent = stabilizeEndingIfNeeded(context, eventConsumer, content, checkResult.hardIssues());
-            failOnHardConstraintIssues(detectHardConstraintIssues(context, stabilizedContent));
-            return new WorkflowResult(stabilizedContent);
+            return new WorkflowResult(finalizeContentWithHardConstraintRepair(
+                    context,
+                    eventConsumer,
+                    content,
+                    checkResult.hardIssues()
+            ));
         }
 
         emitStage(eventConsumer, "revise", "started", "正在根据审校意见修订正文");
@@ -1540,14 +1837,12 @@ public class AIWritingServiceImpl extends ServiceImpl<AIWritingRecordMapper, AIW
             eventConsumer.accept(AIWritingStreamEventVO.replace(revisedContent));
         }
         emitStage(eventConsumer, "revise", "completed", "修订结果已应用");
-        String stabilizedContent = stabilizeEndingIfNeeded(
+        return new WorkflowResult(finalizeContentWithHardConstraintRepair(
                 context,
                 eventConsumer,
                 revisedContent,
                 detectHardConstraintIssues(context, revisedContent)
-        );
-        failOnHardConstraintIssues(detectHardConstraintIssues(context, stabilizedContent));
-        return new WorkflowResult(stabilizedContent);
+        ));
     }
 
     private WorkflowSettings loadWorkflowSettings() {
@@ -1700,6 +1995,18 @@ public class AIWritingServiceImpl extends ServiceImpl<AIWritingRecordMapper, AIW
             issues.add("生成结果为空，未产出可用正文。");
             return issues;
         }
+        if (context != null && context.sceneDraftConstraintBundle() != null) {
+            issues.addAll(aiContinuityStateService.inspectGeneratedScene(
+                    context.provider(),
+                    context.selectedModel(),
+                    context.sceneDraftConstraintBundle().continuityState(),
+                    content,
+                    context.sceneDraftConstraintBundle().goal(),
+                    context.sceneDraftConstraintBundle().stopCondition(),
+                    context.sceneDraftConstraintBundle().nextSceneId(),
+                    context.sceneDraftConstraintBundle().nextSceneGoal()
+            ));
+        }
         if (hasIncompleteEnding(content)) {
             issues.add("正文结尾停在未完成句子、缺少自然收束，不能直接作为可提交结果。");
         }
@@ -1752,6 +2059,23 @@ public class AIWritingServiceImpl extends ServiceImpl<AIWritingRecordMapper, AIW
         return "生成结果未通过硬性完整性检查：" + String.join("；", normalizedIssues) + "。请重试或调整本章锚点后再生成。";
     }
 
+    private String finalizeContentWithHardConstraintRepair(
+            PreparedGenerationContext context,
+            Consumer<AIWritingStreamEventVO> eventConsumer,
+            String content,
+            List<String> hardIssues) {
+        String stabilizedContent = stabilizeEndingIfNeeded(context, eventConsumer, content, hardIssues);
+        List<String> remainingHardIssues = detectHardConstraintIssues(context, stabilizedContent);
+        String repairedContent = repairHardConstraintIssuesIfNeeded(
+                context,
+                eventConsumer,
+                stabilizedContent,
+                remainingHardIssues
+        );
+        failOnHardConstraintIssues(detectHardConstraintIssues(context, repairedContent));
+        return repairedContent;
+    }
+
     private String stabilizeEndingIfNeeded(
             PreparedGenerationContext context,
             Consumer<AIWritingStreamEventVO> eventConsumer,
@@ -1788,6 +2112,71 @@ public class AIWritingServiceImpl extends ServiceImpl<AIWritingRecordMapper, AIW
         }
         emitStage(eventConsumer, "repair", "completed", "结尾修补已完成");
         return stabilized;
+    }
+
+    private String repairHardConstraintIssuesIfNeeded(
+            PreparedGenerationContext context,
+            Consumer<AIWritingStreamEventVO> eventConsumer,
+            String content,
+            List<String> hardIssues) {
+        if (!StringUtils.hasText(content) || hardIssues == null || hardIssues.isEmpty()) {
+            return content;
+        }
+        List<String> actionableIssues = hardIssues.stream()
+                .filter(StringUtils::hasText)
+                .filter(issue -> !issue.contains("结尾") && !issue.contains("收束"))
+                .toList();
+        if (actionableIssues.isEmpty()) {
+            return content;
+        }
+
+        emitStage(eventConsumer, "repair", "started", "检测到镜头连续性硬问题，正在定向修订当前镜头");
+        String repairedContent = executeWithHeartbeat(
+                eventConsumer,
+                "repair",
+                "正在校正人物称呼、时间线和镜头停点，请稍候",
+                () -> aiProviderService.generateText(
+                        context.provider(),
+                        context.selectedModel(),
+                        """
+                        你是一名中文小说连续性修订助手。
+                        请只输出修订后的完整正文，不要解释。
+                        你必须优先修复人物称呼漂移、时间线冲突和越过下一镜头停点的问题。
+                        如果原稿已经提前写到下一镜头，请保留当前镜头需要的部分，并删回到当前镜头停点前自然收束。
+                        """,
+                        buildHardConstraintRepairPrompt(context, content, actionableIssues),
+                        null,
+                        context.maxTokens()
+                )
+        );
+        emitLog(eventConsumer, "repair", "已根据硬性完整性问题重写当前镜头。");
+        if (eventConsumer != null && !Objects.equals(repairedContent, content)) {
+            eventConsumer.accept(AIWritingStreamEventVO.replace(repairedContent));
+        }
+        emitStage(eventConsumer, "repair", "completed", "镜头连续性定向修订已完成");
+        return repairedContent;
+    }
+
+    private String buildHardConstraintRepairPrompt(
+            PreparedGenerationContext context,
+            String content,
+            List<String> hardIssues) {
+        StringBuilder builder = new StringBuilder();
+        builder.append("请针对以下硬性问题修订当前镜头正文。\n");
+        builder.append("要求：\n");
+        builder.append("1. 只输出完整修订后的正文。\n");
+        builder.append("2. 必须沿用上一镜头已确认的人物称呼和会话对象，不要改成其他人。\n");
+        builder.append("3. 只能完成当前镜头，不能把正文推进到下一镜头。\n");
+        builder.append("4. 如果正文已经提前写到下一镜头，请删回到当前镜头停点前，并自然收束。\n");
+        builder.append("5. 保留已经正确的剧情事实、文风和情绪基调。\n\n");
+        builder.append("【必须修复的问题】\n");
+        for (String issue : hardIssues) {
+            builder.append("- ").append(issue.trim()).append('\n');
+        }
+        builder.append('\n');
+        builder.append("【上下文】\n").append(context.userPrompt()).append("\n\n");
+        builder.append("【待修订正文】\n").append(content.trim());
+        return builder.toString();
     }
 
     private boolean containsIncompleteEndingIssue(List<String> hardIssues) {
@@ -2172,6 +2561,11 @@ public class AIWritingServiceImpl extends ServiceImpl<AIWritingRecordMapper, AIW
             root.put("director", directorTrace);
         }
 
+        Map<String, Object> orchestrationTrace = new LinkedHashMap<>();
+        orchestrationTrace.put("entryPoint", context.entryPoint());
+        orchestrationTrace.put("sceneId", context.sceneId());
+        root.put("orchestration", orchestrationTrace);
+
         WritingContextBundle contextBundle = context.contextBundle();
         AIWritingChatParticipationVO participation = contextBundle == null
                 ? AIWritingChatParticipationVO.empty()
@@ -2249,6 +2643,8 @@ public class AIWritingServiceImpl extends ServiceImpl<AIWritingRecordMapper, AIW
             AIProvider provider,
             String selectedModel,
             String promptSnapshot,
+            String entryPoint,
+            String sceneId,
             String systemPrompt,
             String userPrompt,
             WritingContextBundle contextBundle,
@@ -2256,7 +2652,19 @@ public class AIWritingServiceImpl extends ServiceImpl<AIWritingRecordMapper, AIW
             GenerationReadinessVO readiness,
             ChapterAnchorBundle anchorBundle,
             ReaderRevealConstraint readerRevealConstraint,
+            SceneDraftConstraintBundle sceneDraftConstraintBundle,
             Integer maxTokens) {
+    }
+
+    private record SceneDraftConstraintBundle(
+            String sceneId,
+            String goal,
+            List<String> readerReveal,
+            List<String> mustUseAnchors,
+            String stopCondition,
+            String nextSceneId,
+            String nextSceneGoal,
+            SceneContinuityState continuityState) {
     }
 
     private record WritingContextBundle(

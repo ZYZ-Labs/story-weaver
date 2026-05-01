@@ -2,9 +2,9 @@
 
 - Req ID: REQ-20260411-stateful-story-platform-upgrade
 - Plan ID: PLAN-REQ-20260411-stateful-story-platform-upgrade-phase9-migration-compatibility-v1
-- Status: In Progress
+- Status: Completed
 - Created At: 2026-04-20 Asia/Shanghai
-- Updated At: 2026-04-23 Asia/Shanghai
+- Updated At: 2026-04-24 Asia/Shanghai
 
 ## 本轮目标
 
@@ -151,17 +151,45 @@
 - 当前仍保持克制：
   - 先做项目级只读验收入口
   - 暂不直接引入批量写入
+- 已新增项目级 dry-run 计划接口：
+  - `GET /api/story-state/projects/{projectId}/backfill-project-dry-run`
+- 已在 `状态台` 增加项目级 dry-run 面板：
+  - 需回填章节
+  - 可执行章节
+  - 阻塞章节
+  - 项目级建议动作
+  - 前 6 个章节的 dry-run 清单
+- 当前仍坚持：
+  - 只补只读验收和项目级计划壳
+  - 暂不引入破坏式批量写入
+- 已完成首轮线上联调：
+  - `backfill-overview`
+  - `backfill-project-dry-run`
+  - `chapter backfill-analysis`
+  - `chapter backfill-dry-run`
+  - `compatibility-snapshot`
+  均已在线上返回真实数据
+- 已完成第二轮线上联调：
+  - 已确认当前部署前端产物包含：
+    - `项目级 dry-run 计划`
+    - `Phase 9 验收提示`
+    - `推荐样本章节`
+  - 已确认项目级和章节级接口继续稳定返回 `200`
+- 其中样本章节当前已修正为：
+  - `#32 算法少女苏晚`
+  - `#33 训练赛首胜`
+  - `#34 宿敌归来`
+  - `#35 退役者的邀请`
+- 页面级统一人工验收模板已转入 `Phase 10.3`
 
 ## 当前阶段判断
 
 - `Phase 8` 当前状态：
   - 代码侧已接近完成
   - 仍待一次统一部署与最终人工验收
-- `Phase 9` 当前不直接进入大规模代码迁移
-- 当前第一步应先完成：
-  - `Phase 9.1` 兼容清单冻结
-  - 迁移样本冻结
-  - 回填对象边界冻结
+- `Phase 9` 已完成
+- 后续页面级统一人工验收模板不再阻塞 `Phase 9` 关闭
+- 下一步进入 `Phase 10.1`
 
 ## 首批兼容重点
 
@@ -210,9 +238,10 @@
 ## 首批迁移样本建议
 
 - `旧日王座`
-  - `第 31 章`
   - `第 32 章`
+  - `第 33 章`
   - `第 34 章`
+  - `第 35 章`
 - 专门联调样本章节：
   - 冷启动空章
   - 单 scene 已完成

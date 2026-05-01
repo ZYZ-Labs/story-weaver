@@ -20,3 +20,7 @@ export function updateChapter(projectId: number, chapterId: number, payload: Par
 export function deleteChapter(projectId: number, chapterId: number) {
   return http.delete(`/projects/${projectId}/chapters/${chapterId}`)
 }
+
+export function updateChapterRuntimeMode(projectId: number, chapterId: number, mode: 'scene' | 'node') {
+  return http.put<never, Chapter>(`/projects/${projectId}/chapters/${chapterId}/runtime-mode`, { mode })
+}

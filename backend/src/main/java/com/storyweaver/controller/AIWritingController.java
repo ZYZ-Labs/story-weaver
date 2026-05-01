@@ -1,6 +1,7 @@
 package com.storyweaver.controller;
 
 import com.storyweaver.domain.dto.AIWritingRequestDTO;
+import com.storyweaver.domain.vo.AIWritingRollbackResponseVO;
 import com.storyweaver.domain.vo.AIWritingResponseVO;
 import com.storyweaver.domain.vo.AIWritingStreamEventVO;
 import com.storyweaver.security.SecurityUtils;
@@ -60,10 +61,10 @@ public class AIWritingController {
         Thread.startVirtualThread(() -> {
             try {
                 aiWritingService.streamContent(userId, requestDTO, event -> sendStreamEvent(emitter, event));
-                emitter.complete();
             } catch (Exception exception) {
-                sendStreamEvent(emitter, AIWritingStreamEventVO.error(resolveMessage(exception)));
-                emitter.complete();
+                finishStreamWithError(emitter, AIWritingStreamEventVO.error(resolveMessage(exception)));
+            } finally {
+                completeEmitterQuietly(emitter);
             }
         });
 
@@ -157,11 +158,53 @@ public class AIWritingController {
         return ResponseEntity.ok(record);
     }
 
+    @PostMapping("/chapter/{chapterId}/rollback-latest-scene")
+    public ResponseEntity<AIWritingRollbackResponseVO> rollbackLatestAcceptedScene(
+            @PathVariable Long chapterId,
+            @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
+            Authentication authentication) {
+
+        if (!AuthHeaderSupport.hasValidBearerToken(authorizationHeader)) {
+            return ResponseEntity.status(401).build();
+        }
+        SecurityUtils.getCurrentUserId(authentication);
+
+        return ResponseEntity.ok(aiWritingService.rollbackLatestAcceptedScene(chapterId));
+    }
+
+    @PostMapping("/chapter/{chapterId}/rollback-all-scenes")
+    public ResponseEntity<AIWritingRollbackResponseVO> rollbackAllAcceptedScenes(
+            @PathVariable Long chapterId,
+            @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
+            Authentication authentication) {
+
+        if (!AuthHeaderSupport.hasValidBearerToken(authorizationHeader)) {
+            return ResponseEntity.status(401).build();
+        }
+        SecurityUtils.getCurrentUserId(authentication);
+
+        return ResponseEntity.ok(aiWritingService.rollbackAllAcceptedScenes(chapterId));
+    }
+
     private void sendStreamEvent(SseEmitter emitter, AIWritingStreamEventVO event) {
         try {
             emitter.send(SseEmitter.event().name(event.getType()).data(event));
-        } catch (IOException exception) {
-            throw new IllegalStateException("流式连接已中断");
+        } catch (IOException | IllegalStateException exception) {
+            throw new IllegalStateException("流式连接已中断", exception);
+        }
+    }
+
+    private void finishStreamWithError(SseEmitter emitter, AIWritingStreamEventVO event) {
+        try {
+            emitter.send(SseEmitter.event().name(event.getType()).data(event));
+        } catch (IOException | IllegalStateException ignored) {
+        }
+    }
+
+    private void completeEmitterQuietly(SseEmitter emitter) {
+        try {
+            emitter.complete();
+        } catch (IllegalStateException ignored) {
         }
     }
 

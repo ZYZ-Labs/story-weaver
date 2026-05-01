@@ -87,27 +87,50 @@ public class AIModelRoutingService {
     }
 
     private String resolveProviderKey(String entryPoint) {
-        return switch (normalizeEntryPoint(entryPoint)) {
+        String normalizedEntryPoint = normalizeEntryPoint(entryPoint);
+        if (usesWritingConfig(normalizedEntryPoint)) {
+            return "writing_ai_provider_id";
+        }
+
+        return switch (normalizedEntryPoint) {
             case "draft" -> "draft_ai_provider_id";
             case "director", "planner", "orchestrator" -> "director_ai_provider_id";
             case "naming", "name", "character", "character-attribute" -> "naming_ai_provider_id";
             case "summary-workflow", "summary_workflow", "summary" -> "naming_ai_provider_id";
             case "item", "inventory", "loot" -> "item_ai_provider_id";
-            case "writing-center", "writing_center", "writing" -> "writing_ai_provider_id";
             default -> "default_ai_provider_id";
         };
     }
 
     private String resolveModelKey(String entryPoint) {
-        return switch (normalizeEntryPoint(entryPoint)) {
+        String normalizedEntryPoint = normalizeEntryPoint(entryPoint);
+        if (usesWritingConfig(normalizedEntryPoint)) {
+            return "writing_ai_model";
+        }
+
+        return switch (normalizedEntryPoint) {
             case "draft" -> "draft_ai_model";
             case "director", "planner", "orchestrator" -> "director_ai_model";
             case "naming", "name", "character", "character-attribute" -> "naming_ai_model";
             case "summary-workflow", "summary_workflow", "summary" -> "naming_ai_model";
             case "item", "inventory", "loot" -> "item_ai_model";
-            case "writing-center", "writing_center", "writing" -> "writing_ai_model";
             default -> "default_ai_model";
         };
+    }
+
+    private boolean usesWritingConfig(String normalizedEntryPoint) {
+        return switch (normalizedEntryPoint) {
+            case "writing-center", "writing_center", "writing" -> true;
+            default -> isChapterWorkspaceSceneDraftEntryPoint(normalizedEntryPoint);
+        };
+    }
+
+    private boolean isChapterWorkspaceSceneDraftEntryPoint(String normalizedEntryPoint) {
+        boolean chapterWorkspaceEntryPoint = normalizedEntryPoint.contains("chapter-workspace")
+                || normalizedEntryPoint.contains("chapter_workspace");
+        boolean sceneDraftEntryPoint = normalizedEntryPoint.contains("scene-draft")
+                || normalizedEntryPoint.contains("scene_draft");
+        return chapterWorkspaceEntryPoint && sceneDraftEntryPoint;
     }
 
     private Long parseLong(String value) {

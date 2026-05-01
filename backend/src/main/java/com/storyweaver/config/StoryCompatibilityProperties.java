@@ -23,6 +23,10 @@ public class StoryCompatibilityProperties {
 
     private boolean backfillExecuteEnabled = true;
 
+    private boolean chapterWorkspaceNodePreviewEnabled = true;
+
+    private boolean chapterWorkspaceNodeResolveEnabled = false;
+
     public boolean isLegacyWritingCenterEnabled() {
         return legacyWritingCenterEnabled;
     }
@@ -85,5 +89,21 @@ public class StoryCompatibilityProperties {
 
     public void setBackfillExecuteEnabled(boolean backfillExecuteEnabled) {
         this.backfillExecuteEnabled = backfillExecuteEnabled;
+    }
+
+    public boolean isChapterWorkspaceNodePreviewEnabled() {
+        return chapterWorkspaceNodePreviewEnabled;
+    }
+
+    public void setChapterWorkspaceNodePreviewEnabled(boolean chapterWorkspaceNodePreviewEnabled) {
+        this.chapterWorkspaceNodePreviewEnabled = chapterWorkspaceNodePreviewEnabled;
+    }
+
+    public boolean isChapterWorkspaceNodeResolveEnabled() {
+        return chapterWorkspaceNodeResolveEnabled;
+    }
+
+    public void setChapterWorkspaceNodeResolveEnabled(boolean chapterWorkspaceNodeResolveEnabled) {
+        this.chapterWorkspaceNodeResolveEnabled = chapterWorkspaceNodeResolveEnabled;
     }
 }

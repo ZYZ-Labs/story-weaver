@@ -57,6 +57,9 @@ public class Chapter {
     @TableField(exist = false)
     private Integer readingTimeMinutes;
 
+    @TableField(exist = false)
+    private String narrativeRuntimeMode;
+
     @TableField(fill = FieldFill.INSERT)
     private LocalDateTime createTime;
 
@@ -126,6 +129,9 @@ public class Chapter {
 
     public Integer getReadingTimeMinutes() { return readingTimeMinutes; }
     public void setReadingTimeMinutes(Integer readingTimeMinutes) { this.readingTimeMinutes = readingTimeMinutes; }
+
+    public String getNarrativeRuntimeMode() { return narrativeRuntimeMode; }
+    public void setNarrativeRuntimeMode(String narrativeRuntimeMode) { this.narrativeRuntimeMode = narrativeRuntimeMode; }
 
     public LocalDateTime getCreateTime() { return createTime; }
     public void setCreateTime(LocalDateTime createTime) { this.createTime = createTime; }
